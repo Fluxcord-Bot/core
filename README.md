@@ -1,15 +1,12 @@
-# wafbot
+# Fluxcord
+A set-and-forget Discord <-> Fluxer bridge.
 
-To install dependencies:
+## Features
+- Basic message bridging
+- Reply bridging
+- Embed bridging
+- Attachment bridging
+- *others soon*
 
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.6. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+## Setup
+WIP
