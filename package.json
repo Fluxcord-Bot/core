@@ -1,0 +1,21 @@
+{
+  "name": "wafbot",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@fluxerjs/core": "^1.1.9",
+    "discord.js": "^14.25.1",
+    "expiry-map": "^2.0.0",
+    "sequelize": "^6.37.7",
+    "sequelize-typescript": "^2.1.6",
+    "sqlite3": "^5.1.7",
+    "truncate": "^3.0.0"
+  }
+}
