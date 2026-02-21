@@ -1,4 +1,15 @@
-import { Sequelize, Model, Column, DataType, Table, HasMany, BelongsTo, ForeignKey, Default, AllowNull } from "sequelize-typescript";
+import {
+  Sequelize,
+  Model,
+  Column,
+  DataType,
+  Table,
+  HasMany,
+  BelongsTo,
+  ForeignKey,
+  Default,
+  AllowNull,
+} from "sequelize-typescript";
 import Config from "../config";
 import { log } from "../utils/Logger";
 import fs from "node:fs";
@@ -38,9 +49,9 @@ export class ChannelMap extends Model {
   declare fluxerWebhookToken: string;
 
   @AllowNull(false)
-  @Default('both')
-  @Column(DataType.ENUM('discord2fluxer', 'fluxer2discord', 'both'))
-  declare bridgeType: 'discord2fluxer' | 'fluxer2discord' | 'both';
+  @Default("both")
+  @Column(DataType.ENUM("discord2fluxer", "fluxer2discord", "both"))
+  declare bridgeType: "discord2fluxer" | "fluxer2discord" | "both";
 
   @HasMany(() => MessageMap)
   declare messageMaps: MessageMap[];
@@ -49,8 +60,8 @@ export class ChannelMap extends Model {
 @Table
 export class MessageMap extends Model {
   @AllowNull(false)
-  @Column(DataType.ENUM('discord', 'fluxer'))
-  declare messageSource: 'discord' | 'fluxer';
+  @Column(DataType.ENUM("discord", "fluxer"))
+  declare messageSource: "discord" | "fluxer";
 
   @AllowNull(false)
   @Column(DataType.STRING)
@@ -69,7 +80,7 @@ export class MessageMap extends Model {
   declare content: string;
 
   @ForeignKey(() => ChannelMap)
-  @Column({ type: DataType.INTEGER, field: 'ChannelMapId' })
+  @Column({ type: DataType.INTEGER, field: "ChannelMapId" })
   declare channelMapId: number;
 
   @BelongsTo(() => ChannelMap)
@@ -77,21 +88,12 @@ export class MessageMap extends Model {
 }
 
 const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: Config.DataFolderPath + '/fluxcord.db',
-  logging: msg => log('DB', msg),
-  models: [ChannelMap, MessageMap]
+  dialect: "sqlite",
+  storage: Config.DataFolderPath + "/fluxcord.db",
+  logging: (msg) => log("DB", msg),
+  models: [ChannelMap, MessageMap],
 });
 
-if (!(fs.existsSync(Config.DataFolderPath + '/fluxcord.db'))) {
-  await sequelize.sync({ force: true });
-} else {
-  try {
-    await sequelize.authenticate();
-    log('DB', 'Connected to database successfully');
-  } catch (error) {
-    log('DB', 'Error while connecting to database:', error);
-  }
-}
+await sequelize.sync();
 
 export { sequelize };

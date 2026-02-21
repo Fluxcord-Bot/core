@@ -15,11 +15,11 @@ const Config = {
   FluxerTempEmojiGuildId: "0000000000000000000",
 
   // The categories that the bot will log, remove any that you don't need.
-  // Categories are, FLUXER, DISCORD, DB, META
-  LoggingCategories: ['FLUXER', 'DISCORD', /*'DB',*/ 'META'],
+  // Categories are, FLUXER, DISCORD, DB, META, DEBUG
+  LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META"],
 
   // The prefix of the bot
-  BotPrefix: 'fc!'
-}
+  BotPrefix: "fc!",
+};
 
 export default Config;
