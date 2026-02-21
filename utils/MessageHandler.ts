@@ -4,7 +4,8 @@ import {
   Client as DiscordClient,
   PermissionFlagsBits as DiscordPermissionFlagsBits,
   TextChannel as DiscordTextChannel,
-  type MessageReference
+  type MessageReference,
+  AttachmentBuilder
 } from "discord.js";
 import { Message as FluxerMessage, type PartialMessage as FluxerPartialMessage, Client as FluxerClient, PermissionFlags, GuildChannel as FluxerGuildChannel } from "@fluxerjs/core";
 import { ChannelMap, MessageMap } from "../db";
@@ -62,6 +63,7 @@ export async function FluxerCreateMessageHandler(message: FluxerMessage, client:
     // @ts-expect-error
     content: (messageReference ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === 'discord' ? `<@${messageReference.authorId}>`: `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: ${truncate(messageReference.content, 25)}\n` : '')
         + message.content,
+    files: message.attachments.map(a => a.url ?? ''),
     username: message.author.globalName ?? 'Fluxcord',
     avatarURL: message.author.avatarURL() ?? undefined,
   })
@@ -130,6 +132,10 @@ export async function DiscordCreateMessageHandler(
         + await parseDiscordEmojiToFluxer(message.content, fluxerClient),
       username: message.author.displayName ?? 'Fluxcord',
       avatar_url: message.author.avatarURL() ?? undefined,
+      files: message.attachments.map(a => ({
+        name: a.name,
+        url: a.url
+      })),
       embeds: await Promise.all(message.embeds.map(async x => await discordEmbedToFluxer(x, fluxerClient)))
     }, true)
 
