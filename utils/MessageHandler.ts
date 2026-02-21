@@ -91,7 +91,7 @@ export async function FluxerCreateMessageHandler(
     content:
       // @ts-expect-error
       (messageReference
-        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: ${truncate(messageReference.content, 25)}\n`
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
         : "") +
       (await parseFluxerEmojiToDiscord(message.content, discordClient)),
     files: message.attachments.map((a) => a.proxy_url ?? a.url ?? ""),
@@ -150,7 +150,7 @@ export async function FluxerUpdateMessageHandler(
       content:
         // @ts-expect-error
         (messageReference
-          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: ${truncate(messageReference.content, 25)}\n`
+          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
           : "") + newMessage.content,
       files: newMessage.attachments.map((a) => a.url ?? ""),
     });
@@ -235,6 +235,9 @@ export async function DiscordCreateMessageHandler(
     });
   }
 
+  const interactingUser = message.interaction
+    ? message.interactionMetadata?.user
+    : undefined;
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
   const webhooks = await (channel as FluxerGuildChannel).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
@@ -242,9 +245,12 @@ export async function DiscordCreateMessageHandler(
     const msg = await webhook.send(
       {
         content:
+          (interactingUser
+            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\``
+            : "") +
           // @ts-expect-error
           (messageReference
-            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`}: ${truncate(messageReference.content, 25)}\n`
+            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
             : "") +
           (await parseDiscordEmojiToFluxer(message.content, fluxerClient)),
         username:
@@ -296,6 +302,10 @@ export async function DiscordUpdateMessageHandler(
       messageExisting.fluxerMessageId,
     );
 
+    const newAttachments = newMsg.attachments.filter((x) =>
+      message.attachments.find((y) => y.url === x.url || y.url === x.proxyURL),
+    );
+
     let messageReference: MessageMap | null;
     if (newMsg.reference) {
       messageReference = await MessageMap.findOne({
@@ -312,12 +322,17 @@ export async function DiscordUpdateMessageHandler(
       });
     }
 
+    console.log(newAttachments);
     await message.edit({
       content:
         // @ts-expect-error
         (messageReference
-          ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`}: ${truncate(messageReference.content, 25)}\n`
-          : "") + (await parseDiscordEmojiToFluxer(message.content, client)),
+          ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
+          : "") +
+        (await parseDiscordEmojiToFluxer(message.content, client)) +
+        (Array.from(newAttachments).length > 0
+          ? `\n${Array.from(newAttachments).map((x, i) => `[${i}](${x})`)}`
+          : ""),
       embeds: await Promise.all(
         newMsg.embeds.map(async (x) => await discordEmbedToFluxer(x, client)),
       ),
