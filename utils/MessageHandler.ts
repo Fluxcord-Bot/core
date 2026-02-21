@@ -63,6 +63,8 @@ export async function FluxerCreateMessageHandler(
     raw: true,
   });
 
+  if (channelMap?.bridgeType === "discord2fluxer") return;
+
   let messageReference: MessageMap | null;
   if (message.messageReference) {
     messageReference = await MessageMap.findOne({
@@ -212,6 +214,8 @@ export async function DiscordCreateMessageHandler(
     },
     raw: true,
   });
+
+  if (channelMap?.bridgeType === "fluxer2discord") return;
 
   if (!channelMap || channelMap.discordWebhookId === message.webhookId) return;
 
