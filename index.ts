@@ -137,11 +137,27 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
 process.on("uncaughtException", (error) => {
   log("DEBUG", "A uncaught exception occurred.", error);
 
+  try {
+    discordClient.destroy();
+  } catch {}
+
+  try {
+    fluxerClient.destroy();
+  } catch {}
+
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   log("DEBUG", "A unhandled rejection occurred.", reason);
+
+  try {
+    discordClient.destroy();
+  } catch {}
+
+  try {
+    fluxerClient.destroy();
+  } catch {}
 
   process.exit(1);
 });
