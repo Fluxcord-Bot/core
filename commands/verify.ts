@@ -32,7 +32,7 @@ const command: CommandSchema = {
       isFluxer ? discordClient : fluxerClient
     ).channels.fetch(channelId);
 
-    if (!thisChannel || !channel || !channel.isSendable()) {
+    if (!thisChannel || !channel) {
       log(
         isFluxer ? "FLUXER" : "DISCORD",
         `channel ${message.channelId} is on non expected value. report it on https://codeberg.org/jbcarreon123/fluxcord as this SHOULD NOT happen`,
