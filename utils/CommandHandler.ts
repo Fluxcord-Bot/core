@@ -2,18 +2,13 @@ import {
   type OmitPartialGroupDMChannel,
   Message as DiscordMessage,
   Client as DiscordClient,
-  GuildChannel as DiscordGuildChannel,
 } from "discord.js";
 import {
   Message as FluxerMessage,
   Client as FluxerClient,
-  Channel as FluxerChannel,
-  GuildChannel as FluxerGuildChannel,
+  EmbedBuilder,
 } from "@fluxerjs/core";
 import Config from "../config";
-import { ChannelMap } from "../db";
-import { log } from "./Logger";
-import { Op } from "sequelize";
 import fs from "node:fs";
 import ExpiryMap from "expiry-map";
 import type { CommandSchema } from "./CommandSchema";
@@ -68,5 +63,22 @@ export async function CommandHandler(
     );
   }
 
-  await commandToRun?.run(params, message, discordClient, fluxerClient);
+  try {
+    await commandToRun?.run(params, message, discordClient, fluxerClient);
+  } catch (e) {
+    await message.reply({
+      // @ts-expect-error
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("A error has occurred while executing this command!")
+          .setDescription(
+            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
+          )
+          .addFields({
+            name: "Stack trace",
+            value: `${e}`,
+          }),
+      ],
+    });
+  }
 }

@@ -1,4 +1,8 @@
-import { Events as FluxerEvents, Client as FluxerClient } from "@fluxerjs/core";
+import {
+  Events as FluxerEvents,
+  Client as FluxerClient,
+  EmbedBuilder,
+} from "@fluxerjs/core";
 import {
   Client as DiscordClient,
   Events as DiscordEvents,
@@ -39,28 +43,77 @@ const fluxerClient = new FluxerClient({
   },
 });
 
-discordClient.on(DiscordEvents.MessageCreate, (msg) => {
+discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
-  DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
+  try {
+    await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
+  } catch (e) {
+    await msg.reply({
+      embeds: [
+        // @ts-expect-error
+        new EmbedBuilder()
+          .setTitle("A error has occurred while bridging this message!")
+          .setDescription(
+            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
+          )
+          .addFields({
+            name: "Stack trace",
+            value: `${e}`,
+          }),
+      ],
+    });
+  }
 });
 
-discordClient.on(DiscordEvents.MessageUpdate, (oldMsg, newMsg) => {
-  DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClient);
+discordClient.on(DiscordEvents.MessageUpdate, async (oldMsg, newMsg) => {
+  try {
+    await DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClient);
+  } catch (e) {
+    log("FLUXER", e);
+  }
 });
 
-discordClient.on(DiscordEvents.MessageDelete, (msg) => {
-  DiscordDeleteMessageHandler(msg, fluxerClient);
+discordClient.on(DiscordEvents.MessageDelete, async (msg) => {
+  try {
+    await DiscordDeleteMessageHandler(msg, fluxerClient);
+  } catch (e) {
+    log("FLUXER", e);
+  }
 });
 
-fluxerClient.on(FluxerEvents.MessageCreate, (msg) => {
-  if (msg.author.id === fluxerClient.user?.id) return;
-  FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
+fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
+  try {
+    if (msg.author.id === fluxerClient.user?.id) return;
+    await FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
+  } catch (e) {
+    await msg.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("A error has occurred while bridging this message!")
+          .setDescription(
+            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
+          )
+          .addFields({
+            name: "Stack trace",
+            value: `${e}`,
+          }),
+      ],
+    });
+  }
 });
-fluxerClient.on(FluxerEvents.MessageUpdate, (oldMsg, newMsg) => {
-  FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);
+fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
+  try {
+    await FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);
+  } catch (e) {
+    log("DISCORD", e);
+  }
 });
-fluxerClient.on(FluxerEvents.MessageDelete, (msg) => {
-  FluxerDeleteMessageHandler(msg, discordClient);
+fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
+  try {
+    FluxerDeleteMessageHandler(msg, discordClient);
+  } catch (e) {
+    log("DISCORD", e);
+  }
 });
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
