@@ -1,4 +1,12 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: './Dockerfile'
+    volumes:
+      - "./data:/data"
+    command: bun run migrate.ts
+
   bot:
     build:
       context: .
@@ -6,3 +14,6 @@ services:
     restart: unless-stopped
     volumes:
       - "./data:/data"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

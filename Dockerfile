@@ -1,4 +1,8 @@
-FROM oven/bun:1
+FROM oven/bun:debian
+
+RUN apt update
+
+RUN apt install python3 -y
 
 WORKDIR /app
 

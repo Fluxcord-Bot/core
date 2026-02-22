@@ -6,15 +6,18 @@ import {
 } from "discord.js";
 import Config from "./config";
 import {
-  DiscordCreateMessageHandler,
-  DiscordDeleteMessageHandler,
-  DiscordUpdateMessageHandler,
   FluxerCreateMessageHandler,
   FluxerDeleteMessageHandler,
   FluxerUpdateMessageHandler,
-} from "./utils/MessageHandler";
+} from "./utils/FluxerHandler";
+import {
+  DiscordCreateMessageHandler,
+  DiscordDeleteMessageHandler,
+  DiscordUpdateMessageHandler,
+} from "./utils/DiscordHandler";
 import { log } from "./utils/Logger";
 import fs from "node:fs";
+import { ChannelMap } from "./db";
 
 const discordClient: DiscordClient<boolean> = new DiscordClient({
   intents: [
@@ -24,11 +27,25 @@ const discordClient: DiscordClient<boolean> = new DiscordClient({
   ],
 });
 
-const fluxerClient = new FluxerClient({ intents: 0 });
+const maps = await ChannelMap.findAll();
+
+const fluxerClient = new FluxerClient({
+  intents: 0,
+  presence: {
+    status: "online",
+    custom_status: {
+      text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
+    },
+  },
+});
 
 discordClient.on(DiscordEvents.MessageCreate, (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
-  DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
+  DiscordCreateMessageHandler(
+    msg,
+    discordClient,
+    fluxerClient,
+  );
 });
 
 discordClient.on(DiscordEvents.MessageUpdate, (oldMsg, newMsg) => {
@@ -41,7 +58,11 @@ discordClient.on(DiscordEvents.MessageDelete, (msg) => {
 
 fluxerClient.on(FluxerEvents.MessageCreate, (msg) => {
   if (msg.author.id === fluxerClient.user?.id) return;
-  FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
+  FluxerCreateMessageHandler(
+    msg,
+    fluxerClient,
+    discordClient,
+  );
 });
 fluxerClient.on(FluxerEvents.MessageUpdate, (oldMsg, newMsg) => {
   FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);
@@ -115,6 +136,10 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
 
 discordClient.on(DiscordEvents.ClientReady, async () => {
   log("DISCORD", `${discordClient.user?.tag} is ready!`);
+
+  discordClient.user?.setActivity(
+    `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
+  );
 });
 
 process.on("uncaughtException", (error) => {

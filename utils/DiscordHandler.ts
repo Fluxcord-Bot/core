@@ -2,17 +2,10 @@ import {
   type OmitPartialGroupDMChannel,
   Message as DiscordMessage,
   Client as DiscordClient,
-  PermissionFlagsBits as DiscordPermissionFlagsBits,
-  TextChannel as DiscordTextChannel,
-  type MessageReference,
-  AttachmentBuilder,
   type PartialMessage as DiscordPartialMessage,
 } from "discord.js";
 import {
-  Message as FluxerMessage,
-  type PartialMessage as FluxerPartialMessage,
   Client as FluxerClient,
-  PermissionFlags,
   GuildChannel as FluxerGuildChannel,
   TextChannel,
 } from "@fluxerjs/core";
@@ -24,169 +17,15 @@ import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
 import { discordEmbedToFluxer } from "./EmbedConverter";
-import {
-  parseDiscordEmojiToFluxer,
-  parseFluxerEmojiToDiscord,
-} from "./EmojiParser";
+import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser";
+import { checkManageServerPerms } from "./CheckManageServerPerms";
 
 let fluxcordBotEmojiCfg: any = undefined;
-
-export async function FluxerCreateMessageHandler(
-  message: FluxerMessage,
-  client: FluxerClient,
-  discordClient: DiscordClient,
-) {
-  if (!fluxcordBotEmojiCfg)
-    fluxcordBotEmojiCfg = JSON.parse(
-      readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
-    );
-
-  if (!message.guildId) return;
-  if (message.content.startsWith(Config.BotPrefix)) {
-    if (
-      await checkManageServerPerms(message.guildId, message.author.id, client)
-    ) {
-      CommandHandler(message, discordClient, client);
-      return;
-    } else {
-      log(
-        "FLUXER",
-        `User ${message.author.id} on guild ${message.guild} does not have ManageGuild perms, treating message as normal message...`,
-      );
-    }
-  }
-
-  const channelMap = await ChannelMap.findOne({
-    where: {
-      fluxerChannelId: message.channelId,
-    },
-    raw: true,
-  });
-
-  if (channelMap?.bridgeType === "discord2fluxer") return;
-
-  let messageReference: MessageMap | null;
-  if (message.messageReference) {
-    messageReference = await MessageMap.findOne({
-      where: {
-        [Op.or]: [
-          {
-            fluxerMessageId: message.messageReference.message_id,
-          },
-          {
-            discordMessageId: message.messageReference.message_id,
-          },
-        ],
-      },
-    });
-  }
-
-  if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
-
-  const webhook = await discordClient.fetchWebhook(
-    channelMap.discordWebhookId,
-    channelMap.discordWebhookToken,
-  );
-  const msg = await webhook.send({
-    content:
-      // @ts-expect-error
-      (messageReference
-        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
-        : "") +
-      (await parseFluxerEmojiToDiscord(message.content, discordClient)),
-    files: message.attachments.map((a) => a.proxy_url ?? a.url ?? ""),
-    username:
-      message.author.globalName ??
-      message.author.username + "#" + message.author.discriminator,
-    avatarURL: message.author.avatarURL() ?? undefined,
-  });
-
-  await MessageMap.create({
-    messageSource: "fluxer",
-    discordMessageId: msg.id,
-    fluxerMessageId: message.id,
-    channelMapId: channelMap.id,
-    authorId: message.author.id,
-    content: await parseFluxerEmojiToDiscord(message.content, discordClient),
-  });
-}
-
-export async function FluxerUpdateMessageHandler(
-  oldMessage: FluxerMessage | null,
-  newMessage: FluxerMessage,
-  client: DiscordClient,
-) {
-  const messageExisting = await MessageMap.findOne({
-    where: {
-      fluxerMessageId: newMessage.id,
-    },
-    include: ["channelMap"],
-  });
-
-  if (messageExisting) {
-    const channelMap = messageExisting.channelMap;
-    const webhook = await client.fetchWebhook(
-      channelMap.discordWebhookId,
-      channelMap.discordWebhookToken,
-    );
-
-    let messageReference: MessageMap | null;
-    if (newMessage.messageReference) {
-      messageReference = await MessageMap.findOne({
-        where: {
-          [Op.or]: [
-            {
-              fluxerMessageId: newMessage.messageReference.message_id,
-            },
-            {
-              discordMessageId: newMessage.messageReference.message_id,
-            },
-          ],
-        },
-      });
-    }
-
-    await webhook.editMessage(messageExisting.discordMessageId, {
-      content:
-        // @ts-expect-error
-        (messageReference
-          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
-          : "") + newMessage.content,
-      files: newMessage.attachments.map((a) => a.url ?? ""),
-    });
-
-    messageExisting.content = newMessage.content;
-    await messageExisting.save();
-  }
-}
-
-export async function FluxerDeleteMessageHandler(
-  message: FluxerPartialMessage,
-  client: DiscordClient,
-) {
-  const messageExisting = await MessageMap.findOne({
-    where: {
-      fluxerMessageId: message.id,
-    },
-    include: ["channelMap"],
-  });
-
-  if (messageExisting) {
-    const channelMap = messageExisting.channelMap;
-    const webhook = await client.fetchWebhook(
-      channelMap.discordWebhookId,
-      channelMap.discordWebhookToken,
-    );
-
-    await webhook.deleteMessage(messageExisting.discordMessageId);
-    await messageExisting.destroy();
-  }
-}
 
 export async function DiscordCreateMessageHandler(
   message: OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
   client: DiscordClient,
-  fluxerClient: FluxerClient,
+  fluxerClient: FluxerClient
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -207,6 +46,10 @@ export async function DiscordCreateMessageHandler(
       );
     }
   }
+
+  const stickers = message.stickers
+    .map((x) => `[${x.name}](${x.url})`)
+    .join(" ");
 
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -252,7 +95,8 @@ export async function DiscordCreateMessageHandler(
           (messageReference
             ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
             : "") +
-          (await parseDiscordEmojiToFluxer(message.content, fluxerClient)),
+          (await parseDiscordEmojiToFluxer(message.content, fluxerClient)) +
+          stickers,
         username:
           message.author.displayName ?? message.author.globalName ?? "Fluxcord",
         avatar_url: message.author.avatarURL() ?? undefined,
@@ -368,30 +212,5 @@ export async function DiscordDeleteMessageHandler(
 
     await message.delete();
     await messageExisting.destroy();
-  }
-}
-
-async function checkManageServerPerms(
-  guildId: string,
-  userId: string,
-  client: FluxerClient | DiscordClient,
-) {
-  const guild = await client.guilds.fetch(guildId);
-  if (!guild) return false;
-  const user = await guild.members.fetch({
-    user: userId,
-  });
-  if (Array.isArray(user)) {
-    return (
-      user[0]?.permissions.has(PermissionFlags.ManageGuild) ||
-      user[0]?.permissions.has(PermissionFlags.Administrator) ||
-      guild.ownerId == userId
-    );
-  } else {
-    return (
-      user.permissions.has(DiscordPermissionFlagsBits.ManageGuild) ||
-      user.permissions.has(DiscordPermissionFlagsBits.Administrator) ||
-      guild.ownerId == user.id
-    );
   }
 }
