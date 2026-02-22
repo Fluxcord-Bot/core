@@ -28,17 +28,8 @@ export async function FluxerCreateMessageHandler(
 
   if (!message.guildId) return;
   if (message.content.startsWith(Config.BotPrefix)) {
-    if (
-      await checkManageServerPerms(message.guildId, message.author.id, client)
-    ) {
-      CommandHandler(message, discordClient, client);
-      return;
-    } else {
-      log(
-        "FLUXER",
-        `User ${message.author.id} on guild ${message.guild} does not have ManageGuild perms, treating message as normal message...`,
-      );
-    }
+    CommandHandler(message, discordClient, client);
+    return;
   }
 
   const channelMap = await ChannelMap.findOne({

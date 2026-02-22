@@ -34,17 +34,8 @@ export async function DiscordCreateMessageHandler(
 
   if (!message.guildId) return;
   if (message.content.startsWith(Config.BotPrefix)) {
-    if (
-      await checkManageServerPerms(message.guildId, message.author.id, client)
-    ) {
-      CommandHandler(message, client, fluxerClient);
-      return;
-    } else {
-      log(
-        "DISCORD",
-        `User ${message.author.id} on guild ${message.guild} does not have ManageGuild perms, treating message as normal message...`,
-      );
-    }
+    CommandHandler(message, client, fluxerClient);
+    return;
   }
 
   const stickers = message.stickers
@@ -166,7 +157,6 @@ export async function DiscordUpdateMessageHandler(
       });
     }
 
-    console.log(newAttachments);
     await message.edit({
       content:
         // @ts-expect-error
@@ -199,8 +189,6 @@ export async function DiscordDeleteMessageHandler(
     },
     include: ["channelMap"],
   });
-
-  console.log(messageExisting);
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
