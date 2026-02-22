@@ -136,10 +136,14 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
 
 process.on("uncaughtException", (error) => {
   log("DEBUG", "A uncaught exception occurred.", error);
+
+  process.exit(1);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   log("DEBUG", "A unhandled rejection occurred.", reason);
+
+  process.exit(1);
 });
 
 discordClient.login(Config.DiscordBotToken);
