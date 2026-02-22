@@ -28,7 +28,7 @@ let BridgeMap: ExpiryMap<
 export async function CommandHandler(
   message: FluxerMessage | OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
   discordClient: DiscordClient,
-  fluxerClient: FluxerClient
+  fluxerClient: FluxerClient,
 ) {
   const cmdList = message.content.split(" ");
   const command = cmdList[0]?.replace(Config.BotPrefix, "");

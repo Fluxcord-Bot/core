@@ -1,4 +1,12 @@
-import { Table, AllowNull, Column, DataType, ForeignKey, Model, BelongsTo } from "sequelize-typescript";
+import {
+  Table,
+  AllowNull,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  BelongsTo,
+} from "sequelize-typescript";
 import { ChannelMap } from "./ChannelMap";
 
 @Table

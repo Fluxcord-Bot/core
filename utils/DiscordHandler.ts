@@ -25,7 +25,7 @@ let fluxcordBotEmojiCfg: any = undefined;
 export async function DiscordCreateMessageHandler(
   message: OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
   client: DiscordClient,
-  fluxerClient: FluxerClient
+  fluxerClient: FluxerClient,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(

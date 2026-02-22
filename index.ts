@@ -41,11 +41,7 @@ const fluxerClient = new FluxerClient({
 
 discordClient.on(DiscordEvents.MessageCreate, (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
-  DiscordCreateMessageHandler(
-    msg,
-    discordClient,
-    fluxerClient,
-  );
+  DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
 });
 
 discordClient.on(DiscordEvents.MessageUpdate, (oldMsg, newMsg) => {
@@ -58,11 +54,7 @@ discordClient.on(DiscordEvents.MessageDelete, (msg) => {
 
 fluxerClient.on(FluxerEvents.MessageCreate, (msg) => {
   if (msg.author.id === fluxerClient.user?.id) return;
-  FluxerCreateMessageHandler(
-    msg,
-    fluxerClient,
-    discordClient,
-  );
+  FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
 });
 fluxerClient.on(FluxerEvents.MessageUpdate, (oldMsg, newMsg) => {
   FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);

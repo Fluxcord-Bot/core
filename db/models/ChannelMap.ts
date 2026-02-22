@@ -1,4 +1,12 @@
-import { Table, AllowNull, Column, DataType, Default, Model, HasMany } from "sequelize-typescript";
+import {
+  Table,
+  AllowNull,
+  Column,
+  DataType,
+  Default,
+  Model,
+  HasMany,
+} from "sequelize-typescript";
 import { MessageMap } from "./MessageMap";
 
 @Table

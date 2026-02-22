@@ -1,4 +1,11 @@
-import { Table, AllowNull, Column, DataType, Default, Model } from "sequelize-typescript";
+import {
+  Table,
+  AllowNull,
+  Column,
+  DataType,
+  Default,
+  Model,
+} from "sequelize-typescript";
 
 @Table
 export class UserConfig extends Model {
