@@ -10,13 +10,17 @@ import {
 } from "discord.js";
 import Config from "./config";
 import {
+  FluxerBulkDeleteMessageHandler,
   FluxerCreateMessageHandler,
   FluxerDeleteMessageHandler,
+  FluxerPinsUpdateHandler,
   FluxerUpdateMessageHandler,
 } from "./utils/FluxerHandler";
 import {
+  DiscordBulkDeleteMessageHandler,
   DiscordCreateMessageHandler,
   DiscordDeleteMessageHandler,
+  DiscordPinsUpdateHandler,
   DiscordUpdateMessageHandler,
 } from "./utils/DiscordHandler";
 import { log } from "./utils/Logger";
@@ -80,6 +84,22 @@ discordClient.on(DiscordEvents.MessageDelete, async (msg) => {
   }
 });
 
+discordClient.on(DiscordEvents.MessageBulkDelete, async (msgs) => {
+  try {
+    await DiscordBulkDeleteMessageHandler(msgs, fluxerClient);
+  } catch (e) {
+    log("FLUXER", e);
+  }
+});
+
+discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
+  try {
+    await DiscordPinsUpdateHandler(channel, fluxerClient);
+  } catch (e) {
+    log("FLUXER", e);
+  }
+});
+
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
   try {
     if (msg.author.id === fluxerClient.user?.id) return;
@@ -107,6 +127,22 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
   try {
     FluxerDeleteMessageHandler(msg, discordClient);
+  } catch (e) {
+    log("DISCORD", e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.MessageDeleteBulk, async (msgs) => {
+  try {
+    FluxerBulkDeleteMessageHandler(msgs, discordClient);
+  } catch (e) {
+    log("DISCORD", e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
+  try {
+    FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", e);
   }

@@ -2,6 +2,7 @@ import { Message, EmbedBuilder } from "@fluxerjs/core";
 import Config from "../config";
 import type { CommandSchema } from "../utils/CommandSchema";
 import { commands } from "../utils/CommandHandler";
+import { checkManageServerPerms } from "../utils/CheckManageServerPerms";
 
 const command: CommandSchema = {
   name: "help",
@@ -40,6 +41,25 @@ const command: CommandSchema = {
         });
       }
     } else {
+      const isUserBotAdmin = Config.AdminAccountIds.find(
+        (x) => x === message.author.id,
+      );
+      const isUserGuildAdmin = checkManageServerPerms(
+        message.guildId ?? "",
+        message.author.id,
+        message.client,
+      );
+
+      let cmds = commands;
+
+      if (!isUserBotAdmin) {
+        cmds = cmds.filter((x) => !x.requireOwner);
+      }
+
+      if (!isUserGuildAdmin) {
+        cmds = cmds.filter((x) => !x.requireElevated);
+      }
+
       await message.reply({
         //@ts-expect-error
         embeds: [
@@ -51,7 +71,7 @@ const command: CommandSchema = {
 Prefix is \`${Config.BotPrefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
             )
             .addFields(
-              ...commands.map((x) => ({
+              ...cmds.map((x) => ({
                 name: `${Config.BotPrefix}${x.name}${x.params ? " " + x.params : ""}`,
                 value: x.description,
                 inline: true,

@@ -21,8 +21,7 @@ const command: CommandSchema = {
 Known issues:
 - Bridge "eats" attachments, basically happens when fluxer cdn just explodes (corrupted attachment), also happens when discord cdn also explodes (missing attachment)
 - Due to fluxer limitations, edits from Discord to Fluxer will not bridge
-- Due to Fluxer limitations, NSFW channels cannot be bridged to Discord
-- Due to limitations of fluxer.js, embeds from Fluxer will not bridge`,
+- Due to Fluxer limitations, NSFW channels cannot be bridged to Discord`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     const channelId = params[0];
