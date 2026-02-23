@@ -12,6 +12,6 @@ RUN bun install
 
 COPY . .
 
-RUN bunx npx migrate.ts
+RUN bunx tsx migrate.ts
 
 CMD ["bun", "index.ts"]
