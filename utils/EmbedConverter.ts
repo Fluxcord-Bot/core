@@ -1,13 +1,17 @@
 import {
   EmbedBuilder as FluxerEmbedBuilder,
   Client as FluxerClient,
+  Message,
 } from "@fluxerjs/core";
 import {
   Embed as DiscordEmbed,
   EmbedBuilder as DiscordEmbedBuilder,
   Client as DiscordClient,
 } from "discord.js";
-import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser";
+import {
+  parseDiscordEmojiToFluxer,
+  parseFluxerEmojiToDiscord,
+} from "./EmojiStickerParser";
 
 export async function discordEmbedToFluxer(
   embed: DiscordEmbed,
@@ -59,4 +63,62 @@ export async function discordEmbedToFluxer(
     });
 
   return outEmbed;
+}
+
+export async function fluxerEmbedToDiscord(
+  message: Message,
+  discordClient: DiscordClient,
+): Promise<DiscordEmbedBuilder[]> {
+  const embeds = message.embeds;
+
+  const embedsOut = await Promise.all(
+    embeds.map(async (embed) => {
+      let outEmbed = new DiscordEmbedBuilder()
+        .setTitle(embed.title ?? null)
+        .setURL(embed.url ?? null)
+        .setColor(embed.color ?? null)
+        .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
+        .setDescription(
+          await parseFluxerEmojiToDiscord(
+            embed.description ?? "",
+            discordClient,
+          ),
+        );
+
+      if (embed.fields) {
+        outEmbed = outEmbed.addFields(
+          ...(await Promise.all(
+            embed.fields.map(async (x: any) => ({
+              name: x.name,
+              value:
+                (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "",
+              inline: x.inline,
+            })),
+          )),
+        );
+      }
+
+      if (embed.author)
+        outEmbed = outEmbed.setAuthor({
+          name: embed.author.name ?? "",
+          iconURL: embed.author.icon_url,
+          url: embed.author.url,
+        });
+
+      if (embed.footer)
+        outEmbed = outEmbed.setFooter({
+          text: embed.footer.text,
+          iconURL: embed.footer.icon_url,
+        });
+
+      if (embed.image) outEmbed = outEmbed.setImage(embed.image.url);
+
+      if (embed.thumbnail)
+        outEmbed = outEmbed.setThumbnail(embed.thumbnail.url);
+
+      return outEmbed;
+    }),
+  );
+
+  return embedsOut;
 }

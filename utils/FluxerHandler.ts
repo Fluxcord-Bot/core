@@ -13,6 +13,7 @@ import truncate from "truncate";
 import { readFileSync } from "node:fs";
 import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser";
 import { checkManageServerPerms } from "./CheckManageServerPerms";
+import { fluxerEmbedToDiscord } from "./EmbedConverter";
 
 let fluxcordBotEmojiCfg: any = undefined;
 
@@ -114,6 +115,7 @@ export async function FluxerCreateMessageHandler(
     username:
       message.author.globalName ??
       message.author.username + "#" + message.author.discriminator,
+    embeds: await fluxerEmbedToDiscord(message, discordClient),
     avatarURL: message.author.avatarURL() ?? undefined,
   });
 

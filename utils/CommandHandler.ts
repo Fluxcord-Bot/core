@@ -40,6 +40,8 @@ export async function CommandHandler(
   discordClient: DiscordClient,
   fluxerClient: FluxerClient,
 ) {
+  if (message.author.bot || message.webhookId) return;
+
   const cmdList = message.content.split(" ");
   const command = cmdList[0]?.replace(Config.BotPrefix, "");
   const params = cmdList.slice(1);
