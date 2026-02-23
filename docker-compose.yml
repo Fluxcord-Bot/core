@@ -2,15 +2,15 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: './Dockerfile'
+      dockerfile: "./Dockerfile"
     volumes:
       - "./data:/data"
-    command: bun run migrate.ts
+    command: bunx npx migrate.ts
 
   bot:
     build:
       context: .
-      dockerfile: './Dockerfile'
+      dockerfile: "./Dockerfile"
     restart: unless-stopped
     volumes:
       - "./data:/data"
