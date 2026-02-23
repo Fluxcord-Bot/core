@@ -10,7 +10,7 @@ import {
   GuildChannel as FluxerGuildChannel,
   TextChannel,
 } from "@fluxerjs/core";
-import { ChannelMap, MessageMap } from "../db";
+import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db";
 import Config from "../config";
 import { CommandHandler } from "./CommandHandler";
 import { log } from "./Logger";
@@ -27,6 +27,7 @@ export async function DiscordCreateMessageHandler(
   message: OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
   client: DiscordClient,
   fluxerClient: FluxerClient,
+  proxyCompatibility?: boolean,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -37,6 +38,39 @@ export async function DiscordCreateMessageHandler(
   if (message.content.startsWith(Config.BotPrefix)) {
     CommandHandler(message, client, fluxerClient);
     return;
+  }
+
+  const userConfig = await UserConfig.findOne({
+    where: {
+      userId: message.author.id,
+    },
+  });
+  if (userConfig && userConfig.proxyCompatibility && !proxyCompatibility) {
+    setTimeout(
+      async () =>
+        await DiscordCreateMessageHandler(message, client, fluxerClient, true),
+      2000,
+    );
+    return;
+  }
+
+  if (proxyCompatibility) {
+    const messageMap = await MessageMap.findOne({
+      where: {
+        [Op.and]: [
+          sequelize.where(sequelize.fn("LOWER", sequelize.col("content")), {
+            [Op.like]: `%${message.content.slice(2, message.content.length - 2)}%`,
+          }),
+          {
+            createdAt: {
+              [Op.gte]: new Date(Date.now() - 5000),
+            },
+          },
+        ],
+      },
+    });
+
+    if (messageMap) return;
   }
 
   const stickers = message.stickers

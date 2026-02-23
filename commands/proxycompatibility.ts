@@ -8,6 +8,8 @@ const command: CommandSchema = {
   name: "proxycompatibility",
   description: "Toggle Proxy Compatibility Mode",
   requireElevated: false,
+  additionalInfo:
+    "If enabled, instead of bridging your message immediately, it will wait for the proxy bot to send the right version of the message and Fluxcord will bridge that instead.",
   async run(params, message, _, _2) {
     const userConfig = await UserConfig.findOrCreate({
       where: {

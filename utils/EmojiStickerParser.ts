@@ -2,7 +2,11 @@ import {
   Client as FluxerClient,
   GuildSticker as FluxerSticker,
 } from "@fluxerjs/core";
-import { Client as DiscordClient, Sticker as DiscordSticker } from "discord.js";
+import {
+  Client as DiscordClient,
+  Sticker as DiscordSticker,
+  Message,
+} from "discord.js";
 import { log } from "./Logger";
 import RandomString from "./RandomString";
 import Config from "../config";
