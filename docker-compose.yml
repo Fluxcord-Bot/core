@@ -5,7 +5,7 @@ services:
       dockerfile: "./Dockerfile"
     volumes:
       - "./data:/data"
-    command: bunx npx migrate.ts
+    command: bunx npx /app/migrate.ts
 
   bot:
     build:
