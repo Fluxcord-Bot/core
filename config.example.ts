@@ -18,6 +18,9 @@ const Config = {
   // also allows verifying bridging without having Manage Channel perms.
   AdminAccountIds: ["0000000000000000000"],
 
+  // The footer of every embed sent by Fluxcord. Optional.
+  EmbedFooterContent: "",
+
   // The categories that the bot will log, remove any that you don't need.
   // Categories are, FLUXER, DISCORD, DB, META, DEBUG
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META"],

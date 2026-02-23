@@ -13,6 +13,7 @@ import fs from "node:fs";
 import ExpiryMap from "expiry-map";
 import type { CommandSchema } from "./CommandSchema";
 import { checkManageServerPerms } from "./CheckManageServerPerms";
+import { log } from "./Logger";
 
 export let BridgeMap: ExpiryMap<
   string,
@@ -63,6 +64,13 @@ export async function CommandHandler(
     );
   }
 
+  if (
+    commandToRun?.requireOwner &&
+    !Config.AdminAccountIds.find((x) => x === message.author.id)
+  ) {
+    await message.reply(`Only bot admins can execute this command!`);
+  }
+
   try {
     await commandToRun?.run(params, message, discordClient, fluxerClient);
   } catch (e) {
@@ -80,5 +88,7 @@ export async function CommandHandler(
           }),
       ],
     });
+
+    log("DEBUG", e);
   }
 }
