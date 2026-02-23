@@ -51,6 +51,7 @@ export async function CommandHandler(
     await message.reply(
       `Command \`${Config.BotPrefix + command}\` does not exist!`,
     );
+    return;
   }
 
   if (
@@ -64,6 +65,7 @@ export async function CommandHandler(
     await message.reply(
       `You need at least **Manage ${message instanceof FluxerMessage ? "Community" : "Server"}** permissions to run this command!`,
     );
+    return;
   }
 
   if (
@@ -71,6 +73,7 @@ export async function CommandHandler(
     !Config.AdminAccountIds.find((x) => x === message.author.id)
   ) {
     await message.reply(`Only bot admins can execute this command!`);
+    return;
   }
 
   try {
