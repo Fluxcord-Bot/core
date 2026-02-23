@@ -15,6 +15,14 @@ const command: CommandSchema = {
   name: "bridge",
   description: "Bridge a channel",
   requireElevated: true,
+  params: "<channelId> <both|discord2fluxer|fluxer2discord>",
+  additionalInfo: `The channelId parameter takes a channel ID of the other end's channel (e.g. if you're running it on Fluxer, it needs a Discord channel ID.)
+
+Known issues:
+- Bridge "eats" attachments, basically happens when fluxer cdn just explodes (corrupted attachment), also happens when discord cdn also explodes (missing attachment)
+- Due to fluxer limitations, edits from Discord to Fluxer will not bridge
+- Due to Fluxer limitations, NSFW channels cannot be bridged to Discord
+- Due to limitations of fluxer.js, embeds from Fluxer will not bridge`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     const channelId = params[0];
@@ -40,10 +48,7 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
     if (!channel) {
       await message.reply("Channel not found. Maybe invite the bot?");
       return;
-    } else if (
-      channel instanceof FluxerChannel &&
-      (!channel.isSendable() || channel.isDM())
-    ) {
+    } else if (channel instanceof FluxerChannel && channel.isDM()) {
       await message.reply(
         "Channel type is not a text-based channel or is a DM.",
       );
@@ -96,6 +101,7 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
       `Now, verify if you wanna bridge on the other end by using \`${Config.BotPrefix}verify\`! You have 2 minutes to do it or else it will expire.`,
     );
 
+    //@ts-expect-error
     channel.send({
       content: `${isFluxer ? "Fluxer" : "Discord"} channel ${
         message.channel instanceof FluxerChannel

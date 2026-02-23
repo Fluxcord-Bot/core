@@ -31,6 +31,8 @@ const discordClient: DiscordClient<boolean> = new DiscordClient({
   ],
 });
 
+export const botStartingTime = new Date();
+
 const maps = await ChannelMap.findAll();
 
 const fluxerClient = new FluxerClient({
@@ -53,9 +55,6 @@ discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
         // @ts-expect-error
         new EmbedBuilder()
           .setTitle("A error has occurred while bridging this message!")
-          .setDescription(
-            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
-          )
           .addFields({
             name: "Stack trace",
             value: `${e}`,
@@ -90,9 +89,6 @@ fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
       embeds: [
         new EmbedBuilder()
           .setTitle("A error has occurred while bridging this message!")
-          .setDescription(
-            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
-          )
           .addFields({
             name: "Stack trace",
             value: `${e}`,

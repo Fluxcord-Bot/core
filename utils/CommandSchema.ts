@@ -12,6 +12,9 @@ export type CommandSchema = {
   name: string;
   description: string;
   requireElevated: boolean;
+  requireOwner?: boolean;
+  params?: string;
+  additionalInfo?: string;
   run: (
     params: string[],
     message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | FluxerMessage,

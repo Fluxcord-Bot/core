@@ -7,26 +7,66 @@ const command: CommandSchema = {
   name: "help",
   description: "Help for Fluxbot's functions",
   requireElevated: false,
+  params: "[command]",
   async run(params, message, _, _2) {
-    await message.reply({
-      //@ts-expect-error
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("Fluxcord")
-          .setDescription(
-            `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.
+    if (params[0]) {
+      const command = commands.find((x) => x.name === params[0]);
+      if (command) {
+        await message.reply({
+          //@ts-expect-error
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(
+                `${Config.BotPrefix}${command.name}${command.params ? " " + command.params : ""}`,
+              )
+              .setDescription(
+                command.description +
+                  (command.additionalInfo
+                    ? `\n\n` + command.additionalInfo
+                    : ""),
+              )
+              .setFooter(
+                Config.EmbedFooterContent
+                  ? {
+                      text: Config.EmbedFooterContent,
+                    }
+                  : null,
+              ),
+          ],
+        });
+      } else {
+        await message.reply({
+          content: `Cannot find command \`${params[0]}\`!`,
+        });
+      }
+    } else {
+      await message.reply({
+        //@ts-expect-error
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("Fluxcord")
+            .setDescription(
+              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.
 
-Prefix is \`${Config.BotPrefix}\`. To use the bot's bridging features, you will need the Manage Server/Community permission.`,
-          )
-          .addFields(
-            ...commands.map((x) => ({
-              name: `${Config.BotPrefix}${x.name}`,
-              value: x.description,
-              inline: true,
-            })),
-          ),
-      ],
-    });
+Prefix is \`${Config.BotPrefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
+            )
+            .addFields(
+              ...commands.map((x) => ({
+                name: `${Config.BotPrefix}${x.name}${x.params ? " " + x.params : ""}`,
+                value: x.description,
+                inline: true,
+              })),
+            )
+            .setFooter(
+              Config.EmbedFooterContent
+                ? {
+                    text: Config.EmbedFooterContent,
+                  }
+                : null,
+            ),
+        ],
+      });
+    }
   },
 };
 

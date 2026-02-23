@@ -57,6 +57,11 @@ export async function FluxerCreateMessageHandler(
     });
   }
 
+  const userJoin =
+    message.type === 7
+      ? `*@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator} joined the bridged community*`
+      : "";
+
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
 
   const webhook = await discordClient.fetchWebhook(
@@ -69,7 +74,8 @@ export async function FluxerCreateMessageHandler(
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
         : "") +
-      (await parseFluxerEmojiToDiscord(message.content, discordClient)),
+      (await parseFluxerEmojiToDiscord(message.content, discordClient)) +
+      userJoin,
     files: message.attachments.map((a) => a.proxy_url ?? a.url ?? ""),
     username:
       message.author.globalName ??

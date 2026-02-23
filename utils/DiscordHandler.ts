@@ -3,6 +3,7 @@ import {
   Message as DiscordMessage,
   Client as DiscordClient,
   type PartialMessage as DiscordPartialMessage,
+  MessageType,
 } from "discord.js";
 import {
   Client as FluxerClient,
@@ -72,6 +73,10 @@ export async function DiscordCreateMessageHandler(
   const interactingUser = message.interaction
     ? message.interactionMetadata?.user
     : undefined;
+  const userJoin =
+    message.type === MessageType.UserJoin
+      ? `*@${message.author.tag} joined the bridged server*`
+      : "";
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
   const webhooks = await (channel as FluxerGuildChannel).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
@@ -87,7 +92,8 @@ export async function DiscordCreateMessageHandler(
             ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
             : "") +
           (await parseDiscordEmojiToFluxer(message.content, fluxerClient)) +
-          stickers,
+          stickers +
+          userJoin,
         username:
           message.author.displayName ?? message.author.globalName ?? "Fluxcord",
         avatar_url: message.author.avatarURL() ?? undefined,

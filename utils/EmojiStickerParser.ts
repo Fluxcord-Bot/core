@@ -54,7 +54,13 @@ export async function parseDiscordEmojiToFluxer(
 
           result = result.replaceAll(`:${m[1]}:`, `<${fluxerEmoji}>`);
         } catch (e) {
-          log("FLUXER", "Cannot convert Discord emoji to Fluxer", e);
+          log(
+            "FLUXER",
+            "Cannot convert Discord emoji to Fluxer, deleting 10 oldest emojis and trying again...",
+            e,
+          );
+          await deleteOldestEmojisFluxer(fluxerClient);
+          return await parseDiscordEmojiToFluxer(content, fluxerClient);
         }
       }
     }
@@ -105,11 +111,42 @@ export async function parseFluxerEmojiToDiscord(
             `<${m[1].startsWith("a") ? "a" : ""}:${str}:${discordEmoji?.id}>`,
           );
         } catch (e) {
-          log("DISCORD", "Cannot convert Fluxer emoji to Discord", e);
+          log(
+            "DISCORD",
+            "Cannot convert Fluxer emoji to Discord, deleting 10 oldest emojis and trying again...",
+            e,
+          );
+          await deleteOldestEmojisDiscord(discordClient);
+          return await parseFluxerEmojiToDiscord(content, discordClient);
         }
       }
     }
   }
 
   return result;
+}
+
+async function deleteOldestEmojisFluxer(fluxerClient: FluxerClient) {
+  const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
+  if (guild) {
+    let emojis = await guild.fetchEmojis();
+    emojis = emojis.filter((x) => !x.name.startsWith("reply"));
+    emojis = emojis.slice(-11, -1);
+
+    await Promise.all(emojis.map(async (x) => await x.delete()));
+  }
+}
+
+async function deleteOldestEmojisDiscord(discordClient: DiscordClient) {
+  let app = await discordClient.application?.fetch();
+  if (app) {
+    let emojis = app.emojis.cache.filter((x) => !x.name.startsWith("reply"));
+    let i = 0;
+    for (let emojiKey in emojis.reverse().keys) {
+      if (i > 10) break;
+      const emoji = emojis.get(emojiKey);
+      await emoji?.delete();
+      i++;
+    }
+  }
 }

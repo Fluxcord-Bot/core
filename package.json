@@ -8,10 +8,10 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@fluxerjs/core": "^1.1.9",
+    "@fluxerjs/core": "^1.2.2",
     "discord.js": "^14.25.1",
     "expiry-map": "^2.0.0",
     "sequelize": "^6.37.7",
