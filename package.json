@@ -1,6 +1,6 @@
 {
   "name": "wafbot",
-  "version": "1.5a",
+  "version": "1.5a2",
   "module": "index.ts",
   "type": "module",
   "private": true,

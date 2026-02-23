@@ -93,7 +93,7 @@ export async function FluxerCreateMessageHandler(
 
   const userJoin =
     message.type === 7
-      ? `*@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator} joined the bridged community*`
+      ? `*@${message.author.username}#${message.author.discriminator} joined the bridged community*`
       : "";
 
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
