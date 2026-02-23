@@ -12,6 +12,6 @@ RUN bun install
 
 COPY . .
 
-RUN bun run migrate.ts
+RUN chmod +x docker-entrypoint.sh
 
-CMD ["bun", "index.ts"]
+CMD ["./docker-entrypoint.sh"]
