@@ -21,71 +21,62 @@ const command: CommandSchema = {
   description: "Total bridge list",
   requireElevated: false,
   requireOwner: true,
-  async run(params, message, discordClient, fluxerClient) {
+  async run(_, message, discordClient, fluxerClient) {
     const allBridgedChannels = await ChannelMap.findAll();
+
     const mappedChannels = await Promise.all(
       allBridgedChannels.map(async (x) => {
-        try {
-          let discordGuild: DiscordGuild | undefined = undefined,
-            discordChannel: DiscordGuildChannel | undefined = undefined,
-            fluxerGuild: Guild | null = null,
-            fluxerChannel: FluxerChannel | null = null;
-          try {
-            discordGuild = await discordClient.guilds.fetch(x.discordGuildId);
-          } catch {}
-          try {
-            discordChannel = (await discordClient.channels.fetch(
-              x.discordChannelId,
-            )) as DiscordGuildChannel;
-          } catch {}
-          try {
-            fluxerChannel = await fluxerClient.channels.fetch(
-              x.discordChannelId,
-            );
-          } catch {}
-          try {
-            fluxerGuild = await fluxerClient.guilds.fetch(x.fluxerGuildId);
-          } catch {}
-          return {
-            ...x,
-            discordChannel,
-            discordGuild,
-            fluxerChannel,
-            fluxerGuild,
-          };
-        } catch (e) {
-          log("DEBUG", e);
-          return x;
-        }
+        const data = x.dataValues;
+
+        const [discordGuild, discordChannel, fluxerChannel, fluxerGuild] =
+          await Promise.allSettled([
+            discordClient.guilds.fetch(data.discordGuildId),
+            discordClient.channels.fetch(data.discordChannelId),
+            fluxerClient.channels.fetch(data.fluxerChannelId),
+            fluxerClient.guilds.fetch(data.fluxerGuildId),
+          ]);
+
+        return {
+          ...data,
+          discordGuild:
+            discordGuild.status === "fulfilled"
+              ? (discordGuild.value as DiscordGuild)
+              : undefined,
+          discordChannel:
+            discordChannel.status === "fulfilled"
+              ? (discordChannel.value as DiscordGuildChannel)
+              : undefined,
+          fluxerChannel:
+            fluxerChannel.status === "fulfilled"
+              ? (fluxerChannel.value as FluxerChannel)
+              : null,
+          fluxerGuild:
+            fluxerGuild.status === "fulfilled"
+              ? (fluxerGuild.value as Guild)
+              : null,
+        };
       }),
     );
+
+    const bridgeArrow = (type: string) =>
+      type === "both" ? "<->" : type === "fluxer2discord" ? "-->" : "<--";
 
     const str = mappedChannels
       .map(
         (x) =>
-          //@ts-expect-error
-          `${x.fluxerChannel?.name} (${x.fluxerChannelId}) on ${x.fluxerGuild?.name} (${x.fluxerGuildId}) ${
-            x.bridgeType === "both"
-              ? "<->"
-              : x.bridgeType === "fluxer2discord"
-                ? "-->"
-                : "<--"
-            //@ts-expect-error
-          } ${x.discordGuild?.name} (${x.discordChannelId}) on ${x.discordGuild?.name} (${x.discordGuildId})`,
+          `${x.fluxerChannel?.name ?? "unknown"} (${x.fluxerChannelId}) on ${x.fluxerGuild?.name ?? "unknown"} (${x.fluxerGuildId}) ` +
+          `${bridgeArrow(x.bridgeType)} ` +
+          `${x.discordChannel?.name ?? "unknown"} (${x.discordChannelId}) on ${x.discordGuild?.name ?? "unknown"} (${x.discordGuildId})`,
       )
       .join("\n");
 
     const strBuf = Buffer.from(str);
 
     if (message instanceof FluxerMessage) {
-      await message.reply({
-        files: [{ name: "channels.txt", data: strBuf }],
-      });
+      await message.reply({ files: [{ name: "channels.txt", data: strBuf }] });
     } else {
-      const att = new AttachmentBuilder(strBuf).setName("channels.txt");
-
       await message.reply({
-        files: [att],
+        files: [new AttachmentBuilder(strBuf).setName("channels.txt")],
       });
     }
   },
