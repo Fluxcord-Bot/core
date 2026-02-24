@@ -1,9 +1,11 @@
-import { Message, EmbedBuilder } from "@fluxerjs/core";
+import { Message, EmbedBuilder, TextChannel } from "@fluxerjs/core";
 import Config from "../config";
 import type { CommandSchema } from "../utils/CommandSchema";
 import { BridgeMap, commands } from "../utils/CommandHandler";
-
-import { GuildChannel as DiscordGuildChannel } from "discord.js";
+import {
+  GuildChannel as DiscordGuildChannel,
+  TextChannel as DiscordTextChannel,
+} from "discord.js";
 import {
   Message as FluxerMessage,
   Channel as FluxerChannel,
@@ -61,6 +63,58 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
       );
       return;
     }
+
+    if (isFluxer) {
+      const chnl = (await fluxerClient.channels.fetch(
+        message.channelId,
+      )) as TextChannel;
+      if (chnl.nsfw) {
+        await message.reply(
+          "Due to Fluxer API limitations, you cannot bridge NSFW channels.",
+        );
+        return;
+      }
+    } else {
+      if ((channel as TextChannel).nsfw) {
+        await message.reply(
+          "Due to Fluxer API limitations, you cannot bridge NSFW channels.",
+        );
+        return;
+      }
+    }
+
+    // let fluxer fix the above bug first then uncomment this
+    // if (isFluxer) {
+    //   const currentChannel = (await fluxerClient.channels.fetch(
+    //     message.channelId,
+    //   )) as TextChannel;
+
+    //   if (
+    //     (currentChannel.nsfw && !(channel as DiscordTextChannel).nsfw) ||
+    //     (!currentChannel.nsfw && (channel as DiscordTextChannel).nsfw)
+    //   ) {
+    //     await message.reply(
+    //       "Both channels needs to be set as NSFW to bridge them.",
+    //     );
+    //     return;
+    //   }
+    // } else {
+    //   const currentChannel = await discordClient.channels.fetch(
+    //     message.channelId,
+    //   );
+
+    //   if (
+    //     ((channel as TextChannel).nsfw &&
+    //       !(currentChannel as DiscordTextChannel).nsfw) ||
+    //     (!(channel as TextChannel).nsfw &&
+    //       (currentChannel as DiscordTextChannel).nsfw)
+    //   ) {
+    //     await message.reply(
+    //       "Both channels needs to be set as NSFW to bridge them.",
+    //     );
+    //     return;
+    //   }
+    // }
 
     const channelMap = await ChannelMap.findOne({
       where: {

@@ -50,7 +50,7 @@ export async function FluxerCreateMessageHandler(
     setTimeout(
       async () =>
         await FluxerCreateMessageHandler(message, client, discordClient, true),
-      2000,
+      3000,
     );
     return;
   }
@@ -113,6 +113,11 @@ export async function FluxerCreateMessageHandler(
       ? `\n-# Message contains stickers: ${stickers.join(", ")}`
       : "";
 
+  const overAttachments = message.attachments.filter((x) => x.size > 9999000);
+  const overAttachmentsStr = overAttachments
+    .map((x) => `[${x.filename}](${x.url})`)
+    .join(" ");
+
   const webhook = await discordClient.fetchWebhook(
     channelMap.discordWebhookId,
     channelMap.discordWebhookToken,
@@ -128,8 +133,13 @@ export async function FluxerCreateMessageHandler(
         discordClient,
       )) +
       userJoin +
-      stickerMsg,
-    files: message.attachments.map((a) => a.proxy_url ?? a.url ?? ""),
+      stickerMsg +
+      (overAttachmentsStr
+        ? "\n-# has attachments over 10mb: " + overAttachmentsStr
+        : ""),
+    files: message.attachments
+      .filter((x) => x.size < 9999000)
+      .map((a) => a.proxy_url ?? a.url ?? ""),
     username:
       message.author.globalName ??
       message.author.username + "#" + message.author.discriminator,

@@ -43,6 +43,14 @@ export class ChannelMap extends Model {
   @Column(DataType.STRING)
   declare fluxerWebhookToken: string;
 
+  @AllowNull(true)
+  @Column(DataType.STRING)
+  declare errorLoggingChannelId: string;
+
+  @AllowNull(true)
+  @Column(DataType.ENUM("fluxer", "discord"))
+  declare errorLoggingPlatform: "fluxer" | "discord";
+
   @AllowNull(false)
   @Default("both")
   @Column(DataType.ENUM("discord2fluxer", "fluxer2discord", "both"))

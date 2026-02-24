@@ -9,6 +9,8 @@ import {
   type PartialMessage,
   Typing,
   type TextBasedChannel,
+  MessageFlags,
+  MessageFlagsBitField,
 } from "discord.js";
 import {
   Client as FluxerClient,
@@ -53,11 +55,16 @@ export async function DiscordCreateMessageHandler(
       userId: message.author.id,
     },
   });
-  if (userConfig && userConfig.proxyCompatibility && !proxyCompatibility) {
+  if (
+    ((userConfig && userConfig.proxyCompatibility) ||
+      (message.type === MessageType.ChatInputCommand &&
+        message.flags.has("Loading"))) &&
+    (!proxyCompatibility || message.flags.has("Loading"))
+  ) {
     setTimeout(
       async () =>
         await DiscordCreateMessageHandler(message, client, fluxerClient, true),
-      2000,
+      3000,
     );
     return;
   }
@@ -125,6 +132,10 @@ export async function DiscordCreateMessageHandler(
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
   const webhooks = await (channel as FluxerGuildChannel).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
+  const overAttachments = message.attachments.filter((x) => x.size > 24999900);
+  const overAttachmentsStr = overAttachments
+    .map((x) => `[${x.name}](${x.url})`)
+    .join(" ");
   if (webhook) {
     const msg = await webhook.send(
       {
@@ -141,14 +152,19 @@ export async function DiscordCreateMessageHandler(
             fluxerClient,
           )) +
           stickerMsg +
-          userJoin,
+          userJoin +
+          (overAttachmentsStr
+            ? "\n-# has attachments over 25mb: " + overAttachmentsStr
+            : ""),
         username:
           message.author.displayName ?? message.author.globalName ?? "Fluxcord",
         avatar_url: message.author.avatarURL() ?? undefined,
-        files: message.attachments.map((a) => ({
-          name: a.name,
-          url: a.url,
-        })),
+        files: message.attachments
+          .filter((x) => x.size < 24999900)
+          .map((a) => ({
+            name: a.name,
+            url: a.url,
+          })),
         embeds: await Promise.all(
           message.embeds.map(
             async (x) => await discordEmbedToFluxer(x, fluxerClient),

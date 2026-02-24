@@ -1,4 +1,7 @@
-import { Message as FluxerMessage } from "@fluxerjs/core";
+import {
+  Message as FluxerMessage,
+  Client as FluxerClient,
+} from "@fluxerjs/core";
 import { Message as DiscordMessage, MessageMentions } from "discord.js";
 import { ChannelMap } from "../db";
 import { Op } from "sequelize";
@@ -35,9 +38,54 @@ export async function parseMentions(message: DiscordMessage | FluxerMessage) {
     message.mentions.roles.forEach((v) => {
       res = res.replaceAll(`<@&${v.id}>`, `@${v.name}`);
     });
-  } else {
-    const roles = message.message.mentions.forEach((v) => {
+  } else if (message.client instanceof FluxerClient) {
+    res = await parseRolesAndChannels(
+      res,
+      message.guildId ?? "",
+      message.client,
+    );
+
+    message.mentions.forEach((v) => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.username}#${v.discriminator}`);
+    });
+  }
+
+  return res;
+}
+
+async function parseRolesAndChannels(
+  content: string,
+  guildId: string,
+  fluxerClient: FluxerClient,
+) {
+  const guild = await fluxerClient.guilds.fetch(guildId);
+
+  let res = content;
+
+  if (guild) {
+    const roles = await guild.fetchRoles();
+    const channels = await guild.fetchChannels();
+
+    roles.forEach((v) => {
+      res = res.replaceAll(`<@&${v.id}>`, `@${v.name}`);
+    });
+
+    const bridgedChannels = await ChannelMap.findAll({
+      where: {
+        fluxerChannelId: {
+          [Op.in]: channels.map((x) => x.id),
+        },
+      },
+    });
+
+    channels.forEach((v) => {
+      const bridgedChannel = bridgedChannels.find(
+        (x) => v.id === x.fluxerChannelId,
+      );
+      res = res.replaceAll(
+        `<#${v.id}>`,
+        bridgedChannel ? `<#${bridgedChannel.discordChannelId}>` : `#${v.name}`,
+      );
     });
   }
 

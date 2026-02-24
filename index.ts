@@ -26,6 +26,7 @@ import {
 import { log } from "./utils/Logger";
 import fs from "node:fs";
 import { ChannelMap } from "./db";
+import { sendErrorMessage } from "./utils/sendErrorMessage";
 
 const discordClient: DiscordClient<boolean> = new DiscordClient({
   intents: [
@@ -54,17 +55,7 @@ discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   try {
     await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
-    await msg.reply({
-      embeds: [
-        // @ts-expect-error
-        new EmbedBuilder()
-          .setTitle("A error has occurred while bridging this message!")
-          .addFields({
-            name: "Stack trace",
-            value: `${e}`,
-          }),
-      ],
-    });
+    await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
   }
 });
 
@@ -72,7 +63,7 @@ discordClient.on(DiscordEvents.MessageUpdate, async (oldMsg, newMsg) => {
   try {
     await DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClient);
   } catch (e) {
-    log("FLUXER", e);
+    await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
   }
 });
 
@@ -105,23 +96,14 @@ fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
     if (msg.author.id === fluxerClient.user?.id) return;
     await FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
   } catch (e) {
-    await msg.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("A error has occurred while bridging this message!")
-          .addFields({
-            name: "Stack trace",
-            value: `${e}`,
-          }),
-      ],
-    });
+    await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
   }
 });
 fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
   try {
     await FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);
   } catch (e) {
-    log("DISCORD", e);
+    await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
   }
 });
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
