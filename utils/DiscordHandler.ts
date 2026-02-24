@@ -69,7 +69,7 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
-  if (proxyCompatibility) {
+  if (proxyCompatibility && message.type !== MessageType.ChatInputCommand) {
     const messageMap = await MessageMap.findOne({
       where: {
         [Op.and]: [
