@@ -77,11 +77,6 @@ export async function sendErrorMessage(
           });
         }
       }
-      log(
-        message instanceof Message ? "FLUXER" : "DISCORD",
-        "An error occurred",
-        error,
-      );
     } else {
       if (replyFallback) {
         await message.reply({
@@ -95,13 +90,13 @@ export async function sendErrorMessage(
               }),
           ],
         });
-      } else {
-        log(
-          message instanceof Message ? "FLUXER" : "DISCORD",
-          "An error occurred",
-          error,
-        );
       }
     }
   }
+
+  log(
+    message instanceof Message ? "FLUXER" : "DISCORD",
+    "An error occurred",
+    error,
+  );
 }
