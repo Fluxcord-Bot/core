@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { discordEmbedToFluxer } from "./EmbedConverter";
 import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser";
 import { checkManageServerPerms } from "./CheckManageServerPerms";
+import { parseMentions } from "./MessageContentParser";
 
 let fluxcordBotEmojiCfg: any = undefined;
 
@@ -135,7 +136,10 @@ export async function DiscordCreateMessageHandler(
           (messageReference
             ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
             : "") +
-          (await parseDiscordEmojiToFluxer(message.content, fluxerClient)) +
+          (await parseDiscordEmojiToFluxer(
+            await parseMentions(message),
+            fluxerClient,
+          )) +
           stickerMsg +
           userJoin,
         username:
@@ -158,7 +162,10 @@ export async function DiscordCreateMessageHandler(
       messageSource: "discord",
       discordMessageId: message.id,
       fluxerMessageId: msg?.id,
-      content: await parseDiscordEmojiToFluxer(message.content, fluxerClient),
+      content: await parseDiscordEmojiToFluxer(
+        await parseMentions(message),
+        fluxerClient,
+      ),
       channelMapId: channelMap.id,
       authorId: message.author.id,
     });
@@ -213,7 +220,10 @@ export async function DiscordUpdateMessageHandler(
         (messageReference
           ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${truncate(messageReference.content, 25)}\n`
           : "") +
-        (await parseDiscordEmojiToFluxer(message.content, client)) +
+        (await parseDiscordEmojiToFluxer(
+          await parseMentions(message),
+          client,
+        )) +
         (Array.from(newAttachments).length > 0
           ? `\n${Array.from(newAttachments).map((x, i) => `[${i}](${x})`)}`
           : ""),
@@ -278,6 +288,8 @@ export async function DiscordBulkDeleteMessageHandler(
     await channel.bulkDeleteMessages(
       messagesExisting.map((x) => x.fluxerMessageId),
     );
+
+    await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
 
     await reply.delete();
   }

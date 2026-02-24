@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser";
 import { checkManageServerPerms } from "./CheckManageServerPerms";
 import { fluxerEmbedToDiscord } from "./EmbedConverter";
+import { parseMentions } from "./MessageContentParser";
 
 let fluxcordBotEmojiCfg: any = undefined;
 
@@ -122,7 +123,10 @@ export async function FluxerCreateMessageHandler(
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${truncate(messageReference.content, 25)}\n`
         : "") +
-      (await parseFluxerEmojiToDiscord(message.content, discordClient)) +
+      (await parseFluxerEmojiToDiscord(
+        await parseMentions(message),
+        discordClient,
+      )) +
       userJoin +
       stickerMsg,
     files: message.attachments.map((a) => a.proxy_url ?? a.url ?? ""),
@@ -139,7 +143,10 @@ export async function FluxerCreateMessageHandler(
     fluxerMessageId: message.id,
     channelMapId: channelMap.id,
     authorId: message.author.id,
-    content: await parseFluxerEmojiToDiscord(message.content, discordClient),
+    content: await parseFluxerEmojiToDiscord(
+      await parseMentions(message),
+      discordClient,
+    ),
   });
 }
 
