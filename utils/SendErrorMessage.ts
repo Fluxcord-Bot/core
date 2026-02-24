@@ -77,6 +77,11 @@ export async function sendErrorMessage(
           });
         }
       }
+      log(
+        message instanceof Message ? "FLUXER" : "DISCORD",
+        "An error occurred",
+        error,
+      );
     } else {
       if (replyFallback) {
         await message.reply({

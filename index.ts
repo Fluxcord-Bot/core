@@ -26,7 +26,7 @@ import {
 import { log } from "./utils/Logger";
 import fs from "node:fs";
 import { ChannelMap } from "./db";
-import { sendErrorMessage } from "./utils/sendErrorMessage";
+import { sendErrorMessage } from "./utils/SendErrorMessage";
 
 const discordClient: DiscordClient<boolean> = new DiscordClient({
   intents: [
