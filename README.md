@@ -12,5 +12,14 @@ A set-and-forget Discord <-> Fluxer bridge.
 - Bulk deletion bridging
 - *others soon*
 
-## Setup
-WIP
+## Self hosted setup 
+- Install Docker and Docker Compose
+- Clone this repository: `git clone https://git.gay/jbcarreon123/Fluxcord`
+- Copy `config.example.ts` to `config.ts`
+- Edit `config.ts` to the things needed by it
+- Run `docker compose up -d --build`
+
+## Updating
+- Run `git pull`
+- Check for config changes on the example config file
+- Run `docker compose up -d --build`
