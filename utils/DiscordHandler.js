@@ -16,12 +16,14 @@ let fluxcordBotEmojiCfg = undefined;
  * @param {DiscordClient} client
  * @param {FluxerClient} fluxerClient
  * @param {boolean} [proxyCompatibility]
+ * @param {boolean} [useExplicitHandler]
  */
 export async function DiscordCreateMessageHandler(
   message,
   client,
   fluxerClient,
   proxyCompatibility,
+  useExplicitHandler,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -150,7 +152,9 @@ export async function DiscordCreateMessageHandler(
           message.author.displayName ??
           message.author.globalName ??
           "Fluxcord",
-        avatar_url: message.author.avatarURL() ?? undefined,
+        avatar_url: useExplicitHandler
+          ? "https://party.jbc.lol/explicit.png"
+          : (message.author.avatarURL() ?? undefined),
         files: message.attachments
           .filter((x) => x.size < 24999900)
           .map((a) => ({
