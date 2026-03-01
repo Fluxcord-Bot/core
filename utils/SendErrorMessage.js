@@ -1,25 +1,22 @@
-import {
-  EmbedBuilder,
-  Message,
-  type Client as FluxerClient,
-  type TextChannel,
-} from "@fluxerjs/core";
-import {
-  EmbedBuilder as DiscordEmbedBuilder,
-  type Client as DiscordClient,
-  type Message as DiscordMessage,
-  type OmitPartialGroupDMChannel,
-} from "discord.js";
-import { ChannelMap } from "../db";
+import { EmbedBuilder, Message } from "@fluxerjs/core";
+import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
+import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
-import { log } from "./Logger";
+import { log } from "./Logger.js";
 
+/**
+ * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>> | Message} message
+ * @param {DiscordClient} discordClient
+ * @param {FluxerClient} fluxerClient
+ * @param {any} error
+ * @param {boolean} [replyFallback=false]
+ */
 export async function sendErrorMessage(
-  message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | Message,
-  discordClient: DiscordClient,
-  fluxerClient: FluxerClient,
-  error: any,
-  replyFallback: boolean = false,
+  message,
+  discordClient,
+  fluxerClient,
+  error,
+  replyFallback = false,
 ) {
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -41,7 +38,7 @@ export async function sendErrorMessage(
           channelMap.errorLoggingChannelId,
         );
 
-        (channel as TextChannel).send({
+        /** @type {any} */ (channel).send({
           embeds: [
             new EmbedBuilder()
               .setTitle("Error occurred while bridging a message")

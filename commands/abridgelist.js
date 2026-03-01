@@ -1,22 +1,11 @@
-import { Message, EmbedBuilder, GuildChannel, Guild } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { BridgeMap, commands } from "../utils/CommandHandler";
+import { AttachmentBuilder } from "discord.js";
+import { Message as FluxerMessage } from "@fluxerjs/core";
+import { ChannelMap } from "../db/index.js";
 
-import {
-  AttachmentBuilder,
-  GuildChannel as DiscordGuildChannel,
-  Guild as DiscordGuild,
-} from "discord.js";
-import {
-  Message as FluxerMessage,
-  Channel as FluxerChannel,
-} from "@fluxerjs/core";
-import { ChannelMap } from "../db";
-import { Op } from "sequelize";
-import { log } from "../utils/Logger";
-
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "abridgelist",
   description: "Total bridge list",
   requireElevated: false,
@@ -40,25 +29,21 @@ const command: CommandSchema = {
           ...data,
           discordGuild:
             discordGuild.status === "fulfilled"
-              ? (discordGuild.value as DiscordGuild)
+              ? discordGuild.value
               : undefined,
           discordChannel:
             discordChannel.status === "fulfilled"
-              ? (discordChannel.value as DiscordGuildChannel)
+              ? discordChannel.value
               : undefined,
           fluxerChannel:
-            fluxerChannel.status === "fulfilled"
-              ? (fluxerChannel.value as FluxerChannel)
-              : null,
+            fluxerChannel.status === "fulfilled" ? fluxerChannel.value : null,
           fluxerGuild:
-            fluxerGuild.status === "fulfilled"
-              ? (fluxerGuild.value as Guild)
-              : null,
+            fluxerGuild.status === "fulfilled" ? fluxerGuild.value : null,
         };
       }),
     );
 
-    const bridgeArrow = (type: string) =>
+    const bridgeArrow = (type) =>
       type === "both" ? "<->" : type === "fluxer2discord" ? "-->" : "<--";
 
     const str = mappedChannels

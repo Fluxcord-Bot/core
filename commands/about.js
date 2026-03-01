@@ -1,10 +1,12 @@
-import { Message, EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { ChannelMap } from "../db";
+import { EmbedBuilder } from "@fluxerjs/core";
+import Config from "../config.js";
+import { ChannelMap } from "../db/index.js";
 import Package from "../package.json" with { type: "json" };
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "about",
   description: "About Fluxcord",
   requireElevated: false,

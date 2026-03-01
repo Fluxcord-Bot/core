@@ -3,12 +3,14 @@ import {
   Message as FluxerMessage,
   GuildChannel as FluxerGuildChannel,
 } from "@fluxerjs/core";
-import { ChannelMap } from "../db";
-import { log } from "../utils/Logger";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { BridgeMap } from "../utils/CommandHandler";
+import { ChannelMap } from "../db/index.js";
+import { log } from "../utils/Logger.js";
+import { BridgeMap } from "../utils/CommandHandler.js";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "verify",
   description: "Verify/approve a bridge",
   requireElevated: true,

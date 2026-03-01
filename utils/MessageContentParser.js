@@ -1,12 +1,12 @@
-import {
-  Message as FluxerMessage,
-  Client as FluxerClient,
-} from "@fluxerjs/core";
-import { Message as DiscordMessage, MessageMentions } from "discord.js";
-import { ChannelMap } from "../db";
+import { Client as FluxerClient } from "@fluxerjs/core";
+import { MessageMentions } from "discord.js";
+import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
-export async function parseMentions(message: DiscordMessage | FluxerMessage) {
+/**
+ * @param {import("discord.js").Message | FluxerMessage} message
+ */
+export async function parseMentions(message) {
   let res = message.content;
 
   if (message.mentions instanceof MessageMentions) {
@@ -53,11 +53,12 @@ export async function parseMentions(message: DiscordMessage | FluxerMessage) {
   return res;
 }
 
-async function parseRolesAndChannels(
-  content: string,
-  guildId: string,
-  fluxerClient: FluxerClient,
-) {
+/**
+ * @param {string} content
+ * @param {string} guildId
+ * @param {FluxerClient} fluxerClient
+ */
+async function parseRolesAndChannels(content, guildId, fluxerClient) {
   const guild = await fluxerClient.guilds.fetch(guildId);
 
   let res = content;

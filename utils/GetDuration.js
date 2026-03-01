@@ -1,4 +1,8 @@
-export function getDuration(start: Date, end: Date) {
+/**
+ * @param {Date} start
+ * @param {Date} end
+ */
+export function getDuration(start, end) {
   let diffMs = end.getTime() - start.getTime();
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   diffMs -= days * 1000 * 60 * 60 * 24;

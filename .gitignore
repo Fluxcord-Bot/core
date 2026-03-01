@@ -35,5 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 config.json
 config.ts
+config.js
 
 data/fluxcord*

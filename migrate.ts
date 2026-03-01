@@ -1,5 +1,6 @@
+//@ts-check
 import { Umzug, SequelizeStorage } from "umzug";
-import { sequelize } from "./db";
+import { sequelize } from "./db/index.js";
 
 const umzug = new Umzug({
   migrations: { glob: "migrations/*.ts" },

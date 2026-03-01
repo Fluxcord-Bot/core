@@ -1,26 +1,19 @@
-import {
-  Client as FluxerClient,
-  GuildSticker as FluxerSticker,
-} from "@fluxerjs/core";
-import {
-  Client as DiscordClient,
-  Sticker as DiscordSticker,
-  Message,
-} from "discord.js";
-import { log } from "./Logger";
-import RandomString from "./RandomString";
-import Config from "../config";
+import { log } from "./Logger.js";
+import RandomString from "./RandomString.js";
+import Config from "../utils/ConfigHandler.js";
 
-export async function parseDiscordEmojiToFluxer(
-  content: string | null,
-  fluxerClient: FluxerClient,
-) {
+/**
+ * @param {string | null} content
+ * @param {FluxerClient} fluxerClient
+ */
+export async function parseDiscordEmojiToFluxer(content, fluxerClient) {
   if (!content) return content;
   const regex = /:(a?\d+):/g;
 
   let result = content.replace(/<(a?):[\w\-\_]+:(\d+)>/g, ":$1$2:");
 
-  const emojis: string[] = [];
+  /** @type {string[]} */
+  const emojis = [];
 
   let m;
   while ((m = regex.exec(result)) !== null) {
@@ -38,7 +31,6 @@ export async function parseDiscordEmojiToFluxer(
               (m[1].startsWith("a") ? ".gif" : ".webp"),
           );
           const buf = await res.arrayBuffer();
-          const arr = new Uint8Array(buf);
           const str = RandomString(16);
 
           const fluxerGuild = await fluxerClient.guilds.fetch(
@@ -46,7 +38,12 @@ export async function parseDiscordEmojiToFluxer(
           );
           await fluxerGuild?.createEmojisBulk([
             {
-              image: arr.toBase64(),
+              image: btoa(
+                new Uint8Array(buf).reduce(
+                  (data, byte) => data + String.fromCharCode(byte),
+                  "",
+                ),
+              ),
               name: str,
             },
           ]);
@@ -73,16 +70,18 @@ export async function parseDiscordEmojiToFluxer(
   return result;
 }
 
-export async function parseFluxerEmojiToDiscord(
-  content: string,
-  discordClient: DiscordClient,
-) {
+/**
+ * @param {string} content
+ * @param {DiscordClient} discordClient
+ */
+export async function parseFluxerEmojiToDiscord(content, discordClient) {
   if (!content) return content;
   const regex = /:(a?\d+):/g;
 
   let result = content.replace(/<(a?):[\w\-\_]+:(\d+)>/g, ":$1$2:");
 
-  const emojis: string[] = [];
+  /** @type {string[]} */
+  const emojis = [];
 
   let m;
   while ((m = regex.exec(result)) !== null) {
@@ -130,7 +129,10 @@ export async function parseFluxerEmojiToDiscord(
   return result;
 }
 
-async function deleteOldestEmojisFluxer(fluxerClient: FluxerClient) {
+/**
+ * @param {FluxerClient} fluxerClient
+ */
+async function deleteOldestEmojisFluxer(fluxerClient) {
   const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
   if (guild) {
     let emojis = await guild.fetchEmojis();
@@ -141,7 +143,10 @@ async function deleteOldestEmojisFluxer(fluxerClient: FluxerClient) {
   }
 }
 
-async function deleteOldestEmojisDiscord(discordClient: DiscordClient) {
+/**
+ * @param {DiscordClient} discordClient
+ */
+async function deleteOldestEmojisDiscord(discordClient) {
   let app = await discordClient.application?.fetch();
   if (app) {
     let emojis = app.emojis.cache.filter((x) => !x.name.startsWith("reply"));

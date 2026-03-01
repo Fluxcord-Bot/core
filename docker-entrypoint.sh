@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
-bun run migrate.ts
-exec bun index.ts
+pnpm run migrate
+exec pnpm run start

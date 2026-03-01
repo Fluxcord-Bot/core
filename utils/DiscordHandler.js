@@ -1,42 +1,27 @@
-import {
-  type OmitPartialGroupDMChannel,
-  Message as DiscordMessage,
-  Client as DiscordClient,
-  type PartialMessage as DiscordPartialMessage,
-  MessageType,
-  type ReadonlyCollection,
-  Message,
-  type PartialMessage,
-  Typing,
-  type TextBasedChannel,
-  MessageFlags,
-  MessageFlagsBitField,
-} from "discord.js";
-import {
-  Client as FluxerClient,
-  GuildChannel as FluxerGuildChannel,
-  GuildChannel,
-  TextChannel,
-} from "@fluxerjs/core";
-import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db";
-import Config from "../config";
-import { CommandHandler } from "./CommandHandler";
-import { log } from "./Logger";
+import { MessageType } from "discord.js";
+import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db/index.js";
+import Config from "../utils/ConfigHandler.js";
+import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
-import { discordEmbedToFluxer } from "./EmbedConverter";
-import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser";
-import { checkManageServerPerms } from "./CheckManageServerPerms";
-import { parseMentions } from "./MessageContentParser";
+import { discordEmbedToFluxer } from "./EmbedConverter.js";
+import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser.js";
+import { parseMentions } from "./MessageContentParser.js";
 
-let fluxcordBotEmojiCfg: any = undefined;
+let fluxcordBotEmojiCfg = undefined;
 
+/**
+ * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} message
+ * @param {DiscordClient} client
+ * @param {FluxerClient} fluxerClient
+ * @param {boolean} [proxyCompatibility]
+ */
 export async function DiscordCreateMessageHandler(
-  message: OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
-  client: DiscordClient,
-  fluxerClient: FluxerClient,
-  proxyCompatibility?: boolean,
+  message,
+  client,
+  fluxerClient,
+  proxyCompatibility,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -106,7 +91,8 @@ export async function DiscordCreateMessageHandler(
 
   if (!channelMap || channelMap.discordWebhookId === message.webhookId) return;
 
-  let messageReference: MessageMap | null;
+  /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
+  let messageReference;
   if (message.reference) {
     messageReference = await MessageMap.findOne({
       where: {
@@ -130,7 +116,9 @@ export async function DiscordCreateMessageHandler(
       ? `*@${message.author.tag} joined the bridged server*`
       : "";
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
-  const webhooks = await (channel as FluxerGuildChannel).fetchWebhooks();
+  const webhooks = await /** @type {FluxerGuildChannel} */ (
+    channel
+  ).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
   const overAttachments = message.attachments.filter((x) => x.size > 24999900);
   const overAttachmentsStr = overAttachments
@@ -188,13 +176,12 @@ export async function DiscordCreateMessageHandler(
   }
 }
 
-export async function DiscordUpdateMessageHandler(
-  oldMsg: OmitPartialGroupDMChannel<
-    DiscordMessage<boolean> | DiscordPartialMessage<boolean>
-  >,
-  newMsg: OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
-  client: FluxerClient,
-) {
+/**
+ * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean> | import("discord.js").PartialMessage<boolean>>} oldMsg
+ * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} newMsg
+ * @param {FluxerClient} client
+ */
+export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   const messageExisting = await MessageMap.findOne({
     where: {
       discordMessageId: newMsg.id,
@@ -206,7 +193,7 @@ export async function DiscordUpdateMessageHandler(
     const channelMap = messageExisting.channelMap;
     const channel = await client.channels.fetch(channelMap.fluxerChannelId);
 
-    const message = await (channel as TextChannel).messages.fetch(
+    const message = await /** @type {TextChannel} */ (channel).messages.fetch(
       messageExisting.fluxerMessageId,
     );
 
@@ -214,7 +201,8 @@ export async function DiscordUpdateMessageHandler(
       message.attachments.find((y) => y.url === x.url || y.url === x.proxyURL),
     );
 
-    let messageReference: MessageMap | null;
+    /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
+    let messageReference;
     if (newMsg.reference) {
       messageReference = await MessageMap.findOne({
         where: {
@@ -253,12 +241,11 @@ export async function DiscordUpdateMessageHandler(
   }
 }
 
-export async function DiscordDeleteMessageHandler(
-  msg: OmitPartialGroupDMChannel<
-    DiscordMessage<boolean> | DiscordPartialMessage<boolean>
-  >,
-  client: FluxerClient,
-) {
+/**
+ * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean> | import("discord.js").PartialMessage<boolean>>} msg
+ * @param {FluxerClient} client
+ */
+export async function DiscordDeleteMessageHandler(msg, client) {
   const messageExisting = await MessageMap.findOne({
     where: {
       discordMessageId: msg.id,
@@ -270,7 +257,7 @@ export async function DiscordDeleteMessageHandler(
     const channelMap = messageExisting.channelMap;
     const channel = await client.channels.fetch(channelMap.fluxerChannelId);
 
-    const message = await (channel as TextChannel).messages.fetch(
+    const message = await /** @type {TextChannel} */ (channel).messages.fetch(
       messageExisting.fluxerMessageId,
     );
 
@@ -279,10 +266,11 @@ export async function DiscordDeleteMessageHandler(
   }
 }
 
-export async function DiscordBulkDeleteMessageHandler(
-  msgs: ReadonlyCollection<string, Message<true> | PartialMessage<true>>,
-  client: FluxerClient,
-) {
+/**
+ * @param {import("discord.js").ReadonlyCollection<string, Message<true> | import("discord.js").PartialMessage<true>>} msgs
+ * @param {FluxerClient} client
+ */
+export async function DiscordBulkDeleteMessageHandler(msgs, client) {
   const messagesExisting = await MessageMap.findAll({
     where: {
       discordMessageId: {
@@ -293,9 +281,11 @@ export async function DiscordBulkDeleteMessageHandler(
   });
 
   if (messagesExisting.length > 0) {
-    const channel = (await client.channels.fetch(
-      messagesExisting[0]?.channelMap.fluxerChannelId ?? "",
-    )) as GuildChannel;
+    const channel = /** @type {GuildChannel} */ (
+      await client.channels.fetch(
+        messagesExisting[0]?.channelMap.fluxerChannelId ?? "",
+      )
+    );
 
     const reply = await channel.send({
       content: `Bridging bulk deletes, please wait...`,
@@ -311,10 +301,11 @@ export async function DiscordBulkDeleteMessageHandler(
   }
 }
 
-export async function DiscordPinsUpdateHandler(
-  channel: TextBasedChannel,
-  client: FluxerClient,
-) {
+/**
+ * @param {import("discord.js").TextBasedChannel} channel
+ * @param {FluxerClient} client
+ */
+export async function DiscordPinsUpdateHandler(channel, client) {
   const channelMap = await ChannelMap.findOne({
     where: {
       discordChannelId: channel.id,
@@ -332,9 +323,9 @@ export async function DiscordPinsUpdateHandler(
       },
     });
 
-    const fluxerChannel = (await client.channels.fetch(
-      channelMap?.fluxerChannelId,
-    )) as TextChannel;
+    const fluxerChannel = /** @type {TextChannel} */ (
+      await client.channels.fetch(channelMap?.fluxerChannelId)
+    );
 
     if (fluxerChannel) {
       const fluxerPinned = await fluxerChannel.fetchPinnedMessages();

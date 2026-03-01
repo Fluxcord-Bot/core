@@ -1,38 +1,38 @@
-import {
-  Events as FluxerEvents,
-  Client as FluxerClient,
-  EmbedBuilder,
-} from "@fluxerjs/core";
+//@ts-check
+
+import { Events as FluxerEvents, Client as FluxerClient } from "@fluxerjs/core";
 import {
   Client as DiscordClient,
   Events as DiscordEvents,
   GatewayIntentBits,
 } from "discord.js";
-import Config from "./config";
+import Config from "./utils/ConfigHandler.js";
 import {
   FluxerBulkDeleteMessageHandler,
   FluxerCreateMessageHandler,
   FluxerDeleteMessageHandler,
   FluxerPinsUpdateHandler,
   FluxerUpdateMessageHandler,
-} from "./utils/FluxerHandler";
+} from "./utils/FluxerHandler.js";
 import {
   DiscordBulkDeleteMessageHandler,
   DiscordCreateMessageHandler,
   DiscordDeleteMessageHandler,
   DiscordPinsUpdateHandler,
   DiscordUpdateMessageHandler,
-} from "./utils/DiscordHandler";
-import { log } from "./utils/Logger";
+} from "./utils/DiscordHandler.js";
+import { log } from "./utils/Logger.js";
 import fs from "node:fs";
-import { ChannelMap } from "./db";
-import { sendErrorMessage } from "./utils/SendErrorMessage";
+import { ChannelMap } from "./db/index.js";
+import { sendErrorMessage } from "./utils/SendErrorMessage.js";
+import { getVoiceManager } from "@fluxerjs/voice";
 
-const discordClient: DiscordClient<boolean> = new DiscordClient({
+const discordClient = new DiscordClient({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -41,6 +41,9 @@ export const botStartingTime = new Date();
 const maps = await ChannelMap.findAll();
 
 const fluxerClient = new FluxerClient({
+  rest: {
+    api: Config.FluxerAPIBaseURL,
+  },
   intents: 0,
   presence: {
     status: "online",
@@ -49,6 +52,9 @@ const fluxerClient = new FluxerClient({
     },
   },
 });
+
+// @ts-expect-error
+getVoiceManager(fluxerClient);
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;

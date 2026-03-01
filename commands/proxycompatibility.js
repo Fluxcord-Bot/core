@@ -1,10 +1,10 @@
-import { Message, EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { commands } from "../utils/CommandHandler";
-import { UserConfig } from "../db";
+import { Message } from "@fluxerjs/core";
+import { UserConfig } from "../db/index.js";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "proxycompatibility",
   description: "Toggle Proxy Compatibility Mode",
   requireElevated: false,

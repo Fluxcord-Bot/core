@@ -1,4 +1,8 @@
 const Config = {
+  // The base URL of Fluxer API. If you're not using a self-hosted Fluxer instance,
+  // do not touch this.
+  FluxerAPIBaseURL: "https://api.fluxer.app",
+
   // The path for the bot's data directory. Probably do not touch if you're using Docker.
   DataFolderPath: "/data",
 

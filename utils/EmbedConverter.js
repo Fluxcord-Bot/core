@@ -1,22 +1,16 @@
-import {
-  EmbedBuilder as FluxerEmbedBuilder,
-  Client as FluxerClient,
-  Message,
-} from "@fluxerjs/core";
-import {
-  Embed as DiscordEmbed,
-  EmbedBuilder as DiscordEmbedBuilder,
-  Client as DiscordClient,
-} from "discord.js";
+import { EmbedBuilder as FluxerEmbedBuilder } from "@fluxerjs/core";
+import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import {
   parseDiscordEmojiToFluxer,
   parseFluxerEmojiToDiscord,
-} from "./EmojiStickerParser";
+} from "./EmojiStickerParser.js";
 
-export async function discordEmbedToFluxer(
-  embed: DiscordEmbed,
-  fluxerClient: FluxerClient,
-): Promise<FluxerEmbedBuilder> {
+/**
+ * @param {DiscordEmbed} embed
+ * @param {FluxerClient} fluxerClient
+ * @returns {Promise<FluxerEmbedBuilder>}
+ */
+export async function discordEmbedToFluxer(embed, fluxerClient) {
   let outEmbed = new FluxerEmbedBuilder()
     .setTitle(embed.title)
     .setURL(embed.url)
@@ -65,10 +59,12 @@ export async function discordEmbedToFluxer(
   return outEmbed;
 }
 
-export async function fluxerEmbedToDiscord(
-  message: Message,
-  discordClient: DiscordClient,
-): Promise<DiscordEmbedBuilder[]> {
+/**
+ * @param {Message} message
+ * @param {DiscordClient} discordClient
+ * @returns {Promise<DiscordEmbedBuilder[]>}
+ */
+export async function fluxerEmbedToDiscord(message, discordClient) {
   const embeds = message.embeds;
 
   const embedsOut = await Promise.all(
@@ -88,7 +84,7 @@ export async function fluxerEmbedToDiscord(
       if (embed.fields) {
         outEmbed = outEmbed.addFields(
           ...(await Promise.all(
-            embed.fields.map(async (x: any) => ({
+            embed.fields.map(async (x) => ({
               name: x.name,
               value:
                 (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "",

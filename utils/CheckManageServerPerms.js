@@ -1,11 +1,12 @@
-import { Client as DiscordClient, PermissionFlagsBits } from "discord.js";
-import { Client as FluxerClient, PermissionFlags } from "@fluxerjs/core";
+import { PermissionFlagsBits } from "discord.js";
+import { PermissionFlags } from "@fluxerjs/core";
 
-export async function checkManageServerPerms(
-  guildId: string,
-  userId: string,
-  client: FluxerClient | DiscordClient,
-) {
+/**
+ * @param {string} guildId
+ * @param {string} userId
+ * @param {FluxerClient | DiscordClient} client
+ */
+export async function checkManageServerPerms(guildId, userId, client) {
   const guild = await client.guilds.fetch(guildId);
   if (!guild) return false;
   const user = await guild.members.fetch({

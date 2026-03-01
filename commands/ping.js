@@ -1,11 +1,11 @@
-import { Message, EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { commands } from "../utils/CommandHandler";
-import { getDuration } from "../utils/GetDuration";
-import { botStartingTime } from "..";
+import { EmbedBuilder } from "@fluxerjs/core";
+import { getDuration } from "../utils/GetDuration.js";
+import { botStartingTime } from "../index.js";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "uptime",
   description: "Bot uptime",
   requireElevated: false,

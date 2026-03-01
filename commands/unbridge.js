@@ -1,11 +1,10 @@
-import { Message, EmbedBuilder, TextChannel } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { commands } from "../utils/CommandHandler";
-import { ChannelMap } from "../db";
+import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "unbridge",
   description: "Unbridge the current channel",
   requireElevated: false,
@@ -35,9 +34,9 @@ const command: CommandSchema = {
     } catch {}
 
     try {
-      const channel = (await fluxerClient.channels.fetch(
-        channelMap.fluxerChannelId,
-      )) as TextChannel;
+      const channel = /** @type {TextChannel} */ (
+        await fluxerClient.channels.fetch(channelMap.fluxerChannelId)
+      );
       const webhooks = await channel.fetchWebhooks();
       const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
       await webhook?.delete();

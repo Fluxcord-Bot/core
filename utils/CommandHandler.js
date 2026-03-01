@@ -1,51 +1,31 @@
-import {
-  type OmitPartialGroupDMChannel,
-  Message as DiscordMessage,
-  Client as DiscordClient,
-} from "discord.js";
-import {
-  Message as FluxerMessage,
-  Client as FluxerClient,
-  EmbedBuilder,
-} from "@fluxerjs/core";
-import Config from "../config";
+import { Message as FluxerMessage, EmbedBuilder } from "@fluxerjs/core";
+import Config from "../utils/ConfigHandler.js";
 import fs from "node:fs";
 import ExpiryMap from "expiry-map";
-import type { CommandSchema } from "./CommandSchema";
-import { checkManageServerPerms } from "./CheckManageServerPerms";
-import { log } from "./Logger";
+import { checkManageServerPerms } from "./CheckManageServerPerms.js";
+import { log } from "./Logger.js";
 
-export let BridgeMap: ExpiryMap<
-  string,
-  {
-    discordChannel: string;
-    fluxerChannel: string;
-    bridgeType: string;
-  }
-> = new ExpiryMap(120000);
+export let BridgeMap = new ExpiryMap(120000);
 
-async function getCommands() {
+export async function getCommands() {
   const entries = fs.readdirSync("./commands");
   return Promise.all(
-    entries.flatMap(
-      async (x) => (await import("../commands/" + x)).default as CommandSchema,
-    ),
+    entries.flatMap(async (x) => (await import("../commands/" + x)).default),
   );
 }
 
-export const commands = await getCommands();
-
-export async function CommandHandler(
-  message: FluxerMessage | OmitPartialGroupDMChannel<DiscordMessage<boolean>>,
-  discordClient: DiscordClient,
-  fluxerClient: FluxerClient,
-) {
+/**
+ * @param {FluxerMessage | import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} message
+ * @param {DiscordClient} discordClient
+ * @param {FluxerClient} fluxerClient
+ */
+export async function CommandHandler(message, discordClient, fluxerClient) {
   if (message.author.bot || message.webhookId) return;
 
   const cmdList = message.content.split(" ");
   const command = cmdList[0]?.replace(Config.BotPrefix, "");
   const params = cmdList.slice(1);
-  const commandToRun = commands.find((x) => x.name === command);
+  const commandToRun = (await getCommands()).find((x) => x.name === command);
 
   if (!commandToRun) {
     await message.reply(

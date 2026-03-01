@@ -1,34 +1,26 @@
-import {
-  Client as DiscordClient,
-  TextChannel,
-  type GatewayMessageDeleteBulkDispatchData,
-  type TextBasedChannel,
-} from "discord.js";
-import {
-  Message as FluxerMessage,
-  type PartialMessage as FluxerPartialMessage,
-  Client as FluxerClient,
-  TextChannel as FluxerTextChannel,
-} from "@fluxerjs/core";
-import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db";
-import Config from "../config";
-import { CommandHandler } from "./CommandHandler";
-import { log } from "./Logger";
+import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db/index.js";
+import Config from "../utils/ConfigHandler.js";
+import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
-import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser";
-import { checkManageServerPerms } from "./CheckManageServerPerms";
-import { fluxerEmbedToDiscord } from "./EmbedConverter";
-import { parseMentions } from "./MessageContentParser";
+import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
+import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
+import { parseMentions } from "./MessageContentParser.js";
 
-let fluxcordBotEmojiCfg: any = undefined;
+let fluxcordBotEmojiCfg = undefined;
 
+/**
+ * @param {FluxerMessage} message
+ * @param {FluxerClient} client
+ * @param {DiscordClient} discordClient
+ * @param {boolean} [proxyCompatibility]
+ */
 export async function FluxerCreateMessageHandler(
-  message: FluxerMessage,
-  client: FluxerClient,
-  discordClient: DiscordClient,
-  proxyCompatibility?: boolean,
+  message,
+  client,
+  discordClient,
+  proxyCompatibility,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -83,7 +75,8 @@ export async function FluxerCreateMessageHandler(
 
   if (channelMap?.bridgeType === "discord2fluxer") return;
 
-  let messageReference: MessageMap | null;
+  /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
+  let messageReference;
   if (message.messageReference) {
     messageReference = await MessageMap.findOne({
       where: {
@@ -160,10 +153,15 @@ export async function FluxerCreateMessageHandler(
   });
 }
 
+/**
+ * @param {FluxerMessage | null} oldMessage
+ * @param {FluxerMessage} newMessage
+ * @param {DiscordClient} client
+ */
 export async function FluxerUpdateMessageHandler(
-  oldMessage: FluxerMessage | null,
-  newMessage: FluxerMessage,
-  client: DiscordClient,
+  oldMessage,
+  newMessage,
+  client,
 ) {
   const messageExisting = await MessageMap.findOne({
     where: {
@@ -179,7 +177,8 @@ export async function FluxerUpdateMessageHandler(
       channelMap.discordWebhookToken,
     );
 
-    let messageReference: MessageMap | null;
+    /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
+    let messageReference;
     if (newMessage.messageReference) {
       messageReference = await MessageMap.findOne({
         where: {
@@ -209,10 +208,11 @@ export async function FluxerUpdateMessageHandler(
   }
 }
 
-export async function FluxerDeleteMessageHandler(
-  message: FluxerPartialMessage,
-  client: DiscordClient,
-) {
+/**
+ * @param {import("@fluxerjs/core").PartialMessage} message
+ * @param {DiscordClient} client
+ */
+export async function FluxerDeleteMessageHandler(message, client) {
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: message.id,
@@ -232,14 +232,11 @@ export async function FluxerDeleteMessageHandler(
   }
 }
 
-export async function FluxerBulkDeleteMessageHandler(
-  msgs: {
-    channel_id: string;
-    guild_id?: string;
-    ids: string[];
-  },
-  client: DiscordClient,
-) {
+/**
+ * @param {{ channel_id: string; guild_id?: string; ids: string[] }} msgs
+ * @param {DiscordClient} client
+ */
+export async function FluxerBulkDeleteMessageHandler(msgs, client) {
   const messagesExisting = await MessageMap.findAll({
     where: {
       fluxerMessageId: {
@@ -250,9 +247,11 @@ export async function FluxerBulkDeleteMessageHandler(
   });
 
   if (messagesExisting.length > 0) {
-    const channel = (await client.channels.fetch(
-      messagesExisting[0]?.channelMap.fluxerChannelId ?? "",
-    )) as TextChannel;
+    const channel = /** @type {TextChannel} */ (
+      await client.channels.fetch(
+        messagesExisting[0]?.channelMap.fluxerChannelId ?? "",
+      )
+    );
 
     const reply = await channel.send({
       content: `Bridging bulk deletes, please wait...`,
@@ -264,13 +263,12 @@ export async function FluxerBulkDeleteMessageHandler(
   }
 }
 
-export async function FluxerPinsUpdateHandler(
-  chnl: {
-    channel_id: string;
-  },
-  client: DiscordClient,
-  fluxerClient: FluxerClient,
-) {
+/**
+ * @param {{ channel_id: string }} chnl
+ * @param {DiscordClient} client
+ * @param {FluxerClient} fluxerClient
+ */
+export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
   const channelMap = await ChannelMap.findOne({
     where: {
       fluxerChannelId: chnl.channel_id,
@@ -278,9 +276,9 @@ export async function FluxerPinsUpdateHandler(
   });
 
   if (channelMap) {
-    const channel = (await fluxerClient.channels.fetch(
-      chnl.channel_id,
-    )) as FluxerTextChannel;
+    const channel = /** @type {FluxerTextChannel} */ (
+      await fluxerClient.channels.fetch(chnl.channel_id)
+    );
 
     if (channel) {
       const pinned = await channel.fetchPinnedMessages();

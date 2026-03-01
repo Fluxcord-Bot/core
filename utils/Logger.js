@@ -1,6 +1,10 @@
-import Config from "../config";
+import Config from "../utils/ConfigHandler.js";
 
-export function log(type: string, ...msg: any[]) {
+/**
+ * @param {string} type
+ * @param {...any} msg
+ */
+export function log(type, ...msg) {
   if (!Config.LoggingCategories.includes(type)) return;
   console.log(
     `[${new Date().toLocaleTimeString("en-US", {

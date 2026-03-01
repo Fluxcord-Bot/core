@@ -1,17 +1,19 @@
-import { Message, EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { commands } from "../utils/CommandHandler";
-import { checkManageServerPerms } from "../utils/CheckManageServerPerms";
+import { EmbedBuilder } from "@fluxerjs/core";
+import Config from "../utils/ConfigHandler.js";
+import { getCommands } from "../utils/CommandHandler.js";
+import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "help",
-  description: "Help for Fluxbot's functions",
+  description: "Help for Fluxcord's functions",
   requireElevated: false,
   params: "[command]",
   async run(params, message, _, _2) {
     if (params[0]) {
-      const command = commands.find((x) => x.name === params[0]);
+      const command = (await getCommands()).find((x) => x.name === params[0]);
       if (command) {
         await message.reply({
           //@ts-expect-error
@@ -50,7 +52,7 @@ const command: CommandSchema = {
         message.client,
       );
 
-      let cmds = commands;
+      let cmds = await getCommands();
 
       if (!isUserBotAdmin) {
         cmds = cmds.filter((x) => !x.requireOwner);
@@ -66,9 +68,7 @@ const command: CommandSchema = {
           new EmbedBuilder()
             .setTitle("Fluxcord")
             .setDescription(
-              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.
-
-Prefix is \`${Config.BotPrefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
+              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${Config.BotPrefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
             )
             .addFields(
               ...cmds.map((x) => ({

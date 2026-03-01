@@ -1,14 +1,22 @@
-FROM oven/bun:debian
+FROM node:20-trixie
+
+ENV PNPM_HOME="/pnpm"
+
+ENV PATH="$PNPM_HOME:$PATH"
 
 RUN apt update
 
-RUN apt install python3 -y
+RUN apt install build-essential python3-setuptools python3 ffmpeg -y
+
+RUN wget -qO- https://get.pnpm.io/install.sh | ENV="$HOME/.bashrc" SHELL="$(which bash)" bash -
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN bun install
+COPY pnpm-workspace.yaml ./
+
+RUN pnpm install
 
 COPY . .
 

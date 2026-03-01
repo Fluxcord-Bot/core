@@ -1,10 +1,12 @@
-import { Channel as FluxerChannel, TextChannel } from "@fluxerjs/core";
-import Config from "../config";
-import type { CommandSchema } from "../utils/CommandSchema";
-import { ChannelMap } from "../db";
+import { Channel as FluxerChannel } from "@fluxerjs/core";
+import Config from "../utils/ConfigHandler.js";
+import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
-const command: CommandSchema = {
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
   name: "seterrorlogging",
   description: "Set error logging channel",
   requireElevated: true,
@@ -45,7 +47,7 @@ const command: CommandSchema = {
         await message.reply("The bot cannot send messages on this channel.");
         return;
       }
-      await (channel as TextChannel).send({
+      await /** @type {TextChannel} */ (channel).send({
         content: `This channel is configured as the channel where to send the errors on bridging <#${message.channelId}> into.`,
       });
       channelMap.errorLoggingChannelId = channel.id;
