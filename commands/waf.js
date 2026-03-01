@@ -6,6 +6,7 @@ import Package from "../package.json" with { type: "json" };
 /**
  * @type {import('../utils/CommandSchema.js').CommandSchema}
  */
+
 const waf = ["waf", "arf", "waff", "awaf"];
 
 const command = {
