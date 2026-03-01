@@ -94,7 +94,7 @@ export async function FluxerCreateMessageHandler(
 
   const userJoin =
     message.type === 7
-      ? `*@${message.author.username}#${message.author.discriminator} joined the bridged community*`
+      ? `*@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`
       : "";
 
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
@@ -133,9 +133,7 @@ export async function FluxerCreateMessageHandler(
     files: message.attachments
       .filter((x) => x.size < 9999000)
       .map((a) => a.proxy_url ?? a.url ?? ""),
-    username:
-      message.author.globalName ??
-      message.author.username + "#" + message.author.discriminator,
+    username: message.author.globalName ?? message.author.username,
     embeds: await fluxerEmbedToDiscord(message, discordClient),
     avatarURL: message.author.avatarURL() ?? undefined,
   });

@@ -12,7 +12,7 @@ import { parseMentions } from "./MessageContentParser.js";
 let fluxcordBotEmojiCfg = undefined;
 
 /**
- * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} message
+ * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>>} message
  * @param {DiscordClient} client
  * @param {FluxerClient} fluxerClient
  * @param {boolean} [proxyCompatibility]
@@ -125,6 +125,7 @@ export async function DiscordCreateMessageHandler(
     .map((x) => `[${x.name}](${x.url})`)
     .join(" ");
   if (webhook) {
+    const guildUser = await message.guild.members.fetch(message.author.id);
     const msg = await webhook.send(
       {
         content:
@@ -145,7 +146,10 @@ export async function DiscordCreateMessageHandler(
             ? "\n-# has attachments over 25mb: " + overAttachmentsStr
             : ""),
         username:
-          message.author.displayName ?? message.author.globalName ?? "Fluxcord",
+          guildUser.displayName ??
+          message.author.displayName ??
+          message.author.globalName ??
+          "Fluxcord",
         avatar_url: message.author.avatarURL() ?? undefined,
         files: message.attachments
           .filter((x) => x.size < 24999900)

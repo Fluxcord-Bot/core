@@ -1,5 +1,6 @@
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
+import { BridgeMap } from "../utils/CommandHandler.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -23,6 +24,13 @@ const command = {
     });
 
     if (!channelMap) {
+      if (BridgeMap.has(message.channelId)) {
+        BridgeMap.delete(message.channelId);
+
+        await message.reply("Cancelled bridging request.");
+        return;
+      }
+
       await message.reply("This channel is already unbridged.");
       return;
     }

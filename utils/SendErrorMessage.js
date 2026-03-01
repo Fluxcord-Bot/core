@@ -5,9 +5,9 @@ import { Op } from "sequelize";
 import { log } from "./Logger.js";
 
 /**
- * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>> | Message} message
- * @param {DiscordClient} discordClient
- * @param {FluxerClient} fluxerClient
+ * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | Message} message
+ * @param {import("discord.js").Client} discordClient
+ * @param {import("@fluxerjs/core").Client} fluxerClient
  * @param {any} error
  * @param {boolean} [replyFallback=false]
  */
@@ -74,22 +74,10 @@ export async function sendErrorMessage(
           });
         }
       }
-    } else {
-      if (replyFallback) {
-        await message.reply({
-          // @ts-expect-error
-          embeds: [
-            new EmbedBuilder()
-              .setTitle("An error has occurred while bridging this message!")
-              .addFields({
-                name: "Stack trace",
-                value: `${error}`,
-              }),
-          ],
-        });
-      }
     }
   }
+
+  await message.react("❌");
 
   log(
     message instanceof Message ? "FLUXER" : "DISCORD",

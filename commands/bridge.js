@@ -60,19 +60,30 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
     }
 
     if (isFluxer) {
-      const chnl = /** @type {TextChannel} */ (
-        await fluxerClient.channels.fetch(message.channelId)
+      const currentChannel = await fluxerClient.channels.fetch(
+        message.channelId,
       );
-      if (chnl.nsfw) {
+
+      if (
+        (currentChannel.nsfw && !channel.nsfw) ||
+        (!currentChannel.nsfw && channel.nsfw)
+      ) {
         await message.reply(
-          "Due to Fluxer API limitations, you cannot bridge NSFW channels.",
+          "Both channels needs to be set as NSFW to bridge them.",
         );
         return;
       }
     } else {
-      if (/** @type {TextChannel} */ (channel).nsfw) {
+      const currentChannel = await discordClient.channels.fetch(
+        message.channelId,
+      );
+
+      if (
+        (channel.nsfw && !currentChannel.nsfw) ||
+        (!channel.nsfw && currentChannel.nsfw)
+      ) {
         await message.reply(
-          "Due to Fluxer API limitations, you cannot bridge NSFW channels.",
+          "Both channels needs to be set as NSFW to bridge them.",
         );
         return;
       }
