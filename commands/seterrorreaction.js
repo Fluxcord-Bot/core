@@ -29,17 +29,14 @@ const command = {
       }
     }
 
-    const guildMap = await GuildMap.findOrCreate({
+    const guildMap = await GuildMap.findOne({
       where: {
         guildId: message.guildId,
       },
-      defaults: {
-        guildType: message instanceof Message ? "fluxer" : "discord",
-      },
     });
 
-    guildMap[0].errorReaction = params[0] ?? null;
-    await guildMap[0].save();
+    guildMap.errorReaction = params[0] ?? null;
+    await guildMap.save();
 
     if (params[0]) {
       message.reply(`Successfully set ${params[0]} as error reaction!`);
