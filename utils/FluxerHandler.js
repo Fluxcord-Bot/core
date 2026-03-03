@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
+import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -32,6 +33,8 @@ export async function FluxerCreateMessageHandler(
     CommandHandler(message, discordClient, client);
     return;
   }
+
+  await detectProxyCommandCompat(message);
 
   const userConfig = await UserConfig.findOne({
     where: {
