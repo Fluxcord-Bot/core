@@ -40,8 +40,7 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
       message.guildId ?? "",
       message.author.id,
       message.client,
-    ) &&
-    !Config.AdminAccountIds.find((x) => x === message.author.id)
+    )
   ) {
     await message.reply(
       `You need at least **Manage ${message instanceof FluxerMessage ? "Community" : "Server"}** permissions to run this command!`,
