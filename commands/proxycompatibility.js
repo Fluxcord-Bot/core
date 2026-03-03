@@ -7,6 +7,7 @@ import { UserConfig } from "../db/index.js";
 const command = {
   name: "proxycompatibility",
   description: "Toggle Proxy Compatibility Mode",
+  aliases: ["pxycmp", "proxycompat", "pxy", "pk", "fish"],
   requireElevated: false,
   additionalInfo:
     "If enabled, instead of bridging your message immediately, it will wait for the proxy bot to send the right version of the message and Fluxcord will bridge that instead.",

@@ -9,7 +9,9 @@ import {
 } from "@fluxerjs/core";
 
 export type CommandSchema = {
+  groupNames?: string[];
   name: string;
+  aliases?: string[];
   description: string;
   requireElevated: boolean;
   requireOwner?: boolean;

@@ -3,7 +3,7 @@ import {
   Message as FluxerMessage,
   GuildChannel as FluxerGuildChannel,
 } from "@fluxerjs/core";
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap, GuildMap } from "../db/index.js";
 import { log } from "../utils/Logger.js";
 import { BridgeMap } from "../utils/CommandHandler.js";
 
@@ -98,11 +98,17 @@ const command = {
       discordGuildId = channel.guildId;
     }
 
-    await channel.send({
-      content:
-        "🎉 This channel is now bridged to " +
-        (isFluxer ? "Fluxer" : "Discord") +
-        "!",
+    const fluxerGuildMap = await GuildMap.findOrCreate({
+      where: {
+        guildId: fluxerGuildId,
+        guildType: "fluxer",
+      },
+    });
+    const discordGuildMap = await GuildMap.findOrCreate({
+      where: {
+        guildId: discordGuildId,
+        guildType: "discord",
+      },
     });
 
     await ChannelMap.create({
@@ -114,7 +120,16 @@ const command = {
       discordWebhookId,
       fluxerWebhookToken,
       discordWebhookToken,
+      fluxerGuildMapId: fluxerGuildMap[0].id,
+      discordGuildMapId: discordGuildMap[0].id,
       bridgeType: type.toLowerCase(),
+    });
+
+    await channel.send({
+      content:
+        "🎉 This channel is now bridged to " +
+        (isFluxer ? "Fluxer" : "Discord") +
+        "!",
     });
 
     await message.reply({

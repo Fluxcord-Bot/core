@@ -1,16 +1,24 @@
 import { Message as FluxerMessage, EmbedBuilder } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
 import fs from "node:fs";
+import path from "node:path";
 import ExpiryMap from "expiry-map";
 import { checkManageServerPerms } from "./CheckManageServerPerms.js";
 import { log } from "./Logger.js";
 
 export let BridgeMap = new ExpiryMap(120000);
 
+/**
+ * @returns {Promise<import('./CommandSchema.d.ts').CommandSchema[]>}
+ */
 export async function getCommands() {
-  const entries = fs.readdirSync("./commands");
+  const entries = fs.readdirSync("./commands", {
+    recursive: true,
+  });
   return Promise.all(
-    entries.flatMap(async (x) => (await import("../commands/" + x)).default),
+    entries
+      .filter((x) => fs.statSync("./commands/" + x).isFile)
+      .flatMap(async (x) => (await import("../commands/" + x)).default),
   );
 }
 
@@ -24,15 +32,34 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
 
   const cmdList = message.content.split(" ");
   const command = cmdList[0]?.replace(Config.BotPrefix, "");
-  const params = cmdList.slice(1);
-  const commandToRun = (await getCommands()).find((x) => x.name === command);
+  const commands = await getCommands();
+  let commandToRun = commands.find(
+    (x) => x.name === command || x.aliases?.find((y) => y === command),
+  );
+
+  let isGrouped = false;
 
   if (!commandToRun) {
-    await message.reply(
-      `Command \`${Config.BotPrefix + command}\` does not exist!`,
+    // check if it's a group command
+    const commandGroup = commands.filter((x) =>
+      x.groupNames?.find((y) => y === command),
     );
-    return;
+
+    if (commandGroup.length > 0) {
+      const command = cmdList[1];
+      commandToRun = commands.find(
+        (x) => x.name === command || x.aliases?.find((y) => y === command),
+      );
+      isGrouped = true;
+    } else {
+      await message.reply(
+        `Command \`${Config.BotPrefix + command}\` does not exist!`,
+      );
+      return;
+    }
   }
+
+  const params = cmdList.slice(isGrouped ? 2 : 1);
 
   if (
     commandToRun?.requireElevated &&

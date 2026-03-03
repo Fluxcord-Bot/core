@@ -2,6 +2,7 @@ import { Sequelize } from "sequelize-typescript";
 import Config from "../utils/ConfigHandler.js";
 import { log } from "../utils/Logger.js";
 import { DataTypes, Model } from "sequelize";
+import DefaultConfig from "../utils/ConfigHandler.js";
 
 const sequelize = new Sequelize({
   dialect: "sqlite",
@@ -12,6 +13,42 @@ const sequelize = new Sequelize({
 class ChannelMap extends Model {}
 class MessageMap extends Model {}
 class UserConfig extends Model {}
+class GuildMap extends Model {
+  /** @type {string} */
+  guildId;
+  /** @type {"fluxer" | "discord"} */
+  guildType;
+  /** @type {string} */
+  errorReaction = "⛓️‍💥";
+  /** @type {string} */
+  errorLoggingChannelId;
+  /** @type {"fluxer" | "discord"} */
+  errorLoggingPlatform;
+  /** @type {string} */
+  botPrefix = DefaultConfig.BotPrefix;
+}
+
+GuildMap.init(
+  {
+    guildId: { type: DataTypes.STRING, allowNull: false },
+    guildType: { type: DataTypes.ENUM("fluxer", "discord"), allowNull: false },
+    errorReaction: {
+      type: DataTypes.STRING,
+      defaultValue: "⛓️‍💥",
+      allowNull: true,
+    },
+    errorLoggingChannelId: { type: DataTypes.STRING, allowNull: true },
+    errorLoggingPlatform: {
+      type: DataTypes.ENUM("fluxer", "discord"),
+      allowNull: true,
+    },
+    botPrefix: {
+      type: DataTypes.STRING,
+      defaultValue: DefaultConfig.BotPrefix,
+    },
+  },
+  { sequelize, modelName: "GuildMap" },
+);
 
 ChannelMap.init(
   {
@@ -23,15 +60,20 @@ ChannelMap.init(
     fluxerChannelId: { type: DataTypes.STRING, allowNull: false },
     fluxerWebhookId: { type: DataTypes.STRING, allowNull: false },
     fluxerWebhookToken: { type: DataTypes.STRING, allowNull: false },
-    errorLoggingChannelId: { type: DataTypes.STRING, allowNull: true },
-    errorLoggingPlatform: {
-      type: DataTypes.ENUM("fluxer", "discord"),
-      allowNull: true,
-    },
     bridgeType: {
       type: DataTypes.ENUM("discord2fluxer", "fluxer2discord", "both"),
       allowNull: false,
       defaultValue: "both",
+    },
+    fluxerGuildMapId: {
+      type: DataTypes.INTEGER,
+      field: "FluxerGuildMapId",
+      references: { model: GuildMap, key: "id" },
+    },
+    discordGuildMapId: {
+      type: DataTypes.INTEGER,
+      field: "DiscordGuildMapId",
+      references: { model: GuildMap, key: "id" },
     },
   },
   { sequelize, modelName: "ChannelMap" },
@@ -82,5 +124,21 @@ ChannelMap.hasMany(MessageMap, {
   foreignKey: "channelMapId",
   as: "messageMaps",
 });
+ChannelMap.belongsTo(GuildMap, {
+  foreignKey: "discordGuildMapId",
+  as: "discordGuildMap",
+});
+ChannelMap.belongsTo(GuildMap, {
+  foreignKey: "fluxerGuildMapId",
+  as: "fluxerGuildMap",
+});
+GuildMap.hasMany(ChannelMap, {
+  foreignKey: "discordGuildMapId",
+  as: "discordChannelMaps",
+});
+GuildMap.hasMany(ChannelMap, {
+  foreignKey: "fluxerGuildMapId",
+  as: "fluxerChannelMaps",
+});
 
-export { sequelize, ChannelMap, MessageMap, UserConfig };
+export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap };

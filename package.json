@@ -1,6 +1,6 @@
 {
   "name": "fluxcord",
-  "version": "1.8a3",
+  "version": "1.9a",
   "module": "index.js",
   "type": "module",
   "private": true,

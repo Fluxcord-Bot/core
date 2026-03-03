@@ -1,6 +1,6 @@
 import { EmbedBuilder, Message } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { log } from "./Logger.js";
 
@@ -77,7 +77,19 @@ export async function sendErrorMessage(
     }
   }
 
-  await message.react("❌");
+  const guildMap = await GuildMap.findOne({
+    where: {
+      guildId: message.guildId,
+    },
+  });
+
+  if (guildMap) {
+    if (guildMap.errorReaction) {
+      await message.react(guildMap.errorReaction);
+    }
+  } else {
+    await message.react("⛓️‍💥");
+  }
 
   log(
     message instanceof Message ? "FLUXER" : "DISCORD",

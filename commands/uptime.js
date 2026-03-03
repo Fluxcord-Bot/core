@@ -3,7 +3,7 @@ import { getDuration } from "../utils/GetDuration.js";
 import { botStartingTime } from "../index.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../utils/CommandSchema.js').CommandSchema}
  */
 const command = {
   name: "uptime",

@@ -22,7 +22,9 @@ export async function detectProxyCommandCompat(message) {
     PROXY_COMMANDS.find((x) => firstWord.endsWith(x))
   ) {
     const cfg = await UserConfig.findOne({
-      userId: message.author.id,
+      where: {
+        userId: message.author.id,
+      },
     });
 
     // we don't want to override user config so we don't
@@ -36,12 +38,22 @@ export async function detectProxyCommandCompat(message) {
     });
 
     // then we DM that person
-    await message.author.send(
-      `Hey! We detected that you sent a message in ${
-        message.guild.name
-      } that contains a proxy bot's command, so we enabled` +
-        "Proxy Compatibility mode for you. If you want to disable it, just run `" +
-        `${DefaultConfig.BotPrefix}proxycompatibility\`, and we won't touch it ever again.`,
-    );
+    try {
+      await message.author.send(
+        `Hey! We detected that you sent a message in ${
+          message.guild.name
+        } that contains a proxy bot's command, so we enabled` +
+          "Proxy Compatibility mode for you. If you want to disable it, just run `" +
+          `${DefaultConfig.BotPrefix}proxycompatibility\`, and we won't touch it ever again.`,
+      );
+    } catch {
+      await message.reply(
+        `Hey! We detected that you sent a message in ${
+          message.guild.name
+        } that contains a proxy bot's command, so we enabled` +
+          " Proxy Compatibility mode for you. If you want to disable it, just run `" +
+          `${DefaultConfig.BotPrefix}proxycompatibility\`, and we won't touch it ever again.`,
+      );
+    }
   }
 }

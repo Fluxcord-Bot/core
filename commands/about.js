@@ -21,12 +21,12 @@ const command = {
           .setDescription(
             `Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.
 
-Currently bridging ${channels.length} channel${channels.length === 1 ? "s" : ""}`,
+Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
           )
           .addFields(
             {
               name: "Support community",
-              value: "https://fluxer.gg/6ULDiF2g",
+              value: "https://fluxer.gg/waf && https://discord.waf.moe",
               inline: true,
             },
             {

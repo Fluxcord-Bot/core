@@ -9,6 +9,7 @@ import { discordEmbedToFluxer } from "./EmbedConverter.js";
 import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
+import { sendErrorMessage } from "./SendErrorMessage.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -51,11 +52,13 @@ export async function DiscordCreateMessageHandler(
         message.flags.has("Loading"))) &&
     (!proxyCompatibility || message.flags.has("Loading"))
   ) {
-    setTimeout(
-      async () =>
-        await DiscordCreateMessageHandler(message, client, fluxerClient, true),
-      3000,
-    );
+    setTimeout(async () => {
+      try {
+        await DiscordCreateMessageHandler(message, client, fluxerClient, true);
+      } catch {
+        await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
+      }
+    }, 3000);
     return;
   }
 

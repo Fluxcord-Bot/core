@@ -1,13 +1,15 @@
 import { Channel as FluxerChannel } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
+  groupNames: ["guild", "g", "server", "s", "community", "c"],
   name: "seterrorlogging",
+  aliases: ["errlog"],
   description: "Set error logging channel",
   requireElevated: true,
   params: "<channelId>",
@@ -16,25 +18,18 @@ const command = {
   async run(params, message, _, _2) {
     if (!params[0]) {
       await message.reply(
-        `Missing parameters. Usage: \`${Config.BotPrefix}seterrorlogging <channelId>\``,
+        `Missing parameters. Usage: \`${Config.BotPrefix}guild seterrorlogging <channelId>\``,
       );
       return;
     }
 
-    const channelMap = await ChannelMap.findOne({
+    const guildMap = await GuildMap.findOne({
       where: {
-        [Op.or]: [
-          {
-            discordChannelId: message.channelId,
-          },
-          {
-            fluxerChannelId: message.channelId,
-          },
-        ],
+        guildId: message.guildId,
       },
     });
 
-    if (!channelMap) {
+    if (!guildMap) {
       await message.reply("This channel needs to be bridged first.");
       return;
     }
@@ -47,27 +42,21 @@ const command = {
         await message.reply("The bot cannot send messages on this channel.");
         return;
       }
-      await /** @type {TextChannel} */ (channel).send({
-        content: `This channel is configured as the channel where to send the errors on bridging <#${message.channelId}> into.`,
-      });
-      channelMap.errorLoggingChannelId = channel.id;
-      channelMap.errorLoggingPlatform = "fluxer";
+      guildMap.errorLoggingChannelId = channel.id;
+      guildMap.errorLoggingPlatform = "fluxer";
     } else if (channel) {
       if (!channel.isSendable()) {
         await message.reply("The bot cannot send messages on this channel.");
         return;
       }
-      await channel.send({
-        content: `This channel is configured as the channel where to send the errors on bridging <#${message.channelId}> into.`,
-      });
-      channelMap.errorLoggingChannelId = channel.id;
-      channelMap.errorLoggingPlatform = "discord";
+      guildMap.errorLoggingChannelId = channel.id;
+      guildMap.errorLoggingPlatform = "discord";
     } else {
       await message.reply("The bot cannot find this channel.");
       return;
     }
 
-    await channelMap.save();
+    await guildMap.save();
     await message.reply("Done!");
   },
 };
