@@ -9,7 +9,7 @@ import { Op } from "sequelize";
 const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
   name: "seterrorlogging",
-  aliases: ["errlog"],
+  aliases: ["errlog", "err"],
   description: "Set error logging channel",
   requireElevated: true,
   params: "<channelId>",

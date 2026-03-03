@@ -8,7 +8,7 @@ const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
   name: "seterrorreaction",
   description: "Set bot error emoji reaction, do not specify any to disable",
-  aliases: ["setreact", "seterr"],
+  aliases: ["setreact", "setemoji", "se"],
   params: "<emoji>",
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {
