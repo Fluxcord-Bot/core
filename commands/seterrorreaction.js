@@ -39,7 +39,9 @@ const command = {
     await guildMap.save();
 
     if (params[0]) {
-      message.reply(`Successfully set ${params[0]} as error reaction!`);
+      message.reply(
+        `Successfully set ${guildMap.errorReaction} as error reaction!`,
+      );
     } else {
       message.reply(`Successfully disabled error reaction!`);
     }

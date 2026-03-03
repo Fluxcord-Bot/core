@@ -13,20 +13,7 @@ const sequelize = new Sequelize({
 class ChannelMap extends Model {}
 class MessageMap extends Model {}
 class UserConfig extends Model {}
-class GuildMap extends Model {
-  /** @type {string} */
-  guildId;
-  /** @type {"fluxer" | "discord"} */
-  guildType;
-  /** @type {string} */
-  errorReaction = "⛓️‍💥";
-  /** @type {string} */
-  errorLoggingChannelId;
-  /** @type {"fluxer" | "discord"} */
-  errorLoggingPlatform;
-  /** @type {string} */
-  botPrefix = DefaultConfig.BotPrefix;
-}
+class GuildMap extends Model {}
 
 GuildMap.init(
   {
