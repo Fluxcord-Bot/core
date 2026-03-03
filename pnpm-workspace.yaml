@@ -2,4 +2,4 @@ onlyBuiltDependencies:
   - node-webcodecs
   - esbuild
   - sqlite3
-  - "@discordjs/opus"
+  # - "@discordjs/opus"
