@@ -127,7 +127,10 @@ export async function DiscordCreateMessageHandler(
     .map((x) => `[${x.name}](${x.url})`)
     .join(" ");
   if (webhook) {
-    const guildUser = await message.guild.members.fetch(message.author.id);
+    let guildUser = undefined;
+    try {
+      guildUser = await message.guild.members.fetch(message.author.id);
+    } catch {}
     const msg = await webhook.send(
       {
         content:

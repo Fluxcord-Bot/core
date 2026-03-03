@@ -1,17 +1,25 @@
-import { AttachmentBuilder } from "discord.js";
-import { Message as FluxerMessage } from "@fluxerjs/core";
+import { EmbedBuilder } from "@fluxerjs/core";
+import Config from "../config.js";
 import { ChannelMap } from "../db/index.js";
+import Package from "../package.json" with { type: "json" };
+import { Op } from "sequelize";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "abridgelist",
-  description: "Total bridge list",
-  requireElevated: false,
-  requireOwner: true,
-  async run(_, message, discordClient, fluxerClient) {
-    const allBridgedChannels = await ChannelMap.findAll();
+  name: "bridgelist",
+  description: "List of bridged channels on this server/community",
+  requireElevated: true,
+  async run(params, message, discordClient, fluxerClient) {
+    const allBridgedChannels = await ChannelMap.findAll({
+      where: {
+        [Op.or]: {
+          discordGuildId: message.guildId,
+          fluxerGuildId: message.guildId,
+        },
+      },
+    });
 
     const mappedChannels = await Promise.all(
       allBridgedChannels.map(async (x) => {
