@@ -151,7 +151,7 @@ export async function DiscordCreateMessageHandler(
             ? "\n-# has attachments over 25mb: " + overAttachmentsStr
             : ""),
         username:
-          guildUser.displayName ??
+          guildUser?.displayName ??
           message.author.displayName ??
           message.author.globalName ??
           "Fluxcord",
