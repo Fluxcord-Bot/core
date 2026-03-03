@@ -15,7 +15,7 @@ export async function getCommands() {
 }
 
 /**
- * @param {FluxerMessage | import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} message
+ * @param {import("@fluxerjs/core").Message | import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>>} message
  * @param {DiscordClient} discordClient
  * @param {FluxerClient} fluxerClient
  */
