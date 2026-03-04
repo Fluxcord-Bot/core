@@ -61,7 +61,7 @@ export async function FluxerCreateMessageHandler(
       } catch (e) {
         await sendErrorMessage(message, discordClient, client, e);
       }
-    }, 5000);
+    }, 7000);
     return;
   }
 
