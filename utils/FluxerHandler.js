@@ -90,9 +90,6 @@ export async function FluxerCreateMessageHandler(
         })
       )
         return;
-    } else {
-      // this should not happen
-      return;
     }
   }
 
