@@ -99,10 +99,10 @@ export async function DiscordCreateMessageHandler(
         })
       )
         return;
+    } else {
+      // this should not happen
+      return;
     }
-
-    // this should not happen
-    return;
   }
 
   const stickers = message.stickers.map((x) => `${x.name}`);

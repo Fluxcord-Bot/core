@@ -90,10 +90,10 @@ export async function FluxerCreateMessageHandler(
         })
       )
         return;
+    } else {
+      // this should not happen
+      return;
     }
-
-    // this should not happen
-    return;
   }
 
   const channelMap = await ChannelMap.findOne({
