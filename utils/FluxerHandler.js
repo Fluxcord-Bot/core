@@ -63,21 +63,28 @@ export async function FluxerCreateMessageHandler(
   }
 
   if (proxyCompatibility) {
-    const messageMap = await MessageMap.findAll({
+    const channelMap = await ChannelMap.findOne({
       where: {
         [Op.or]: {
           fluxerChannelId: message.channelId,
           discordChannelId: message.channelId,
         },
-        createdAt: {
-          [Op.gte]: new Date(Date.now() - 5000),
-        },
       },
-      limit: 5,
     });
+    if (channelMap) {
+      const messageMap = await MessageMap.findAll({
+        where: {
+          channelMapId: channelMap.id,
+          createdAt: {
+            [Op.gte]: new Date(Date.now() - 10000),
+          },
+        },
+        limit: 5,
+      });
 
-    if (messageMap.find((x) => compare(message.content, x.content) > 0.8))
-      return;
+      if (messageMap.find((x) => compare(message.content, x.content) > 0.8))
+        return;
+    }
   }
 
   const channelMap = await ChannelMap.findOne({
