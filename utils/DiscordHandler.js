@@ -10,7 +10,7 @@ import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
-import compare from "string-compare";
+import fuzzyMatching from "fuzzymatchingjs";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -94,7 +94,12 @@ export async function DiscordCreateMessageHandler(
         limit: 5,
       });
 
-      if (messageMap.find((x) => compare(message.content, x.content) > 0.8))
+      if (
+        messageMap.find(
+          (x) =>
+            fuzzyMatching.confidenceScore(x.content, message.content) > 0.8,
+        )
+      )
         return;
     }
   }

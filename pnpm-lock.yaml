@@ -41,6 +41,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      fuzzymatchingjs:
+        specifier: ^0.5.0
+        version: 0.5.0
       mediabunny:
         specifier: ^1.35.0
         version: 1.35.0
@@ -56,9 +59,6 @@ importers:
       sqlite3:
         specifier: ^5.1.7
         version: 5.1.7
-      string-compare:
-        specifier: ^1.1.2
-        version: 1.1.2
       truncate:
         specifier: ^3.0.0
         version: 3.0.0
@@ -67,10 +67,6 @@ importers:
         version: 3.8.2(@types/node@25.3.0)
 
 packages:
-
-  '@babel/runtime@7.28.6':
-    resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
-    engines: {node: '>=6.9.0'}
 
   '@balena/dockerignore@1.0.2':
     resolution: {integrity: sha512-wMue2Sy4GAVTk6Ic4tJVcnfdau+gx2EnG7S+uAEe+TWJFqE4YoWN4/H8MSLj4eYJKxGg26lZwboEniNiNwZQ6Q==}
@@ -816,6 +812,10 @@ packages:
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
 
+  fuzzymatchingjs@0.5.0:
+    resolution: {integrity: sha512-A0uXWnZ1IkpIO4nfaJMeOzbX/+4p/Fb5uRKJQn8yToO9Hw8FtYo9jliCJ42xXw4+KKX3wToPWWYC5MY9QZPvkA==}
+    engines: {node: '>=20.0.0'}
+
   gauge@3.0.2:
     resolution: {integrity: sha512-+5J6MS/5XksCuXq++uFRsnUd7Ovu1XenbeuIuNRJxYWjgQbPuFhT14lAvsWfqfAmnwluf1OwMjz39HjfLPci0Q==}
     engines: {node: '>=10'}
@@ -1541,9 +1541,6 @@ packages:
     resolution: {integrity: sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q==}
     engines: {node: '>=0.6.19'}
 
-  string-compare@1.1.2:
-    resolution: {integrity: sha512-LKBVyWCmTPu6fg5Q8Jfdz7yFK9qaJMPVW+zJ1a23o8VuZa0UIgQ3oIsNaNUAXONRtFwD4dP5F/C/VuH+nDruig==}
-
   string-width@4.2.3:
     resolution: {integrity: sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==}
     engines: {node: '>=8'}
@@ -1728,8 +1725,6 @@ packages:
     engines: {node: '>=12'}
 
 snapshots:
-
-  '@babel/runtime@7.28.6': {}
 
   '@balena/dockerignore@1.0.2': {}
 
@@ -2618,6 +2613,8 @@ snapshots:
 
   function-bind@1.1.2: {}
 
+  fuzzymatchingjs@0.5.0: {}
+
   gauge@3.0.2:
     dependencies:
       aproba: 2.1.0
@@ -3402,10 +3399,6 @@ snapshots:
   statuses@2.0.2: {}
 
   string-argv@0.3.2: {}
-
-  string-compare@1.1.2:
-    dependencies:
-      '@babel/runtime': 7.28.6
 
   string-width@4.2.3:
     dependencies:

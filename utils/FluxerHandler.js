@@ -8,7 +8,7 @@ import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
-import compare from "string-compare";
+import fuzzyMatching from "fuzzymatchingjs";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -54,11 +54,13 @@ export async function FluxerCreateMessageHandler(
     },
   });
   if (userConfig && userConfig.proxyCompatibility && !proxyCompatibility) {
-    setTimeout(
-      async () =>
-        await FluxerCreateMessageHandler(message, client, discordClient, true),
-      3000,
-    );
+    setTimeout(async () => {
+      try {
+        await FluxerCreateMessageHandler(message, discordClient, client, true);
+      } catch (e) {
+        await sendErrorMessage(message, discordClient, client, e);
+      }
+    }, 3000);
     return;
   }
 
@@ -82,7 +84,12 @@ export async function FluxerCreateMessageHandler(
         limit: 5,
       });
 
-      if (messageMap.find((x) => compare(message.content, x.content) > 0.8))
+      if (
+        messageMap.find(
+          (x) =>
+            fuzzyMatching.confidenceScore(x.content, message.content) > 0.8,
+        )
+      )
         return;
     }
   }
