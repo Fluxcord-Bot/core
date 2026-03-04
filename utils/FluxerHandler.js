@@ -57,7 +57,7 @@ export async function FluxerCreateMessageHandler(
   if (userConfig && userConfig.proxyCompatibility && !proxyCompatibility) {
     setTimeout(async () => {
       try {
-        await FluxerCreateMessageHandler(message, discordClient, client, true);
+        await FluxerCreateMessageHandler(message, client, discordClient, true);
       } catch (e) {
         await sendErrorMessage(message, discordClient, client, e);
       }
