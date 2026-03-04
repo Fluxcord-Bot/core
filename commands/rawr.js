@@ -1,15 +1,15 @@
-const waf = ["waf", "arf", "waff", "awaf"];
+const rawr = ["rawr"];
 
 /**
  * @type {import('../utils/CommandSchema.js').CommandSchema}
  */
 const command = {
-  name: "waf",
+  name: "rawr",
   description: ":3",
   requireElevated: false,
   hideFromHelp: true,
   async run(params, message, discordClient, fluxerClient) {
-    message.reply(waf[Math.floor(Math.random() * waf.length)]);
+    message.reply(rawr[Math.floor(Math.random() * rawr.length)]);
   },
 };
 

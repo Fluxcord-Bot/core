@@ -42,7 +42,7 @@ const command = {
           (x.groupNames?.includes(params[0]) &&
             (x.name === params[1] || x.aliases?.includes(params[1]))),
       );
-      if (command) {
+      if (command && !command.hideFromHelp) {
         const aliases = genAliases(
           command.name,
           command.aliases,
@@ -86,7 +86,7 @@ const command = {
         message.client,
       );
 
-      let cmds = await getCommands();
+      let cmds = (await getCommands()).filter((x) => !x.hideFromHelp);
 
       if (!isUserBotAdmin) {
         cmds = cmds.filter((x) => !x.requireOwner);

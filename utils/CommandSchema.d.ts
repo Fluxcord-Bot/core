@@ -15,6 +15,7 @@ export type CommandSchema = {
   description: string;
   requireElevated: boolean;
   requireOwner?: boolean;
+  hideFromHelp?: boolean;
   params?: string;
   additionalInfo?: string;
   run: (

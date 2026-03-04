@@ -1,7 +1,3 @@
-/**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
- */
-
 const meow = [
   "mreow",
   "mrrp",
@@ -26,10 +22,14 @@ const meow = [
   "nya",
 ];
 
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
 const command = {
   name: "meow",
   description: ":3",
   requireElevated: false,
+  hideFromHelp: true,
   async run(params, message, discordClient, fluxerClient) {
     message.reply(meow[Math.floor(Math.random() * meow.length)]);
   },
