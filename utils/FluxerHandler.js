@@ -8,6 +8,7 @@ import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
+import { sendErrorMessage } from "./SendErrorMessage.js";
 import fuzzyMatching from "fuzzymatchingjs";
 
 let fluxcordBotEmojiCfg = undefined;
