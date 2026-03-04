@@ -61,7 +61,7 @@ export async function FluxerCreateMessageHandler(
       } catch (e) {
         await sendErrorMessage(message, discordClient, client, e);
       }
-    }, 3000);
+    }, 5000);
     return;
   }
 
@@ -78,21 +78,22 @@ export async function FluxerCreateMessageHandler(
       const messageMap = await MessageMap.findAll({
         where: {
           channelMapId: channelMap.id,
-          createdAt: {
-            [Op.gte]: new Date(Date.now() - 10000),
-          },
         },
         limit: 5,
+        order: [["createdAt", "DESC"]],
       });
 
       if (
-        messageMap.find(
-          (x) =>
-            fuzzyMatching.confidenceScore(x.content, message.content) > 0.8,
-        )
+        messageMap.find((x) => {
+          const res = fuzzyMatching.confidenceScore(x.content, message.content);
+          return res > 0.8 || message.content.endsWith(x.content);
+        })
       )
         return;
     }
+
+    // this should not happen
+    return;
   }
 
   const channelMap = await ChannelMap.findOne({
