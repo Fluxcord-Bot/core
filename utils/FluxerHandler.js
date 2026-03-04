@@ -8,13 +8,14 @@ import { parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
+import compare from "string-compare";
 
 let fluxcordBotEmojiCfg = undefined;
 
 /**
- * @param {FluxerMessage} message
- * @param {FluxerClient} client
- * @param {DiscordClient} discordClient
+ * @param {import("@fluxerjs/core").Message} message
+ * @param {import("@fluxerjs/core").Client} client
+ * @param {import("discord.js").Client} discordClient
  * @param {boolean} [proxyCompatibility]
  */
 export async function FluxerCreateMessageHandler(
@@ -34,6 +35,17 @@ export async function FluxerCreateMessageHandler(
     return;
   }
 
+  const channelMapViaUserId = await ChannelMap.findOne({
+    where: {
+      [Op.or]: {
+        discordWebhookId: message.author.id,
+        fluxerWebhookId: message.author.id,
+      },
+    },
+  });
+
+  if (channelMapViaUserId) return;
+
   await detectProxyCommandCompat(message);
 
   const userConfig = await UserConfig.findOne({
@@ -51,22 +63,21 @@ export async function FluxerCreateMessageHandler(
   }
 
   if (proxyCompatibility) {
-    const messageMap = await MessageMap.findOne({
+    const messageMap = await MessageMap.findAll({
       where: {
-        [Op.and]: [
-          sequelize.where(sequelize.fn("LOWER", sequelize.col("content")), {
-            [Op.like]: `%${message.content.slice(2, message.content.length - 2)}%`,
-          }),
-          {
-            createdAt: {
-              [Op.gte]: new Date(Date.now() - 5000),
-            },
-          },
-        ],
+        [Op.or]: {
+          fluxerChannelId: message.channelId,
+          discordChannelId: message.channelId,
+        },
+        createdAt: {
+          [Op.gte]: new Date(Date.now() - 5000),
+        },
       },
+      limit: 5,
     });
 
-    if (messageMap) return;
+    if (messageMap.find((x) => compare(message.content, x.content) > 0.8))
+      return;
   }
 
   const channelMap = await ChannelMap.findOne({
@@ -164,6 +175,17 @@ export async function FluxerUpdateMessageHandler(
   newMessage,
   client,
 ) {
+  const channelMapViaUserId = await ChannelMap.findOne({
+    where: {
+      [Op.or]: {
+        discordWebhookId: newMessage.author.id,
+        fluxerWebhookId: newMessage.author.id,
+      },
+    },
+  });
+
+  if (channelMapViaUserId) return;
+
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: newMessage.id,
@@ -214,6 +236,17 @@ export async function FluxerUpdateMessageHandler(
  * @param {DiscordClient} client
  */
 export async function FluxerDeleteMessageHandler(message, client) {
+  const channelMapViaUserId = await ChannelMap.findOne({
+    where: {
+      [Op.or]: {
+        discordWebhookId: message.authorId,
+        fluxerWebhookId: message.authorId,
+      },
+    },
+  });
+
+  if (channelMapViaUserId) return;
+
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: message.id,

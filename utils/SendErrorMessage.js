@@ -18,49 +18,23 @@ export async function sendErrorMessage(
   error,
   replyFallback = false,
 ) {
-  const channelMap = await ChannelMap.findOne({
+  const guildMap = await GuildMap.findOne({
     where: {
-      [Op.or]: [
-        {
-          discordChannelId: message.channelId,
-        },
-        {
-          fluxerChannelId: message.channelId,
-        },
-      ],
+      guildId: message.guildId,
     },
   });
 
-  if (channelMap) {
-    if (channelMap.errorLoggingChannelId && channelMap.errorLoggingPlatform) {
-      if (channelMap.errorLoggingPlatform === "fluxer") {
-        const channel = await fluxerClient.channels.fetch(
-          channelMap.errorLoggingChannelId,
-        );
+  try {
+    if (guildMap) {
+      if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform) {
+        if (guildMap.errorLoggingPlatform === "fluxer") {
+          const channel = await fluxerClient.channels.fetch(
+            guildMap.errorLoggingChannelId,
+          );
 
-        /** @type {any} */ (channel).send({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle("Error occurred while bridging a message")
-              .addFields({
-                name: "Message",
-                value: `${message.author.globalName} in <#${message.channelId}>: ${message.content}`,
-              })
-              .addFields({
-                name: "Stack trace",
-                value: `${error}`,
-              }),
-          ],
-        });
-      } else {
-        const channel = await discordClient.channels.fetch(
-          channelMap.errorLoggingChannelId,
-        );
-
-        if (channel?.isSendable()) {
-          channel.send({
+          /** @type {any} */ (channel).send({
             embeds: [
-              new DiscordEmbedBuilder()
+              new EmbedBuilder()
                 .setTitle("Error occurred while bridging a message")
                 .addFields({
                   name: "Message",
@@ -72,24 +46,37 @@ export async function sendErrorMessage(
                 }),
             ],
           });
+        } else {
+          const channel = await discordClient.channels.fetch(
+            guildMap.errorLoggingChannelId,
+          );
+
+          if (channel?.isSendable()) {
+            channel.send({
+              embeds: [
+                new DiscordEmbedBuilder()
+                  .setTitle("Error occurred while bridging a message")
+                  .addFields({
+                    name: "Message",
+                    value: `${message.author.globalName} in <#${message.channelId}>: ${message.content}`,
+                  })
+                  .addFields({
+                    name: "Stack trace",
+                    value: `${error}`,
+                  }),
+              ],
+            });
+          }
         }
       }
-    }
-  }
 
-  const guildMap = await GuildMap.findOne({
-    where: {
-      guildId: message.guildId,
-    },
-  });
-
-  if (guildMap) {
-    if (guildMap.errorReaction) {
-      await message.react(guildMap.errorReaction);
+      if (guildMap.errorReaction) {
+        await message.react(guildMap.errorReaction);
+      }
+    } else {
+      await message.react("⛓️‍💥");
     }
-  } else {
-    await message.react("⛓️‍💥");
-  }
+  } catch {}
 
   log(
     message instanceof Message ? "FLUXER" : "DISCORD",

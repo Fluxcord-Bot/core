@@ -1,5 +1,6 @@
 import { Message } from "@fluxerjs/core";
 import { GuildMap, UserConfig } from "../db/index.js";
+import { log } from "node:console";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -15,32 +16,37 @@ const command = {
     if (params[0] && params[0].startsWith("<")) {
       try {
         if (message instanceof Message) {
-          await message.guild.fetchEmoji(
-            params[0].replace("<", "").replace(">", "").split(":")[2],
+          await fluxerClient.resolveEmoji(
+            params[0].replace("<", "").replace(">", ""),
+            message.guildId,
           );
         } else {
           await message.guild.emojis.fetch(
             params[0].replace("<", "").replace(">", "").split(":")[2],
           );
         }
-      } catch {
+      } catch (e) {
+        log("DEBUG", e);
         message.reply("Specified custom emoji should be on this server.");
         return;
       }
     }
 
-    const guildMap = await GuildMap.findOne({
+    const guildMap = await GuildMap.findOrCreate({
       where: {
         guildId: message.guildId,
       },
+      defaults: {
+        guildType: message instanceof Message ? "fluxer" : "discord",
+      },
     });
 
-    guildMap.errorReaction = params[0] ?? null;
-    await guildMap.save();
+    guildMap[0].errorReaction = params[0] ?? null;
+    await guildMap[0].save();
 
     if (params[0]) {
       message.reply(
-        `Successfully set ${guildMap.errorReaction} as error reaction!`,
+        `Successfully set ${guildMap[0].errorReaction} as error reaction!`,
       );
     } else {
       message.reply(`Successfully disabled error reaction!`);

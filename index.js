@@ -164,10 +164,12 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     );
     await fluxerGuild?.createEmojisBulk([
       {
+        // @ts-ignore
         image: replyL.toBase64(),
         name: "reply_l",
       },
       {
+        // @ts-ignore
         image: replyR.toBase64(),
         name: "reply_r",
       },
@@ -233,6 +235,7 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
+// @ts-ignore
 process.on("unhandledRejection", (reason, promise) => {
   log("DEBUG", "A unhandled rejection occurred.", reason);
 

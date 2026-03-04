@@ -29,6 +29,7 @@ function genAliases(cmd, aliases, grp) {
  */
 const command = {
   name: "help",
+  aliases: ["?"],
   description: "Help for Fluxcord's functions",
   requireElevated: false,
   params: "[...command]",
