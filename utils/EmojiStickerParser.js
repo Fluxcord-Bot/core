@@ -148,13 +148,6 @@ export function removeLinkEmbeds(str) {
  * @returns {Promise<string>}
  */
 export async function traverseMessageLinks(str) {
-  // no need to traverse when there's no msg links
-  if (
-    !str.includes("fluxer.app/channels") &&
-    !str.includes("discord.app/channels")
-  )
-    return str;
-
   let result = str;
 
   const regex =
