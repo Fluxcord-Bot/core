@@ -95,7 +95,7 @@ export async function DiscordCreateMessageHandler(
   else
     stickerMsg =
       stickers.length > 0
-        ? `${stickers.map((x) => `[${x.name}](${x.url})`).join(", ")}`
+        ? `${message.stickers.map((x) => `[${x.name}](${x.url})`).join(", ")}`
         : "";
 
   const channelMap = await ChannelMap.findOne({
