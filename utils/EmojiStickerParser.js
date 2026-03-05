@@ -1,6 +1,8 @@
 import { log } from "./Logger.js";
 import RandomString from "./RandomString.js";
 import Config from "../utils/ConfigHandler.js";
+import { ChannelMap, MessageMap } from "../db/index.js";
+import { Op } from "sequelize";
 
 /**
  * @param {string | null} content
@@ -124,6 +126,96 @@ export async function parseFluxerEmojiToDiscord(content, discordClient) {
         }
       }
     }
+  }
+
+  return result;
+}
+
+/**
+ * @param {string} str
+ * @returns {string}
+ */
+export function removeLinkEmbeds(str) {
+  const regex =
+    /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(\([-a-zA-Z0-9@:%_+.~#?&/=]*\)|[-a-zA-Z0-9@:%_+.~#?&/=])*)/g;
+  return str.replace(regex, "<$1>");
+}
+
+/**
+ * @param {string} str
+ * @param {import('discord.js').Client} discordClient
+ * @param {import('@fluxerjs/core').Client} fluxerClient
+ * @returns {Promise<string>}
+ */
+export async function traverseMessageLinks(str) {
+  // no need to traverse when there's no msg links
+  if (
+    !str.includes("fluxer.app/channels") &&
+    !str.includes("discord.app/channels")
+  )
+    return str;
+
+  let result = str;
+
+  const regex =
+    /https:\/\/(discord.com|web.fluxer.app)\/channels\/(\d+)\/(\d+)(?:\/(\d+))?/g;
+
+  let m;
+  while ((m = regex.exec(result)) !== null) {
+    if (m.index === regex.lastIndex) {
+      regex.lastIndex++;
+    }
+
+    try {
+      if (m[1] && m[2] && m[3]) {
+        if (m[4]) {
+          const message = await MessageMap.findOne({
+            where: {
+              [Op.or]: {
+                discordMessageId: m[4],
+                fluxerMessageId: m[4],
+              },
+            },
+            include: ["channelMap"],
+          });
+          if (message) {
+            if (m[1].startsWith("fluxer")) {
+              result = result.replaceAll(
+                m[0],
+                `https://discord.com/channels/${message.channelMap.discordGuildId}/${message.channelMap.discordChannelId}/${message.discordMessageId}`,
+              );
+            } else {
+              result = result.replaceAll(
+                m[0],
+                `https://web.fluxer.app/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`,
+              );
+            }
+          }
+        } else {
+          const channel = await ChannelMap.findOne({
+            where: {
+              [Op.or]: {
+                discordChannelId: m[3],
+                fluxerChannelId: m[3],
+              },
+            },
+          });
+          if (channel) {
+            if (m[1].startsWith("fluxer")) {
+              result = result.replaceAll(
+                m[0],
+                `https://discord.com/channels/${channel.discordGuildId}/${channel.discordChannelId}`,
+              );
+            } else {
+              result = result.replaceAll(
+                m[0],
+                `https://web.fluxer.app/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`,
+              );
+            }
+          }
+        }
+      }
+    } catch {}
   }
 
   return result;
