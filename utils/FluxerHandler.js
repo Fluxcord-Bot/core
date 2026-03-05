@@ -274,7 +274,9 @@ export async function FluxerDeleteMessageHandler(message, client) {
       channelMap.discordWebhookToken,
     );
 
-    await webhook.deleteMessage(messageExisting.discordMessageId);
+    try {
+      await webhook.deleteMessage(messageExisting.discordMessageId);
+    } catch {}
     await messageExisting.destroy();
   }
 }

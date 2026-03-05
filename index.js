@@ -252,3 +252,12 @@ process.on("unhandledRejection", (reason, promise) => {
 
 discordClient.login(Config.DiscordBotToken);
 fluxerClient.login(Config.FluxerBotToken);
+
+function checkIfFluxerConnected() {
+  if (!fluxerClient.isReady()) {
+    log("DEBUG", "Fluxer didn't connect after 10 seconds, restarting...");
+    process.exit(1);
+  }
+}
+
+setTimeout(() => checkIfFluxerConnected(), 10000);
