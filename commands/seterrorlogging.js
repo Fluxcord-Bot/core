@@ -1,7 +1,6 @@
 import { Channel as FluxerChannel } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
-import { ChannelMap, GuildMap } from "../db/index.js";
-import { Op } from "sequelize";
+import { GuildMap } from "../db/index.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}

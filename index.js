@@ -165,12 +165,12 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     await fluxerGuild?.createEmojisBulk([
       {
         // @ts-ignore
-        image: replyL.toBase64(),
+        image: replyL.toString("base64"),
         name: "reply_l",
       },
       {
         // @ts-ignore
-        image: replyR.toBase64(),
+        image: replyR.toString("base64"),
         name: "reply_r",
       },
     ]);

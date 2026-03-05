@@ -1,7 +1,4 @@
-import { EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config.js";
-import { ChannelMap, GuildMap } from "../db/index.js";
-import Package from "../package.json" with { type: "json" };
+import { GuildMap } from "../db/index.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}

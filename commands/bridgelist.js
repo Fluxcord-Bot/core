@@ -1,7 +1,4 @@
-import { EmbedBuilder } from "@fluxerjs/core";
-import Config from "../config.js";
 import { ChannelMap } from "../db/index.js";
-import Package from "../package.json" with { type: "json" };
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { Op } from "sequelize";
 import { AttachmentBuilder } from "discord.js";

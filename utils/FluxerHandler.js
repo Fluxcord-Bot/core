@@ -1,4 +1,4 @@
-import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db/index.js";
+import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -9,7 +9,7 @@ import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
-import fuzzyMatching from "fuzzymatchingjs";
+import { isProxyDuplicate, registerPendingMessage } from "./ProxyCompat.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -36,6 +36,8 @@ export async function FluxerCreateMessageHandler(
     return;
   }
 
+  registerPendingMessage(message.id, message.content);
+
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -54,7 +56,8 @@ export async function FluxerCreateMessageHandler(
       userId: message.author.id,
     },
   });
-  if (userConfig && userConfig.proxyCompatibility && !proxyCompatibility) {
+
+  if (userConfig?.proxyCompatibility && !proxyCompatibility) {
     setTimeout(async () => {
       try {
         await FluxerCreateMessageHandler(message, client, discordClient, true);
@@ -65,32 +68,8 @@ export async function FluxerCreateMessageHandler(
     return;
   }
 
-  if (proxyCompatibility) {
-    const channelMap = await ChannelMap.findOne({
-      where: {
-        [Op.or]: {
-          fluxerChannelId: message.channelId,
-          discordChannelId: message.channelId,
-        },
-      },
-    });
-    if (channelMap) {
-      const messageMap = await MessageMap.findAll({
-        where: {
-          channelMapId: channelMap.id,
-        },
-        limit: 5,
-        order: [["createdAt", "DESC"]],
-      });
-
-      if (
-        messageMap.find((x) => {
-          const res = fuzzyMatching.confidenceScore(x.content, message.content);
-          return res > 0.8 || message.content.endsWith(x.content);
-        })
-      )
-        return;
-    }
+  if (userConfig?.proxyCompatibility && proxyCompatibility) {
+    if (isProxyDuplicate(message.id, message.content, [])) return;
   }
 
   const channelMap = await ChannelMap.findOne({

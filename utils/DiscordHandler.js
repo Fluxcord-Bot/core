@@ -1,5 +1,5 @@
 import { MessageType } from "discord.js";
-import { ChannelMap, MessageMap, sequelize, UserConfig } from "../db/index.js";
+import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -10,7 +10,7 @@ import { parseDiscordEmojiToFluxer } from "./EmojiStickerParser.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
-import fuzzyMatching from "fuzzymatchingjs";
+import { isProxyDuplicate, registerPendingMessage } from "./ProxyCompat.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -40,6 +40,8 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
+  registerPendingMessage(message.id, message.content);
+
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -58,11 +60,14 @@ export async function DiscordCreateMessageHandler(
       userId: message.author.id,
     },
   });
+
+  const isLoadingInteraction =
+    message.type === MessageType.ChatInputCommand &&
+    message.flags.has("Loading");
+
   if (
-    ((userConfig && userConfig.proxyCompatibility) ||
-      (message.type === MessageType.ChatInputCommand &&
-        message.flags.has("Loading"))) &&
-    (!proxyCompatibility || message.flags.has("Loading"))
+    (isLoadingInteraction || userConfig?.proxyCompatibility) &&
+    !proxyCompatibility
   ) {
     setTimeout(async () => {
       try {
@@ -70,39 +75,12 @@ export async function DiscordCreateMessageHandler(
       } catch (e) {
         await sendErrorMessage(message, client, fluxerClient, e);
       }
-    }, 3000);
+    }, 5000);
     return;
   }
 
-  if (proxyCompatibility) {
-    const channelMap = await ChannelMap.findOne({
-      where: {
-        [Op.or]: {
-          fluxerChannelId: message.channelId,
-          discordChannelId: message.channelId,
-        },
-      },
-    });
-    if (channelMap) {
-      const messageMap = await MessageMap.findAll({
-        where: {
-          channelMapId: channelMap.id,
-        },
-        limit: 5,
-        order: [["createdAt", "DESC"]],
-      });
-
-      if (
-        messageMap.find((x) => {
-          const res = fuzzyMatching.confidenceScore(x.content, message.content);
-          return res > 0.8 || message.content.endsWith(x.content);
-        })
-      )
-        return;
-    } else {
-      // this should not happen
-      return;
-    }
+  if (userConfig?.proxyCompatibility && proxyCompatibility) {
+    if (isProxyDuplicate(message.id, message.content, [])) return;
   }
 
   const stickers = message.stickers.map((x) => `${x.name}`);

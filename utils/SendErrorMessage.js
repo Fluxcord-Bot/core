@@ -1,7 +1,6 @@
 import { EmbedBuilder, Message } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
-import { ChannelMap, GuildMap } from "../db/index.js";
-import { Op } from "sequelize";
+import { GuildMap } from "../db/index.js";
 import { log } from "./Logger.js";
 
 /**

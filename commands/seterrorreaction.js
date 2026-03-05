@@ -1,5 +1,5 @@
 import { Message } from "@fluxerjs/core";
-import { GuildMap, UserConfig } from "../db/index.js";
+import { GuildMap } from "../db/index.js";
 import { log } from "node:console";
 
 /**

@@ -1,11 +1,5 @@
-import { GuildChannel as DiscordGuildChannel } from "discord.js";
-import {
-  Message as FluxerMessage,
-  GuildChannel as FluxerGuildChannel,
-} from "@fluxerjs/core";
-import { ChannelMap, GuildMap } from "../db/index.js";
-import { log } from "../utils/Logger.js";
-import { BridgeMap } from "../utils/CommandHandler.js";
+import { Message as FluxerMessage } from "@fluxerjs/core";
+import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
 /**

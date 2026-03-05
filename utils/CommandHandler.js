@@ -1,7 +1,6 @@
 import { Message as FluxerMessage, EmbedBuilder } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
 import fs from "node:fs";
-import path from "node:path";
 import ExpiryMap from "expiry-map";
 import { checkManageServerPerms } from "./CheckManageServerPerms.js";
 import { log } from "./Logger.js";
