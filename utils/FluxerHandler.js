@@ -107,18 +107,10 @@ export async function FluxerCreateMessageHandler(
 
   const stickers = message.stickers.map((x) => `${x.name}`);
 
-  let stickerMsg = "";
-
-  if (message.stickers.find((x) => x.url.endsWith("json")))
-    stickerMsg =
-      stickers.length > 0
-        ? `-# Message contains stickers: ${stickers.join(", ")}`
-        : "";
-  else
-    stickerMsg =
-      stickers.length > 0
-        ? `${stickers.map((x) => `[${x.name}](${x.url})`).join(", ")}`
-        : "";
+  let stickerMsg =
+    stickers.length > 0
+      ? `${message.stickers.map((x) => `[${x.name}](https://fluxerusercontent.com/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
+      : "";
 
   const overAttachments = message.attachments.filter((x) => x.size > 9999000);
   const overAttachmentsStr = overAttachments
