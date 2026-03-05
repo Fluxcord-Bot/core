@@ -151,7 +151,7 @@ export async function traverseMessageLinks(str) {
   let result = str;
 
   const regex =
-    /https:\/\/(discord.com|web.fluxer.app)\/channels\/(\d+)\/(\d+)(?:\/(\d+))?/g;
+    /https:\/\/(discord.com|fluxer.app)\/channels\/(\d+)\/(\d+)(?:\/(\d+))?/g;
 
   let m;
   while ((m = regex.exec(result)) !== null) {
@@ -180,7 +180,7 @@ export async function traverseMessageLinks(str) {
             } else {
               result = result.replaceAll(
                 m[0],
-                `https://web.fluxer.app/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`,
+                `https://fluxer.app/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`,
               );
             }
           }
@@ -202,7 +202,7 @@ export async function traverseMessageLinks(str) {
             } else {
               result = result.replaceAll(
                 m[0],
-                `https://web.fluxer.app/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`,
+                `https://fluxer.app/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`,
               );
             }
           }
