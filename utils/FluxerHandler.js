@@ -78,8 +78,6 @@ export async function FluxerCreateMessageHandler(
     messageReference = undefined;
   }
 
-  console.log(message);
-
   const userJoin =
     message.type === 7
       ? `*@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`

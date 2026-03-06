@@ -9,6 +9,8 @@ import { Op } from "sequelize";
 export async function parseMentions(message) {
   let res = message.content;
 
+  if (!res) return "";
+
   if (message.mentions instanceof MessageMentions) {
     const bridgedChannels = await ChannelMap.findAll({
       where: {

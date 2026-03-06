@@ -112,8 +112,6 @@ export async function DiscordCreateMessageHandler(
     });
   }
 
-  console.log("msg dbg", message);
-
   const interactingUser = message.interaction
     ? message.interactionMetadata?.user
     : undefined;
