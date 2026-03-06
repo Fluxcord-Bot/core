@@ -16,9 +16,6 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
     .setURL(embed.url)
     .setColor(embed.color)
     .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
-    .setDescription(
-      await parseDiscordEmojiToFluxer(embed.description, fluxerClient),
-    )
     .addFields(
       ...(await Promise.all(
         embed.fields.map(async (x) => ({
@@ -28,6 +25,12 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
         })),
       )),
     );
+
+  if (embed.description) {
+    outEmbed = outEmbed.setDescription(
+      await parseDiscordEmojiToFluxer(embed.description, fluxerClient),
+    );
+  }
 
   if (embed.author)
     outEmbed = outEmbed.setAuthor({
