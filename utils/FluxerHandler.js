@@ -72,6 +72,14 @@ export async function FluxerCreateMessageHandler(
     });
   }
 
+  let forwardedMessage;
+  if (message.messageReference?.type === 1) {
+    forwardedMessage = message.messageSnapshots[0];
+    messageReference = undefined;
+  }
+
+  console.log(message);
+
   const userJoin =
     message.type === 7
       ? `*@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`
@@ -86,7 +94,9 @@ export async function FluxerCreateMessageHandler(
       ? `${message.stickers.map((x) => `[${x.name}](https://fluxerusercontent.com/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
       : "";
 
-  const overAttachments = message.attachments.filter((x) => x.size > 9999000);
+  const overAttachments = (forwardedMessage ?? message).attachments.filter(
+    (x) => x.size > 9999000,
+  );
   const overAttachmentsStr = overAttachments
     .map((x) => `[${x.filename}](${x.url})`)
     .join(" ");
@@ -98,12 +108,15 @@ export async function FluxerCreateMessageHandler(
   const msg = await webhook.send({
     content:
       // @ts-expect-error
+      (forwardedMessage
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Forwarded message\n`
+        : "") +
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
         : "") +
       (await traverseMessageLinks(
         await parseFluxerEmojiToDiscord(
-          await parseMentions(message),
+          await parseMentions(forwardedMessage ?? message),
           discordClient,
         ),
       )) +
@@ -112,11 +125,14 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
-    files: message.attachments
+    files: (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 9999000)
       .map((a) => a.proxy_url ?? a.url ?? ""),
     username: message.author.globalName ?? message.author.username,
-    embeds: await fluxerEmbedToDiscord(message, discordClient),
+    embeds: await fluxerEmbedToDiscord(
+      forwardedMessage ?? message,
+      discordClient,
+    ),
     avatarURL: message.author.avatarURL() ?? undefined,
   });
 

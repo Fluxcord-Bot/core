@@ -4,6 +4,7 @@ import {
   Client as DiscordClient,
   Events as DiscordEvents,
   GatewayIntentBits,
+  Partials,
 } from "discord.js";
 import Config from "./utils/ConfigHandler.js";
 import {
@@ -30,7 +31,9 @@ const discordClient = new DiscordClient({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessageReactions,
   ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
 export const botStartingTime = new Date();
