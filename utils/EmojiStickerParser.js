@@ -143,8 +143,6 @@ export function removeLinkEmbeds(str) {
 
 /**
  * @param {string} str
- * @param {import('discord.js').Client} discordClient
- * @param {import('@fluxerjs/core').Client} fluxerClient
  * @returns {Promise<string>}
  */
 export async function traverseMessageLinks(str) {

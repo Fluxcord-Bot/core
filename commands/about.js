@@ -31,7 +31,7 @@ Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}
             },
             {
               name: "Source code",
-              value: "https://git.gay/jbcarreon123/Fluxcord",
+              value: "https://git.gay/Fluxcord/core",
               inline: true,
             },
           )

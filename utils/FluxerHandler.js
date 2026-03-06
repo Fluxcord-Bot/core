@@ -224,19 +224,19 @@ export async function FluxerUpdateMessageHandler(
         (await traverseMessageLinks(
           await parseFluxerEmojiToDiscord(
             await parseMentions(newMessage.content),
-            discordClient,
+            client,
           ),
         )),
       files: newMessage.attachments.map((a) => a.url ?? ""),
     });
 
-    messageExisting.content = await traverseMessageLinks(
+    ((messageExisting.content = await traverseMessageLinks(
       await parseFluxerEmojiToDiscord(
-        await parseMentions(message),
-        discordClient,
+        await parseMentions(newMessage.content),
+        client,
       ),
-    );
-    await messageExisting.save();
+    )),
+      await messageExisting.save());
   }
 }
 
@@ -292,19 +292,23 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
   });
 
   if (messagesExisting.length > 0) {
-    const channel = /** @type {TextChannel} */ (
-      await client.channels.fetch(
-        messagesExisting[0]?.channelMap.fluxerChannelId ?? "",
-      )
-    );
+    try {
+      const channel = /** @type {TextChannel} */ (
+        await client.channels.fetch(
+          messagesExisting[0]?.channelMap.discordChannelId ?? "",
+        )
+      );
 
-    const reply = await channel.send({
-      content: `Bridging bulk deletes, please wait...`,
-    });
+      const reply = await channel.send({
+        content: `Bridging bulk deletes, please wait...`,
+      });
 
-    await channel.bulkDelete(messagesExisting.map((x) => x.discordMessageId));
+      await channel.bulkDelete(messagesExisting.map((x) => x.discordMessageId));
 
-    await reply.delete();
+      await reply.delete();
+    } catch {}
+
+    await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
   }
 }
 
