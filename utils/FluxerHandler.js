@@ -165,7 +165,7 @@ export async function FluxerCreateMessageHandler(
 
 /**
  * @param {FluxerMessage | null} oldMessage
- * @param {FluxerMessage} newMessage
+ * @param {import("@fluxerjs/core").Message} newMessage
  * @param {DiscordClient} client
  */
 export async function FluxerUpdateMessageHandler(
@@ -223,7 +223,7 @@ export async function FluxerUpdateMessageHandler(
           : "") +
         (await traverseMessageLinks(
           await parseFluxerEmojiToDiscord(
-            await parseMentions(newMessage.content),
+            await parseMentions(newMessage),
             client,
           ),
         )),
@@ -231,10 +231,7 @@ export async function FluxerUpdateMessageHandler(
     });
 
     ((messageExisting.content = await traverseMessageLinks(
-      await parseFluxerEmojiToDiscord(
-        await parseMentions(newMessage.content),
-        client,
-      ),
+      await parseFluxerEmojiToDiscord(await parseMentions(newMessage), client),
     )),
       await messageExisting.save());
   }
