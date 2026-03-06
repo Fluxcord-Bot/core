@@ -1,4 +1,4 @@
-import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
+import { ChannelMap, MessageMap } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -11,9 +11,6 @@ import {
 } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
-import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
-import { sendErrorMessage } from "./SendErrorMessage.js";
-import { isProxyDuplicate, registerPendingMessage } from "./ProxyCompat.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -21,13 +18,11 @@ let fluxcordBotEmojiCfg = undefined;
  * @param {import("@fluxerjs/core").Message} message
  * @param {import("@fluxerjs/core").Client} client
  * @param {import("discord.js").Client} discordClient
- * @param {boolean} [proxyCompatibility]
  */
 export async function FluxerCreateMessageHandler(
   message,
   client,
   discordClient,
-  proxyCompatibility,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -40,8 +35,6 @@ export async function FluxerCreateMessageHandler(
     return;
   }
 
-  registerPendingMessage(message.id, message.content);
-
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -52,29 +45,6 @@ export async function FluxerCreateMessageHandler(
   });
 
   if (channelMapViaUserId) return;
-
-  await detectProxyCommandCompat(message);
-
-  const userConfig = await UserConfig.findOne({
-    where: {
-      userId: message.author.id,
-    },
-  });
-
-  if (userConfig?.proxyCompatibility && !proxyCompatibility) {
-    setTimeout(async () => {
-      try {
-        await FluxerCreateMessageHandler(message, client, discordClient, true);
-      } catch (e) {
-        await sendErrorMessage(message, discordClient, client, e);
-      }
-    }, 5000);
-    return;
-  }
-
-  if (userConfig?.proxyCompatibility && proxyCompatibility) {
-    if (isProxyDuplicate(message.id, message.content, [])) return;
-  }
 
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -149,6 +119,17 @@ export async function FluxerCreateMessageHandler(
     embeds: await fluxerEmbedToDiscord(message, discordClient),
     avatarURL: message.author.avatarURL() ?? undefined,
   });
+
+  try {
+    const channel = message.channel;
+    if (channel && channel.isTextBased()) {
+      await channel.messages.fetch(message.id);
+    }
+  } catch {
+    // pretend msg is deleted
+    await msg.delete();
+    return;
+  }
 
   await MessageMap.create({
     messageSource: "fluxer",
@@ -242,17 +223,6 @@ export async function FluxerUpdateMessageHandler(
  * @param {DiscordClient} client
  */
 export async function FluxerDeleteMessageHandler(message, client) {
-  const channelMapViaUserId = await ChannelMap.findOne({
-    where: {
-      [Op.or]: {
-        discordWebhookId: message.authorId,
-        fluxerWebhookId: message.authorId,
-      },
-    },
-  });
-
-  if (channelMapViaUserId) return;
-
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: message.id,
@@ -300,7 +270,11 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
         content: `Bridging bulk deletes, please wait...`,
       });
 
-      await channel.bulkDelete(messagesExisting.map((x) => x.discordMessageId));
+      try {
+        await channel.bulkDelete(
+          messagesExisting.map((x) => x.discordMessageId),
+        );
+      } catch {}
 
       await reply.delete();
     } catch {}

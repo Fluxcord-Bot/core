@@ -10,7 +10,7 @@
     "migrate": "pnpx tsx ./migrate.ts"
   },
   "dependencies": {
-    "@fluxerjs/core": "^1.2.2",
+    "@fluxerjs/core": "^1.2.3",
     "@types/dockerode": "^4.0.1",
     "discord.js": "^14.25.1",
     "dockerode": "^4.0.9",

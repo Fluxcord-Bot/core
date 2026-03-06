@@ -89,11 +89,6 @@ UserConfig.init(
   {
     userType: { type: DataTypes.ENUM("discord", "fluxer"), allowNull: false },
     userId: { type: DataTypes.STRING, allowNull: false },
-    proxyCompatibility: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
     doNotBridgePrefix: {
       type: DataTypes.STRING,
       allowNull: true,

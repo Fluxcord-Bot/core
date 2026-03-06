@@ -1,5 +1,5 @@
 import { MessageType } from "discord.js";
-import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
+import { ChannelMap, MessageMap } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -12,25 +12,19 @@ import {
   traverseMessageLinks,
 } from "./EmojiStickerParser.js";
 import { parseMentions } from "./MessageContentParser.js";
-import { detectProxyCommandCompat } from "./AutoProxyCompat.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
-import { isProxyDuplicate, registerPendingMessage } from "./ProxyCompat.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
 /**
  * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>>} message
  * @param {DiscordClient} client
- * @param {FluxerClient} fluxerClient
- * @param {boolean} [proxyCompatibility]
- * @param {boolean} [useExplicitHandler]
+ * @param {import("@fluxerjs/core").Client} fluxerClient
  */
 export async function DiscordCreateMessageHandler(
   message,
   client,
   fluxerClient,
-  proxyCompatibility,
-  useExplicitHandler,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -44,8 +38,6 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
-  registerPendingMessage(message.id, message.content);
-
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -57,34 +49,19 @@ export async function DiscordCreateMessageHandler(
 
   if (channelMapViaUserId) return;
 
-  await detectProxyCommandCompat(message);
-
-  const userConfig = await UserConfig.findOne({
-    where: {
-      userId: message.author.id,
-    },
-  });
-
   const isLoadingInteraction =
     message.type === MessageType.ChatInputCommand &&
     message.flags.has("Loading");
 
-  if (
-    (isLoadingInteraction || userConfig?.proxyCompatibility) &&
-    !proxyCompatibility
-  ) {
+  if (isLoadingInteraction) {
     setTimeout(async () => {
       try {
-        await DiscordCreateMessageHandler(message, client, fluxerClient, true);
+        await DiscordCreateMessageHandler(message, client, fluxerClient);
       } catch (e) {
         await sendErrorMessage(message, client, fluxerClient, e);
       }
     }, 5000);
     return;
-  }
-
-  if (userConfig?.proxyCompatibility && proxyCompatibility) {
-    if (isProxyDuplicate(message.id, message.content, [])) return;
   }
 
   const stickers = message.stickers.map((x) => `${x.name}`);
@@ -177,9 +154,7 @@ export async function DiscordCreateMessageHandler(
           message.author.displayName ??
           message.author.globalName ??
           "Fluxcord",
-        avatar_url: useExplicitHandler
-          ? "https://party.jbc.lol/explicit.png"
-          : (message.author.avatarURL() ?? undefined),
+        avatar_url: message.author.avatarURL() ?? undefined,
         files: message.attachments
           .filter((x) => x.size < 24999900)
           .map((a) => ({
@@ -194,6 +169,24 @@ export async function DiscordCreateMessageHandler(
       },
       true,
     );
+
+    try {
+      const channel = await message.channel.fetch();
+      if (channel.isSendable()) {
+        await channel.messages.fetch(message.id);
+      }
+    } catch {
+      // pretend msg is deleted
+      try {
+        const fluxerChannel = await fluxerClient.channels.fetch(
+          channelMap.fluxerChannelId,
+        );
+        if (fluxerChannel.isTextBased()) {
+          const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
+          await message.delete();
+        }
+      } catch {}
+    }
 
     await MessageMap.create({
       messageSource: "discord",
@@ -296,17 +289,6 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
  * @param {FluxerClient} client
  */
 export async function DiscordDeleteMessageHandler(msg, client) {
-  const channelMapViaUserId = await ChannelMap.findOne({
-    where: {
-      [Op.or]: {
-        discordWebhookId: msg.author.id,
-        fluxerWebhookId: msg.author.id,
-      },
-    },
-  });
-
-  if (channelMapViaUserId) return;
-
   const messageExisting = await MessageMap.findOne({
     where: {
       discordMessageId: msg.id,
