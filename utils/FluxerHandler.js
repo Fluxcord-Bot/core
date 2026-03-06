@@ -120,16 +120,18 @@ export async function FluxerCreateMessageHandler(
     avatarURL: message.author.avatarURL() ?? undefined,
   });
 
-  try {
-    const channel = message.channel;
-    if (channel && channel.isTextBased()) {
-      await channel.messages.fetch(message.id);
+  setTimeout(async () => {
+    try {
+      const channel = message.channel;
+      if (channel && channel.isTextBased()) {
+        await channel.messages.fetch(message.id);
+      }
+    } catch {
+      // pretend msg is deleted
+      await msg.delete();
+      return;
     }
-  } catch {
-    // pretend msg is deleted
-    await msg.delete();
-    return;
-  }
+  }, 1000);
 
   await MessageMap.create({
     messageSource: "fluxer",

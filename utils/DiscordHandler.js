@@ -170,23 +170,25 @@ export async function DiscordCreateMessageHandler(
       true,
     );
 
-    try {
-      const channel = await message.channel.fetch();
-      if (channel.isSendable()) {
-        await channel.messages.fetch(message.id);
-      }
-    } catch {
-      // pretend msg is deleted
+    setTimeout(async () => {
       try {
-        const fluxerChannel = await fluxerClient.channels.fetch(
-          channelMap.fluxerChannelId,
-        );
-        if (fluxerChannel.isTextBased()) {
-          const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
-          await message.delete();
+        const channel = await message.channel.fetch();
+        if (channel.isSendable()) {
+          await channel.messages.fetch(message.id);
         }
-      } catch {}
-    }
+      } catch {
+        // pretend msg is deleted
+        try {
+          const fluxerChannel = await fluxerClient.channels.fetch(
+            channelMap.fluxerChannelId,
+          );
+          if (fluxerChannel.isTextBased()) {
+            const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
+            await message.delete();
+          }
+        } catch {}
+      }
+    }, 1000);
 
     await MessageMap.create({
       messageSource: "discord",
