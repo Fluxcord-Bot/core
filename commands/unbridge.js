@@ -8,7 +8,7 @@ import { BridgeMap } from "../utils/CommandHandler.js";
 const command = {
   name: "unbridge",
   description: "Unbridge the current channel",
-  requireElevated: false,
+  requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {
     const channelMap = await ChannelMap.findOne({
       where: {

@@ -176,6 +176,20 @@ export async function DiscordCreateMessageHandler(
         if (channel.isSendable()) {
           await channel.messages.fetch(message.id);
         }
+
+        await MessageMap.create({
+          messageSource: "discord",
+          discordMessageId: message.id,
+          fluxerMessageId: msg?.id,
+          content: await traverseMessageLinks(
+            await parseDiscordEmojiToFluxer(
+              await parseMentions(message),
+              fluxerClient,
+            ),
+          ),
+          channelMapId: channelMap.id,
+          authorId: message.author.id,
+        });
       } catch {
         // pretend msg is deleted
         try {
@@ -189,20 +203,6 @@ export async function DiscordCreateMessageHandler(
         } catch {}
       }
     }, 1000);
-
-    await MessageMap.create({
-      messageSource: "discord",
-      discordMessageId: message.id,
-      fluxerMessageId: msg?.id,
-      content: await traverseMessageLinks(
-        await parseDiscordEmojiToFluxer(
-          await parseMentions(message),
-          fluxerClient,
-        ),
-      ),
-      channelMapId: channelMap.id,
-      authorId: message.author.id,
-    });
   }
 }
 

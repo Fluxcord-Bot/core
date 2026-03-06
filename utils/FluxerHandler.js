@@ -126,24 +126,24 @@ export async function FluxerCreateMessageHandler(
       if (channel && channel.isTextBased()) {
         await channel.messages.fetch(message.id);
       }
+
+      await MessageMap.create({
+        messageSource: "fluxer",
+        discordMessageId: msg.id,
+        fluxerMessageId: message.id,
+        channelMapId: channelMap.id,
+        authorId: message.author.id,
+        content: await parseFluxerEmojiToDiscord(
+          await parseMentions(message),
+          discordClient,
+        ),
+      });
     } catch {
       // pretend msg is deleted
       await msg.delete();
       return;
     }
   }, 1000);
-
-  await MessageMap.create({
-    messageSource: "fluxer",
-    discordMessageId: msg.id,
-    fluxerMessageId: message.id,
-    channelMapId: channelMap.id,
-    authorId: message.author.id,
-    content: await parseFluxerEmojiToDiscord(
-      await parseMentions(message),
-      discordClient,
-    ),
-  });
 }
 
 /**
