@@ -8,7 +8,11 @@ import { Op } from "sequelize";
  * @param {string | null} content
  * @param {FluxerClient} fluxerClient
  */
-export async function parseDiscordEmojiToFluxer(content, fluxerClient) {
+export async function parseDiscordEmojiToFluxer(
+  content,
+  fluxerClient,
+  attempt = 0,
+) {
   if (!content) return content;
   const regex = /:(a?\d+):/g;
 
@@ -57,13 +61,19 @@ export async function parseDiscordEmojiToFluxer(content, fluxerClient) {
 
           result = result.replaceAll(`:${m[1]}:`, `<${fluxerEmoji}>`);
         } catch (e) {
-          log(
-            "FLUXER",
-            "Cannot convert Discord emoji to Fluxer, deleting 10 oldest emojis and trying again...",
-            e,
-          );
-          await deleteOldestEmojisFluxer(fluxerClient);
-          return await parseDiscordEmojiToFluxer(content, fluxerClient);
+          if (attempt < 5) {
+            log(
+              "FLUXER",
+              "Cannot convert Discord emoji to Fluxer, deleting 10 oldest emojis and trying again...",
+              e,
+            );
+            await deleteOldestEmojisFluxer(fluxerClient);
+            return await parseDiscordEmojiToFluxer(
+              content,
+              fluxerClient,
+              attempt + 1,
+            );
+          }
         }
       }
     }
