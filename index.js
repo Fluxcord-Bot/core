@@ -23,7 +23,6 @@ import { log } from "./utils/Logger.js";
 import fs from "node:fs";
 import { ChannelMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
-import { getVoiceManager } from "@fluxerjs/voice";
 
 const discordClient = new DiscordClient({
   intents: [
@@ -50,9 +49,6 @@ const fluxerClient = new FluxerClient({
     },
   },
 });
-
-// @ts-expect-error
-getVoiceManager(fluxerClient);
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
