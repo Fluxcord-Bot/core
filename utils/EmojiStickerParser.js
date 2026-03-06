@@ -86,7 +86,11 @@ export async function parseDiscordEmojiToFluxer(
  * @param {string} content
  * @param {DiscordClient} discordClient
  */
-export async function parseFluxerEmojiToDiscord(content, discordClient) {
+export async function parseFluxerEmojiToDiscord(
+  content,
+  discordClient,
+  attempt = 0,
+) {
   if (!content) return content;
   const regex = /:(a?\d+):/g;
 
@@ -126,13 +130,19 @@ export async function parseFluxerEmojiToDiscord(content, discordClient) {
             `<${m[1].startsWith("a") ? "a" : ""}:${str}:${discordEmoji?.id}>`,
           );
         } catch (e) {
-          log(
-            "DISCORD",
-            "Cannot convert Fluxer emoji to Discord, deleting 10 oldest emojis and trying again...",
-            e,
-          );
-          await deleteOldestEmojisDiscord(discordClient);
-          return await parseFluxerEmojiToDiscord(content, discordClient);
+          if (attempt < 5) {
+            log(
+              "DISCORD",
+              "Cannot convert Fluxer emoji to Discord, deleting 10 oldest emojis and trying again...",
+              e,
+            );
+            await deleteOldestEmojisDiscord(discordClient);
+            return await parseFluxerEmojiToDiscord(
+              content,
+              discordClient,
+              attempt + 1,
+            );
+          }
         }
       }
     }
