@@ -6,6 +6,15 @@ import { checkManageServerPerms } from "./CheckManageServerPerms.js";
 import { log } from "./Logger.js";
 
 export let BridgeMap = new ExpiryMap(120000);
+/**
+ * @type {ExpiryMap<string, {
+ *  guildId: string,
+ *  channelId: string,
+ *  isFluxer: boolean,
+ *  direction: "f2d" | "d2f" | "both"
+ * }>}
+ */
+export let PendingSetup = new ExpiryMap(300000);
 
 /**
  * @returns {Promise<import('./CommandSchema.d.ts').CommandSchema[]>}
