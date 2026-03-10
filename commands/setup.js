@@ -70,7 +70,7 @@ const command = {
               `# \`${Config.BotPrefix}setup ${code}\`
 Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.
 
-${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLink(message.client.user.id, isFluxer)})!`,
+${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLink(message.client.user.id, !isFluxer)})!`,
             )
             .setFooter(
               Config.EmbedFooterContent

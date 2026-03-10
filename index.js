@@ -24,6 +24,7 @@ import { log } from "./utils/Logger.js";
 import fs from "node:fs";
 import { ChannelMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
+import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 
 const discordClient = new DiscordClient({
   intents: [
@@ -146,6 +147,16 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
   );
 
+  renderBox([
+    "To invite Fluxcord to your server, here's the invite links:",
+    "",
+    "Discord:",
+    genAuthLink(discordClient.user?.id),
+    "",
+    "Fluxer:",
+    genAuthLink(fluxerClient.user?.id, true),
+  ]);
+
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
     const replyL = fs.readFileSync(Config.DataFolderPath + "/reply-l.webp");
@@ -201,6 +212,7 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
         },
       }),
     );
+    console.log("");
     log("META", "First time setup done! Enjoy using the bot!");
   }
 });
