@@ -264,4 +264,4 @@ function checkIfFluxerConnected() {
   }
 }
 
-setTimeout(() => checkIfFluxerConnected(), 10000);
+setInterval(() => checkIfFluxerConnected(), 10000);
