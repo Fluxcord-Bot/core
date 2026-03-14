@@ -134,7 +134,7 @@ export async function DiscordCreateMessageHandler(
     let guildUser = undefined;
     try {
       guildUser = await message.guild.members.fetch(message.author.id);
-    } catch {}
+    } catch { }
     const msg = await webhook.send(
       {
         content:
@@ -194,11 +194,11 @@ export async function DiscordCreateMessageHandler(
           content: forwardedMessage
             ? "*Forwarded message*"
             : await traverseMessageLinks(
-                await parseDiscordEmojiToFluxer(
-                  await parseMentions(message),
-                  fluxerClient,
-                ),
+              await parseDiscordEmojiToFluxer(
+                await parseMentions(message),
+                fluxerClient,
               ),
+            ),
           channelMapId: channelMap.id,
           authorId: message.author.id,
         });
@@ -212,7 +212,7 @@ export async function DiscordCreateMessageHandler(
             const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
             await message.delete();
           }
-        } catch {}
+        } catch { }
       }
     }, 1000);
   }

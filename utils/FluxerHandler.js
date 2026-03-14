@@ -255,7 +255,7 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
     try {
       await webhook.deleteMessage(messageExisting.discordMessageId);
-    } catch {}
+    } catch { }
     await messageExisting.destroy();
   }
 }
@@ -290,10 +290,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
         await channel.bulkDelete(
           messagesExisting.map((x) => x.discordMessageId),
         );
-      } catch {}
+      } catch { }
 
       await reply.delete();
-    } catch {}
+    } catch { }
 
     await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
   }

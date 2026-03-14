@@ -26,11 +26,26 @@ const Config = {
   EmbedFooterContent: "",
 
   // The categories that the bot will log, remove any that you don't need.
-  // Categories are, FLUXER, DISCORD, DB, META, DEBUG
-  LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META"],
+  // Categories: FLUXER, DISCORD, DB, META, VOICE, DEBUG
+  LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
 
   // The prefix of the bot
   BotPrefix: "fc!",
+
+  // Voice channel bridge mappings (optional).
+  // Each entry links a Discord voice channel to a Fluxer voice channel.
+  // Leave empty (or omit) to disable voice bridging entirely.
+  //
+  // Requires voice/node_modules to be installed: cd voice && pnpm install (or npm install)
+  //
+  // VoiceChannelMaps: [
+  //   {
+  //     discordGuildId: "123456789012345678",   // Discord server ID
+  //     discordChannelId: "234567890123456789", // Discord voice channel ID
+  //     fluxerGuildId: "345678901234567890",    // Fluxer community ID
+  //     fluxerChannelId: "456789012345678901",  // Fluxer voice channel ID
+  //   },
+  // ],
 };
 
 export default Config;

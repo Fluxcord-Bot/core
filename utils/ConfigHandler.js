@@ -9,8 +9,13 @@ const DefaultConfig = {
   FluxerTempEmojiGuildId: "0000000000000000000",
   AdminAccountIds: ["0000000000000000000"],
   EmbedFooterContent: "",
-  LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META"],
+  LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
   BotPrefix: "fc!",
+
+  // Voice channel bridge mappings. Each entry links a Discord voice channel
+  // to a Fluxer voice channel. A Node.js subprocess is spawned per session.
+  // VoiceChannelMaps: [{ discordGuildId, discordChannelId, fluxerGuildId, fluxerChannelId }]
+  VoiceChannelMaps: [],
 
   ...Config,
 };
