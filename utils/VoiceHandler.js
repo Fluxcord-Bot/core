@@ -1,6 +1,7 @@
 //@ts-check
 import { spawn } from "child_process";
 import { Events as DiscordEvents, GatewayDispatchEvents } from "discord.js";
+import { Events as FluxerEvents } from "@fluxerjs/core";
 import { log } from "./Logger.js";
 import Config from "./ConfigHandler.js";
 import { fileURLToPath } from "url";
@@ -91,21 +92,18 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
     maybeLaunch(discordClient, guildId);
   });
 
-  fluxerClient.once("ready", () => {
-    fluxerClient.ws?.on("dispatch", ({ payload }) => {
-      if (payload?.t !== "VOICE_SERVER_UPDATE") return;
-      const { guild_id: fluxerGuildId, endpoint: livekitUrl, token: livekitToken } = payload.d ?? {};
-      if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
+  fluxerClient.on(FluxerEvents.VoiceServerUpdate, (data) => {
+    const { guild_id: fluxerGuildId, endpoint: livekitUrl, token: livekitToken } = data;
+    if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
-      const voiceMap = (Config.VoiceChannelMaps ?? []).find((m) => m.fluxerGuildId === fluxerGuildId);
-      if (!voiceMap) return;
+    const voiceMap = (Config.VoiceChannelMaps ?? []).find((m) => m.fluxerGuildId === fluxerGuildId);
+    if (!voiceMap) return;
 
-      const creds = pending.get(voiceMap.discordGuildId) ?? {};
-      creds.livekitUrl = livekitUrl;
-      creds.livekitToken = livekitToken;
-      pending.set(voiceMap.discordGuildId, creds);
-      maybeLaunch(discordClient, voiceMap.discordGuildId);
-    });
+    const creds = pending.get(voiceMap.discordGuildId) ?? {};
+    creds.livekitUrl = livekitUrl;
+    creds.livekitToken = livekitToken;
+    pending.set(voiceMap.discordGuildId, creds);
+    maybeLaunch(discordClient, voiceMap.discordGuildId);
   });
 
   discordClient.on(DiscordEvents.VoiceStateUpdate, (oldState, newState) => {
