@@ -1,20 +1,13 @@
 //@ts-check
-import { spawn } from "child_process";
 import { Events as DiscordEvents, GatewayDispatchEvents } from "discord.js";
 import { Events as FluxerEvents } from "@fluxerjs/core";
 import { log } from "./Logger.js";
 import Config from "./ConfigHandler.js";
-import { fileURLToPath } from "url";
-import path from "path";
-
-const VOICE_SCRIPT = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../voice/index.js"
-);
+import { spawnBridge, killBridge, hasRunner } from "./VoiceRunnerServer.js";
 
 /**
  * Active voice sessions keyed by discord channel ID.
- * @type {Map<string, { proc: import("child_process").ChildProcess, guildId: string, fluxerGuildId: string, fluxerEmpty: boolean }>}
+ * @type {Map<string, { guildId: string, fluxerGuildId: string, fluxerEmpty: boolean }>}
  */
 const sessions = new Map();
 
@@ -146,6 +139,10 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
 function sendJoinOp(discordClient, guild, guildId, channelId) {
   const voiceMap = findVoiceMap(guildId, channelId);
   if (!voiceMap) return;
+  if (!hasRunner()) {
+    log("VOICE", `No runner available, not joining VC ${channelId}`);
+    return;
+  }
 
   log("VOICE", `Joining Discord VC ${channelId}`);
   const creds = pending.get(guildId) ?? {};
@@ -180,9 +177,10 @@ function maybeLaunch(discordClient, guildId) {
   pending.delete(guildId);
   log("VOICE", `Spawning bridge for channel ${channelId}`);
 
-  const proc = spawn("node", [VOICE_SCRIPT], {
-    env: {
-      ...process.env,
+  const spawned = spawnBridge(
+    channelId,
+    livekitUrl,
+    {
       DISCORD_ENDPOINT: endpoint,
       DISCORD_TOKEN: token,
       DISCORD_SESSION_ID: sessionId,
@@ -192,42 +190,39 @@ function maybeLaunch(discordClient, guildId) {
       LIVEKIT_URL: livekitUrl,
       LIVEKIT_TOKEN: livekitToken,
     },
-    stdio: ["ignore", "inherit", "inherit", "ipc"],
-  });
-
-  sessions.set(channelId, { proc, guildId, fluxerGuildId: voiceMap.fluxerGuildId, fluxerEmpty: false });
-
-  proc.on("message", (msg) => {
-    const session = sessions.get(channelId);
-    if (!session) return;
-    if (msg === "fluxer-empty") {
-      session.fluxerEmpty = true;
-      checkAndMaybeStop(channelId);
-    } else if (msg === "fluxer-joined") {
-      session.fluxerEmpty = false;
+    {
+      onMessage(msg) {
+        const session = sessions.get(channelId);
+        if (!session) return;
+        if (msg === "fluxer-empty") {
+          session.fluxerEmpty = true;
+          checkAndMaybeStop(channelId);
+        } else if (msg === "fluxer-joined") {
+          session.fluxerEmpty = false;
+        }
+      },
+      onExit(code) {
+        log("VOICE", `Bridge exited (code ${code})`);
+        sessions.delete(channelId);
+        const guild = discordClient.guilds.cache.get(guildId);
+        guild?.shard.send({
+          op: 4,
+          d: { guild_id: guildId, channel_id: null, self_mute: false, self_deaf: false },
+        });
+        _fluxerClient?.sendToGateway(0, {
+          op: 4,
+          d: { guild_id: voiceMap.fluxerGuildId, channel_id: null, self_mute: false, self_deaf: false },
+        });
+      },
+      onError(message) {
+        log("VOICE", `Bridge error: ${message}`);
+      },
     }
-  });
+  );
 
-  proc.on("error", (err) => {
-    log("VOICE", `Bridge error: ${err.message}`);
-  });
-
-  proc.on("exit", (code) => {
-    log("VOICE", `Bridge exited (code ${code})`);
-    const session = sessions.get(channelId);
-    sessions.delete(channelId);
-    const guild = discordClient.guilds.cache.get(guildId);
-    guild?.shard.send({
-      op: 4,
-      d: { guild_id: guildId, channel_id: null, self_mute: false, self_deaf: false },
-    });
-    if (session) {
-      _fluxerClient?.sendToGateway(0, {
-        op: 4,
-        d: { guild_id: session.fluxerGuildId, channel_id: null, self_mute: false, self_deaf: false },
-      });
-    }
-  });
+  if (spawned) {
+    sessions.set(channelId, { guildId, fluxerGuildId: voiceMap.fluxerGuildId, fluxerEmpty: false });
+  }
 }
 
 /** @param {string} channelId */
@@ -235,6 +230,6 @@ function stopSession(channelId) {
   const session = sessions.get(channelId);
   if (!session) return;
   sessions.delete(channelId);
-  try { session.proc.kill("SIGTERM"); } catch { }
+  killBridge(channelId);
   log("VOICE", `Session stopped for channel ${channelId}`);
 }

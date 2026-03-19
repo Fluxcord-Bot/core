@@ -44,6 +44,13 @@ importers:
       umzug:
         specifier: ^3.8.2
         version: 3.8.2(@types/node@25.3.5)
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
 
 packages:
 

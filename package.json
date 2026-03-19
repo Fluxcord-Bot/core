@@ -21,6 +21,10 @@
     "sequelize-typescript": "^2.1.6",
     "sqlite3": "^5.1.7",
     "truncate": "^3.0.0",
-    "umzug": "^3.8.2"
+    "umzug": "^3.8.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }

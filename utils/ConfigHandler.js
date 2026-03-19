@@ -12,10 +12,11 @@ const DefaultConfig = {
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
   BotPrefix: "fc!",
 
-  // Voice channel bridge mappings. Each entry links a Discord voice channel
-  // to a Fluxer voice channel. A Node.js subprocess is spawned per session.
   // VoiceChannelMaps: [{ discordGuildId, discordChannelId, fluxerGuildId, fluxerChannelId }]
   VoiceChannelMaps: [],
+
+  RunnerWsPort: 8765,
+  RunnerSecret: "",
 
   ...Config,
 };
