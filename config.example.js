@@ -32,6 +32,12 @@ const Config = {
   // The prefix of the bot
   BotPrefix: "fc!",
 
+  // The port the voice runner WebSocket server listens on.
+  RunnerWsPort: 8765,
+
+  // Secret shared between the core bot and voice runners. Set to a long random string.
+  RunnerSecret: "",
+
   // Voice channel bridge mappings (optional).
   // Each entry links a Discord voice channel to a Fluxer voice channel.
   // Leave empty (or omit) to disable voice bridging entirely.
