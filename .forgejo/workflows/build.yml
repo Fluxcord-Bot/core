@@ -1,21 +1,21 @@
 name: Build docker image
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: rotfront
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Install Docker CLI
+        run: apt-get update && apt-get install -y docker.io
 
       - name: Get version from package.json
         id: pkg
