@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Docker CLI
-        run: apt-get update && apt-get install -y docker.io
+        run: apt-get update && apt-get install -y docker.io jq
 
       - name: Get version from package.json
         id: pkg
