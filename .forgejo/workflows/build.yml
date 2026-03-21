@@ -40,5 +40,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ github.server_url }}/${{ github.repository_owner }}/fluxcord-core:latest
-            ${{ github.server_url }}/${{ github.repository_owner }}/fluxcord-core:${{ steps.pkg.outputs.version }}
+            git.gay/${{ github.repository_owner }}/fluxcord-core:latest
+            git.gay/${{ github.repository_owner }}/fluxcord-core:${{ steps.pkg.outputs.version }}
