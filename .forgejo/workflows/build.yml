@@ -32,7 +32,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
-            image=code.forgejo.org/oci/buildkit:master
+            image=code.forgejo.org/oci/buildkit:buildx-stable-1
 
       - name: Build and push image
         uses: docker/build-push-action@v6
