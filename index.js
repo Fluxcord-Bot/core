@@ -141,17 +141,15 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.Ready, async () => {
-  log(
-    "FLUXER",
-    `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
-  );
+let discordReady = false;
+let fluxerReady = false;
 
+async function onBothReady() {
   renderBox([
     "To invite Fluxcord to your server, here's the invite links:",
     "",
     "Discord:",
-    genAuthLink(discordClient.user?.id),
+    genAuthLink(Config.DiscordClientId),
     "",
     "Fluxer:",
     genAuthLink(fluxerClient.user?.id, true),
@@ -232,6 +230,15 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
       log("META", "First time setup failed:", e);
     }
   }
+}
+
+fluxerClient.on(FluxerEvents.Ready, async () => {
+  log(
+    "FLUXER",
+    `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
+  );
+  fluxerReady = true;
+  if (discordReady) onBothReady();
 });
 
 discordClient.on(DiscordEvents.ClientReady, async () => {
@@ -240,6 +247,9 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
   discordClient.user?.setActivity(
     `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
   );
+
+  discordReady = true;
+  if (fluxerReady) onBothReady();
 });
 
 process.on("uncaughtException", (error) => {
