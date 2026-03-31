@@ -13,13 +13,20 @@ A set-and-forget Discord <-> Fluxer bridge.
 - *others soon*
 
 ## Self hosted setup 
-- Install Docker and Docker Compose
-- Clone this repository: `git clone https://git.gay/jbcarreon123/Fluxcord`
-- Copy `config.example.ts` to `config.ts`
-- Edit `config.ts` to the things needed by it
-- Run `docker compose up -d --build`
+Check https://fluxcord.jbcrn.dev/self-hosting for self hosting docs
 
-## Updating
-- Run `git pull`
-- Check for config changes on the example config file
-- Run `docker compose up -d --build`
+## Development
+Firstly, this requires both Node.js and PNPM installed.
+
+**Do not pull this repo directly.** Instead, pull the Fluxcord Dev repository:
+```
+git pull https://git.gay/Fluxcord/dev Fluxcord
+```
+
+then initialize it:
+```bash
+cd Fluxcord
+pnpm run init
+```
+
+If you use VSCode or a fork, you can find a code-workspace file here that can help you with stuff.
