@@ -19,6 +19,7 @@ import {
   DiscordCreateMessageHandler,
   DiscordDeleteMessageHandler,
   DiscordPinsUpdateHandler,
+  DiscordUpdateMessageHandler,
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
@@ -71,8 +72,7 @@ discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
 
 discordClient.on(DiscordEvents.MessageUpdate, async (oldMsg, newMsg) => {
   try {
-    //await DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClient);
-    // disabling this for now because fluxer bug
+    await DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClient);
   } catch (e) {
     await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
   }

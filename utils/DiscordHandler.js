@@ -244,15 +244,6 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
-    const channel = await client.channels.fetch(channelMap.fluxerChannelId);
-
-    const message = await /** @type {TextChannel} */ (channel).messages.fetch(
-      messageExisting.fluxerMessageId,
-    );
-
-    const newAttachments = newMsg.attachments.filter((x) =>
-      message.attachments.find((y) => y.url === x.url || y.url === x.proxyURL),
-    );
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
@@ -271,28 +262,30 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       });
     }
 
-    await message.edit({
-      content:
-        // @ts-expect-error
-        (messageReference
-          ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
-          : "") +
-        (await traverseMessageLinks(
-          await parseDiscordEmojiToFluxer(await parseMentions(message), client),
-        )) +
-        (Array.from(newAttachments).length > 0
-          ? `\n${Array.from(newAttachments).map((x, i) => `[${i}](${x})`)}`
-          : ""),
-      embeds: await Promise.all(
-        newMsg.embeds.map(async (x) => await discordEmbedToFluxer(x, client)),
-      ),
-    });
+    const newContent =
+      // @ts-expect-error
+      (messageReference
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
+        : "") +
+      (await traverseMessageLinks(
+        await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
+      ));
+
+    await client.rest.patch(
+      `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}`,
+      {
+        body: {
+          content: newContent,
+          embeds: await Promise.all(
+            newMsg.embeds.map(async (x) => await discordEmbedToFluxer(x, client)),
+          ),
+        },
+        auth: false,
+      },
+    );
 
     messageExisting.content = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(
-        await parseMentions(newMsg.content),
-        fluxerClient,
-      ),
+      await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
     );
     await messageExisting.save();
   }
