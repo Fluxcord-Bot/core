@@ -307,11 +307,12 @@ export async function DiscordDeleteMessageHandler(msg, client) {
     const channelMap = messageExisting.channelMap;
     const channel = await client.channels.fetch(channelMap.fluxerChannelId);
 
-    const message = await /** @type {TextChannel} */ (channel).messages.fetch(
-      messageExisting.fluxerMessageId,
-    );
-
-    await message.delete();
+    try {
+      const message = await /** @type {TextChannel} */ (channel).messages.fetch(
+        messageExisting.fluxerMessageId,
+      );
+      await message.delete();
+    } catch {}
     await messageExisting.destroy();
   }
 }

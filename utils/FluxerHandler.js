@@ -248,13 +248,19 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
-    const webhook = await client.fetchWebhook(
-      channelMap.discordWebhookId,
-      channelMap.discordWebhookToken,
-    );
 
     try {
-      await webhook.deleteMessage(messageExisting.discordMessageId);
+      if (messageExisting.messageSource === "discord") {
+        const channel = await client.channels.fetch(channelMap.discordChannelId);
+        const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(messageExisting.discordMessageId);
+        await discordMessage.delete();
+      } else {
+        const webhook = await client.fetchWebhook(
+          channelMap.discordWebhookId,
+          channelMap.discordWebhookToken,
+        );
+        await webhook.deleteMessage(messageExisting.discordMessageId);
+      }
     } catch { }
     await messageExisting.destroy();
   }
