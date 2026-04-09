@@ -104,9 +104,12 @@ export async function parseFluxerEmojiToDiscord(
   const regex = /:(a?\d+):/g;
 
   let result = content.replace(/<(a?):[\w\-\_]+:(\d+)>/g, ":$1$2:");
+  result = result.replace(/:e(a?\d+):/g, ":$1:");
 
   /** @type {string[]} */
   const emojis = [];
+
+  let cachedEmojis = await discordClient.application?.emojis.fetch();
 
   let m;
   while ((m = regex.exec(result)) !== null) {
@@ -120,8 +123,7 @@ export async function parseFluxerEmojiToDiscord(
         try {
           const emojiName = `e${m[1]}`;
 
-          let app = await discordClient.application?.fetch();
-          let existingEmoji = app?.emojis.cache.find(
+          let existingEmoji = cachedEmojis?.find(
             (x) => x.name === emojiName,
           );
 
@@ -140,6 +142,8 @@ export async function parseFluxerEmojiToDiscord(
               attachment: buf,
               name: emojiName,
             });
+
+            if (existingEmoji) cachedEmojis?.set(existingEmoji.id, existingEmoji);
           }
 
           result = result.replaceAll(
