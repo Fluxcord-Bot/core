@@ -1,5 +1,4 @@
 import { log } from "./Logger.js";
-import RandomString from "./RandomString.js";
 import Config from "../utils/ConfigHandler.js";
 import { ChannelMap, MessageMap } from "../db/index.js";
 import { Op } from "sequelize";
@@ -31,31 +30,41 @@ export async function parseDiscordEmojiToFluxer(
       if (!emojis.includes(m[1])) {
         emojis.push(m[1]);
         try {
-          const res = await fetch(
-            "https://cdn.discordapp.com/emojis/" +
-              m[1].replace("a", "") +
-              (m[1].startsWith("a") ? ".gif" : ".webp"),
-          );
-          const buf = await res.arrayBuffer();
-          const str = RandomString(16);
+          const emojiName = `e${m[1]}`;
 
           const fluxerGuild = await fluxerClient.guilds.fetch(
             Config.FluxerTempEmojiGuildId,
           );
-          await fluxerGuild?.createEmojisBulk([
-            {
-              image: btoa(
-                new Uint8Array(buf).reduce(
-                  (data, byte) => data + String.fromCharCode(byte),
-                  "",
+
+          let existingEmojis = await fluxerGuild?.fetchEmojis();
+          let existing = existingEmojis?.find((x) => x.name === emojiName);
+
+          if (!existing) {
+            const res = await fetch(
+              "https://cdn.discordapp.com/emojis/" +
+                m[1].replace("a", "") +
+                (m[1].startsWith("a") ? ".gif" : ".webp"),
+            );
+            const buf = await res.arrayBuffer();
+
+            await fluxerGuild?.createEmojisBulk([
+              {
+                image: btoa(
+                  new Uint8Array(buf).reduce(
+                    (data, byte) => data + String.fromCharCode(byte),
+                    "",
+                  ),
                 ),
-              ),
-              name: str,
-            },
-          ]);
+                name: emojiName,
+              },
+            ]);
+
+            existingEmojis = await fluxerGuild?.fetchEmojis();
+            existing = existingEmojis?.find((x) => x.name === emojiName);
+          }
 
           const fluxerEmoji = await fluxerClient.resolveEmoji(
-            `:${str}:`,
+            `:${emojiName}:`,
             Config.FluxerTempEmojiGuildId,
           );
 
@@ -109,25 +118,33 @@ export async function parseFluxerEmojiToDiscord(
       if (!emojis.includes(m[1])) {
         emojis.push(m[1]);
         try {
-          const res = await fetch(
-            "https://fluxerusercontent.com/emojis/" +
-              m[1].replace("a", "") +
-              ".webp?animated=" +
-              (m[1].startsWith("a") ? "true" : "false") +
-              "&size=240&quality=lossless",
-          );
-          const arrBuf = await res.arrayBuffer();
-          const buf = Buffer.from(arrBuf);
-          const str = RandomString(16);
+          const emojiName = `e${m[1]}`;
 
-          const discordEmoji = await discordClient.application?.emojis.create({
-            attachment: buf,
-            name: str,
-          });
+          let app = await discordClient.application?.fetch();
+          let existingEmoji = app?.emojis.cache.find(
+            (x) => x.name === emojiName,
+          );
+
+          if (!existingEmoji) {
+            const res = await fetch(
+              "https://fluxerusercontent.com/emojis/" +
+                m[1].replace("a", "") +
+                ".webp?animated=" +
+                (m[1].startsWith("a") ? "true" : "false") +
+                "&size=240&quality=lossless",
+            );
+            const arrBuf = await res.arrayBuffer();
+            const buf = Buffer.from(arrBuf);
+
+            existingEmoji = await discordClient.application?.emojis.create({
+              attachment: buf,
+              name: emojiName,
+            });
+          }
 
           result = result.replaceAll(
             `:${m[1]}:`,
-            `<${m[1].startsWith("a") ? "a" : ""}:${str}:${discordEmoji?.id}>`,
+            `<${m[1].startsWith("a") ? "a" : ""}:${emojiName}:${existingEmoji?.id}>`,
           );
         } catch (e) {
           if (attempt < 5) {

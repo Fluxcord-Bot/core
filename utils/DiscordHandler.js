@@ -135,6 +135,16 @@ export async function DiscordCreateMessageHandler(
     try {
       guildUser = await message.guild.members.fetch(message.author.id);
     } catch { }
+
+    const parsedContent = forwardedMessage
+      ? "*Forwarded message*"
+      : await traverseMessageLinks(
+        await parseDiscordEmojiToFluxer(
+          await parseMentions(message),
+          fluxerClient,
+        ),
+      );
+
     const msg = await webhook.send(
       {
         content:
@@ -148,12 +158,7 @@ export async function DiscordCreateMessageHandler(
           (messageReference
             ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
             : "") +
-          (await traverseMessageLinks(
-            await parseDiscordEmojiToFluxer(
-              await parseMentions(forwardedMessage ?? message),
-              fluxerClient,
-            ),
-          )) +
+          parsedContent +
           stickerMsg +
           userJoin +
           (overAttachmentsStr
@@ -191,14 +196,7 @@ export async function DiscordCreateMessageHandler(
           messageSource: "discord",
           discordMessageId: message.id,
           fluxerMessageId: msg?.id,
-          content: forwardedMessage
-            ? "*Forwarded message*"
-            : await traverseMessageLinks(
-              await parseDiscordEmojiToFluxer(
-                await parseMentions(message),
-                fluxerClient,
-              ),
-            ),
+          content: parsedContent,
           channelMapId: channelMap.id,
           authorId: message.author.id,
         });
