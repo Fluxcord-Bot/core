@@ -112,6 +112,10 @@ export async function DiscordCreateMessageHandler(
     });
   }
 
+  const nativeForwardFluxerMessageId = forwardedMessage
+    ? (messageReference?.fluxerMessageId ?? null)
+    : null;
+
   const interactingUser = message.interaction
     ? message.interactionMetadata?.user
     : undefined;
@@ -145,45 +149,68 @@ export async function DiscordCreateMessageHandler(
         ),
       );
 
-    const msg = await webhook.send(
-      {
-        content:
-          (forwardedMessage
-            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
-            : "") +
-          (interactingUser
-            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\``
-            : "") +
-          // @ts-expect-error
-          (messageReference
-            ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await message.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
-            : "") +
-          parsedContent +
-          stickerMsg +
-          userJoin +
-          (overAttachmentsStr
-            ? "\n-# has attachments over 25mb: " + overAttachmentsStr
-            : ""),
-        username:
-          guildUser?.displayName ??
-          message.author.displayName ??
-          message.author.globalName ??
-          "Fluxcord",
-        avatar_url: message.author.avatarURL() ?? undefined,
-        files: (forwardedMessage ?? message).attachments
-          .filter((x) => x.size < 24999900)
-          .map((a) => ({
-            name: a.name,
-            url: a.url,
-          })),
-        embeds: await Promise.all(
-          (forwardedMessage ?? message).embeds.map(
-            async (x) => await discordEmbedToFluxer(x, fluxerClient),
-          ),
-        ),
-      },
-      true,
+    let messageReferenceOption;
+    if (nativeForwardFluxerMessageId) {
+      messageReferenceOption = { type: 1, channel_id: channelMap.fluxerChannelId, message_id: nativeForwardFluxerMessageId };
+    } else if (messageReference) {
+      messageReferenceOption = { message_id: messageReference.fluxerMessageId };
+    }
+
+    const webhookContent =
+      (forwardedMessage && !nativeForwardFluxerMessageId
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
+        : "") +
+      (interactingUser
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\``
+        : "") +
+      (!nativeForwardFluxerMessageId ? parsedContent : "") +
+      (!nativeForwardFluxerMessageId ? stickerMsg : "") +
+      userJoin +
+      (overAttachmentsStr && !nativeForwardFluxerMessageId
+        ? "\n-# has attachments over 25mb: " + overAttachmentsStr
+        : "");
+    const webhookUsername =
+      guildUser?.displayName ??
+      message.author.displayName ??
+      message.author.globalName ??
+      "Fluxcord";
+    const webhookFiles = nativeForwardFluxerMessageId ? [] : (forwardedMessage ?? message).attachments
+      .filter((x) => x.size < 24999900)
+      .map((a) => ({ name: a.name, url: a.url }));
+    const webhookEmbeds = nativeForwardFluxerMessageId ? [] : await Promise.all(
+      (forwardedMessage ?? message).embeds.map(
+        async (x) => await discordEmbedToFluxer(x, fluxerClient),
+      ),
     );
+
+    let msg;
+    if (messageReferenceOption) {
+      msg = await fluxerClient.rest.post(
+        `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}?wait=true`,
+        {
+          body: {
+            content: webhookContent,
+            username: webhookUsername,
+            avatar_url: message.author.avatarURL() ?? undefined,
+            embeds: webhookEmbeds,
+            files: webhookFiles,
+            message_reference: messageReferenceOption,
+          },
+          auth: false,
+        },
+      );
+    } else {
+      msg = await webhook.send(
+        {
+          content: webhookContent,
+          username: webhookUsername,
+          avatar_url: message.author.avatarURL() ?? undefined,
+          files: webhookFiles,
+          embeds: webhookEmbeds,
+        },
+        true,
+      );
+    }
 
     setTimeout(async () => {
       try {
@@ -243,31 +270,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
 
-    /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
-    let messageReference;
-    if (newMsg.reference) {
-      messageReference = await MessageMap.findOne({
-        where: {
-          [Op.or]: [
-            {
-              discordMessageId: newMsg.reference.messageId,
-            },
-            {
-              fluxerMessageId: newMsg.reference.messageId,
-            },
-          ],
-        },
-      });
-    }
-
-    const newContent =
-      // @ts-expect-error
-      (messageReference
-        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${messageReference.messageSource === "fluxer" ? `<@${messageReference.authorId}>` : `@${(await newMsg.fetchReference()).author.tag}`} (https://fluxer.app/channels/${channelMap.fluxerGuildId}/${channelMap.fluxerChannelId}/${messageReference.fluxerMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
-        : "") +
-      (await traverseMessageLinks(
-        await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
-      ));
+    const newContent = await traverseMessageLinks(
+      await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
+    );
 
     await client.rest.patch(
       `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}`,
