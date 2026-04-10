@@ -113,10 +113,6 @@ export async function DiscordCreateMessageHandler(
     });
   }
 
-  const nativeForwardFluxerMessageId = forwardedMessage
-    ? (messageReference?.fluxerMessageId ?? null)
-    : null;
-
   const interactingUser = message.interaction
     ? message.interactionMetadata?.user
     : undefined;
@@ -141,33 +137,29 @@ export async function DiscordCreateMessageHandler(
       guildUser = await message.guild.members.fetch(message.author.id);
     } catch { }
 
-    const parsedContent = forwardedMessage
-      ? "*Forwarded message*"
-      : await traverseMessageLinks(
-        await parseDiscordEmojiToFluxer(
-          sanitizePings(await parseMentions(message)),
-          fluxerClient,
-        ),
-      );
+    const parsedContent = await traverseMessageLinks(
+      await parseDiscordEmojiToFluxer(
+        sanitizePings(await parseMentions(forwardedMessage ?? message)),
+        fluxerClient,
+      ),
+    );
 
     let messageReferenceOption;
-    if (nativeForwardFluxerMessageId) {
-      messageReferenceOption = { type: 1, channel_id: channelMap.fluxerChannelId, message_id: nativeForwardFluxerMessageId };
-    } else if (messageReference) {
+    if (messageReference && !forwardedMessage) {
       messageReferenceOption = { message_id: messageReference.fluxerMessageId };
     }
 
     const webhookContent =
-      (forwardedMessage && !nativeForwardFluxerMessageId
+      (forwardedMessage
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
       (interactingUser
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\``
         : "") +
-      (!nativeForwardFluxerMessageId ? parsedContent : "") +
-      (!nativeForwardFluxerMessageId ? stickerMsg : "") +
+      parsedContent +
+      stickerMsg +
       userJoin +
-      (overAttachmentsStr && !nativeForwardFluxerMessageId
+      (overAttachmentsStr
         ? "\n-# has attachments over 25mb: " + overAttachmentsStr
         : "");
     const webhookUsername =
@@ -175,10 +167,10 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-    const webhookFiles = nativeForwardFluxerMessageId ? [] : (forwardedMessage ?? message).attachments
+    const webhookFiles = (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 24999900)
       .map((a) => ({ name: a.name, url: a.url }));
-    const webhookEmbeds = nativeForwardFluxerMessageId ? [] : await Promise.all(
+    const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
       ),
