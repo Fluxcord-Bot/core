@@ -12,6 +12,7 @@ import {
   traverseMessageLinks,
 } from "./EmojiStickerParser.js";
 import { parseMentions } from "./MessageContentParser.js";
+import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -144,7 +145,7 @@ export async function DiscordCreateMessageHandler(
       ? "*Forwarded message*"
       : await traverseMessageLinks(
         await parseDiscordEmojiToFluxer(
-          await parseMentions(message),
+          sanitizePings(await parseMentions(message)),
           fluxerClient,
         ),
       );
@@ -271,7 +272,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const channelMap = messageExisting.channelMap;
 
     const newContent = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
+      await parseDiscordEmojiToFluxer(sanitizePings(await parseMentions(newMsg)), client),
     );
 
     await client.rest.patch(
@@ -288,7 +289,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     );
 
     messageExisting.content = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(await parseMentions(newMsg), client),
+      await parseDiscordEmojiToFluxer(sanitizePings(await parseMentions(newMsg)), client),
     );
     await messageExisting.save();
   }

@@ -11,6 +11,7 @@ import {
 } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
+import { sanitizePings } from "./SanitizePings.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -114,7 +115,7 @@ export async function FluxerCreateMessageHandler(
         : "") +
       (await traverseMessageLinks(
         await parseFluxerEmojiToDiscord(
-          await parseMentions(forwardedMessage ?? message),
+          sanitizePings(await parseMentions(forwardedMessage ?? message)),
           discordClient,
         ),
       )) +
@@ -148,7 +149,7 @@ export async function FluxerCreateMessageHandler(
         channelMapId: channelMap.id,
         authorId: message.author.id,
         content: await parseFluxerEmojiToDiscord(
-          await parseMentions(message),
+          sanitizePings(await parseMentions(message)),
           discordClient,
         ),
       });
@@ -220,7 +221,7 @@ export async function FluxerUpdateMessageHandler(
           : "") +
         (await traverseMessageLinks(
           await parseFluxerEmojiToDiscord(
-            await parseMentions(newMessage),
+            sanitizePings(await parseMentions(newMessage)),
             client,
           ),
         )),
@@ -228,7 +229,7 @@ export async function FluxerUpdateMessageHandler(
     });
 
     ((messageExisting.content = await traverseMessageLinks(
-      await parseFluxerEmojiToDiscord(await parseMentions(newMessage), client),
+      await parseFluxerEmojiToDiscord(sanitizePings(await parseMentions(newMessage)), client),
     )),
       await messageExisting.save());
   }
