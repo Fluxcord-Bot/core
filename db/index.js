@@ -74,8 +74,8 @@ MessageMap.init(
     },
     discordMessageId: { type: DataTypes.STRING, allowNull: false },
     fluxerMessageId: { type: DataTypes.STRING, allowNull: false },
-    discordReplyId: { type: DataTypes.STRING, allowNull: false },
-    fluxerReplyId: { type: DataTypes.STRING, allowNull: false },
+    discordReplyId: { type: DataTypes.STRING, allowNull: true },
+    fluxerReplyId: { type: DataTypes.STRING, allowNull: true },
     authorId: { type: DataTypes.STRING, allowNull: false },
     content: { type: DataTypes.STRING, allowNull: false },
     channelMapId: {
