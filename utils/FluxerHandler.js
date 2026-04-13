@@ -146,6 +146,8 @@ export async function FluxerCreateMessageHandler(
         messageSource: "fluxer",
         discordMessageId: msg.id,
         fluxerMessageId: message.id,
+        fluxerReplyId: message.referencedMessage?.id,
+        discordReplyId: messageReference?.content,
         channelMapId: channelMap.id,
         authorId: message.author.id,
         content: await parseFluxerEmojiToDiscord(
@@ -263,7 +265,29 @@ export async function FluxerDeleteMessageHandler(message, client) {
         await webhook.deleteMessage(messageExisting.discordMessageId);
       }
     } catch { }
+
     await messageExisting.destroy();
+  }
+
+  const replies = await MessageMap.findAll({
+    where: {
+      fluxerReplyId: message.id
+    },
+    include: ["channelMap"],
+  })
+
+  if (replies.length > 1) {
+    for (let reply of replies) {
+      const channel = await client.channels.fetch(reply.discordChannelId);
+      const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(reply.discordMessageId);
+
+      await discordMessage.edit({
+        content: reply.content = `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*`
+      })
+      reply.discordReplyId = null;
+      reply.fluxerReplyId = null;
+      await reply.save();
+    }
   }
 }
 

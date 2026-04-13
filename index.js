@@ -23,7 +23,7 @@ import {
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
-import { ChannelMap } from "./db/index.js";
+import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 
@@ -54,6 +54,16 @@ const fluxerClient = new FluxerClient({
     },
   },
 });
+
+discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
+  if (!guild.available) return;
+
+  await GuildMap.destroy({
+    where: {
+      guildId: guild.id
+    }
+  })
+})
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
@@ -101,6 +111,16 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
     log("FLUXER", e);
   }
 });
+
+fluxerClient.on(FluxerEvents.GuildDelete, async (guild) => {
+  if (guild.unavailable) return;
+
+  await GuildMap.destroy({
+    where: {
+      guildId: guild.id
+    }
+  })
+})
 
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
   try {
@@ -177,7 +197,7 @@ async function onBothReady() {
             name: "reply_r",
           },
         ]);
-      } catch {}
+      } catch { }
 
       const fluxerEmojiReplyL = await fluxerClient.resolveEmoji(
         ":reply_l:",
@@ -194,7 +214,7 @@ async function onBothReady() {
           attachment: replyL,
           name: "reply_l",
         });
-      } catch {}
+      } catch { }
 
       let discordEmojiReplyR;
       try {
@@ -202,7 +222,7 @@ async function onBothReady() {
           attachment: replyR,
           name: "reply_r",
         });
-      } catch {}
+      } catch { }
 
       if (!discordEmojiReplyL || !discordEmojiReplyR) {
         const existing = await discordClient.application?.emojis.fetch();
@@ -253,7 +273,7 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
 });
 
 process.on("uncaughtException", (error) => {
-  log("DEBUG", "A uncaught exception occurred.", error);
+  log("META", "A uncaught exception occurred.", error);
 
   try {
     discordClient.destroy();
@@ -268,7 +288,7 @@ process.on("uncaughtException", (error) => {
 
 // @ts-ignore
 process.on("unhandledRejection", (reason, promise) => {
-  log("DEBUG", "A unhandled rejection occurred.", reason);
+  log("META", "A unhandled rejection occurred.", reason);
 
   try {
     discordClient.destroy();

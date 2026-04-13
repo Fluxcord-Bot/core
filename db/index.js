@@ -10,10 +10,10 @@ const sequelize = new Sequelize({
   logging: (msg) => log("DB", msg),
 });
 
-class ChannelMap extends Model {}
-class MessageMap extends Model {}
-class UserConfig extends Model {}
-class GuildMap extends Model {}
+class ChannelMap extends Model { }
+class MessageMap extends Model { }
+class UserConfig extends Model { }
+class GuildMap extends Model { }
 
 GuildMap.init(
   {
@@ -74,6 +74,8 @@ MessageMap.init(
     },
     discordMessageId: { type: DataTypes.STRING, allowNull: false },
     fluxerMessageId: { type: DataTypes.STRING, allowNull: false },
+    discordReplyId: { type: DataTypes.STRING, allowNull: false },
+    fluxerReplyId: { type: DataTypes.STRING, allowNull: false },
     authorId: { type: DataTypes.STRING, allowNull: false },
     content: { type: DataTypes.STRING, allowNull: false },
     channelMapId: {
