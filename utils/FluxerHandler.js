@@ -276,7 +276,7 @@ export async function FluxerDeleteMessageHandler(message, client) {
     include: ["channelMap"],
   })
 
-  if (replies.length > 1) {
+  if (replies.length > 0) {
     for (let reply of replies) {
       const channel = await client.channels.fetch(reply.discordChannelId);
       const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(reply.discordMessageId);
