@@ -148,8 +148,8 @@ export async function FluxerCreateMessageHandler(
         messageSource: "fluxer",
         discordMessageId: msg.id,
         fluxerMessageId: message.id,
-        fluxerReplyId: message.messageReference?.message_id,
-        discordReplyId: messageReference?.discordMessageId,
+        fluxerReplyId: message.messageReference?.message_id ?? null,
+        discordReplyId: messageReference?.discordMessageId ?? null,
         channelMapId: channelMap.id,
         authorId: message.author.id,
         content: (await traverseMessageLinks(

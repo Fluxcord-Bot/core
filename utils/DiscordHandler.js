@@ -154,7 +154,7 @@ export async function DiscordCreateMessageHandler(
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
       (interactingUser
-        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\``
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       parsedContent +
       stickerMsg +
@@ -216,8 +216,8 @@ export async function DiscordCreateMessageHandler(
           messageSource: "discord",
           discordMessageId: message.id,
           fluxerMessageId: msg?.id,
-          fluxerReplyId: messageReference?.fluxerMessageId,
-          discordReplyId: message.reference?.messageId,
+          fluxerReplyId: messageReference?.fluxerMessageId ?? null,
+          discordReplyId: message.reference?.messageId ?? null,
           content: parsedContent,
           channelMapId: channelMap.id,
           authorId: message.author.id,
