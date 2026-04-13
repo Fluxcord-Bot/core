@@ -277,7 +277,7 @@ export async function FluxerDeleteMessageHandler(message, client) {
     where: {
       [Op.or]: {
         fluxerReplyId: message.id,
-        discordReplyId: messageExisting?.discordMessageId
+        discordReplyId: messageExisting?.discordMessageId ?? null
       }
     },
     include: ["channelMap"],
