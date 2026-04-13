@@ -146,8 +146,8 @@ export async function FluxerCreateMessageHandler(
         messageSource: "fluxer",
         discordMessageId: msg.id,
         fluxerMessageId: message.id,
-        fluxerReplyId: message.referencedMessage?.id,
-        discordReplyId: messageReference?.content,
+        fluxerReplyId: message.referencedMessage?.message_id,
+        discordReplyId: messageReference?.discordMessageId,
         channelMapId: channelMap.id,
         authorId: message.author.id,
         content: await parseFluxerEmojiToDiscord(

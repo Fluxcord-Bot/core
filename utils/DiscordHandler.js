@@ -216,6 +216,8 @@ export async function DiscordCreateMessageHandler(
           messageSource: "discord",
           discordMessageId: message.id,
           fluxerMessageId: msg?.id,
+          fluxerReplyId: messageReference?.fluxerMessageId,
+          discordReplyId: message.reference?.messageId,
           content: parsedContent,
           channelMapId: channelMap.id,
           authorId: message.author.id,
@@ -308,7 +310,7 @@ export async function DiscordDeleteMessageHandler(msg, client) {
         messageExisting.fluxerMessageId,
       );
       await message.delete();
-    } catch {}
+    } catch { }
     await messageExisting.destroy();
   }
 }
