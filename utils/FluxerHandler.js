@@ -142,18 +142,22 @@ export async function FluxerCreateMessageHandler(
         await channel.messages.fetch(message.id);
       }
 
+      console.log(messageReference)
+
       await MessageMap.create({
         messageSource: "fluxer",
         discordMessageId: msg.id,
         fluxerMessageId: message.id,
-        fluxerReplyId: message.referencedMessage?.message_id,
+        fluxerReplyId: message.messageReference?.message_id,
         discordReplyId: messageReference?.discordMessageId,
         channelMapId: channelMap.id,
         authorId: message.author.id,
-        content: await parseFluxerEmojiToDiscord(
-          sanitizePings(await parseMentions(message)),
-          discordClient,
-        ),
+        content: (await traverseMessageLinks(
+          await parseFluxerEmojiToDiscord(
+            sanitizePings(await parseMentions(forwardedMessage ?? message)),
+            discordClient,
+          ),
+        )),
       });
     } catch {
       // pretend msg is deleted
@@ -271,18 +275,27 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
   const replies = await MessageMap.findAll({
     where: {
-      fluxerReplyId: message.id
+      [Op.or]: {
+        fluxerReplyId: message.id,
+        discordReplyId: messageExisting?.discordMessageId
+      }
     },
     include: ["channelMap"],
   })
 
+  console.log(messageExisting, replies);
+
   if (replies.length > 0) {
     for (let reply of replies) {
-      const channel = await client.channels.fetch(reply.discordChannelId);
-      const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(reply.discordMessageId);
+      const channelMap = messageExisting.channelMap;
+      const webhook = await client.fetchWebhook(
+        channelMap.discordWebhookId,
+        channelMap.discordWebhookToken,
+      );
 
-      await discordMessage.edit({
-        content: reply.content = `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*`
+      await webhook.editMessage(reply.discordMessageId, {
+        content: `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*
+${reply.content}`
       })
       reply.discordReplyId = null;
       reply.fluxerReplyId = null;
