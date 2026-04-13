@@ -277,17 +277,15 @@ export async function FluxerDeleteMessageHandler(message, client) {
     where: {
       [Op.or]: {
         fluxerReplyId: message.id,
-        discordReplyId: messageExisting?.discordMessageId ?? null
+        discordReplyId: messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH"
       }
     },
     include: ["channelMap"],
   })
 
-  console.log(messageExisting, replies);
-
   if (replies.length > 0) {
     for (let reply of replies) {
-      const channelMap = messageExisting.channelMap;
+      const channelMap = reply.channelMap;
       const webhook = await client.fetchWebhook(
         channelMap.discordWebhookId,
         channelMap.discordWebhookToken,
