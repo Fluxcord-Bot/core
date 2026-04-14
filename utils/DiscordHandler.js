@@ -1,5 +1,5 @@
 import { MessageType } from "discord.js";
-import { ChannelMap, MessageMap } from "../db/index.js";
+import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -38,6 +38,16 @@ export async function DiscordCreateMessageHandler(
     CommandHandler(message, client, fluxerClient);
     return;
   }
+
+  const userOptOut = await UserConfig.findOne({
+    where: {
+      userType: "discord",
+      userId: message.author.id,
+      doNotBridgePrefix: "__opted_out__",
+    },
+  });
+
+  if (userOptOut) return;
 
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
@@ -141,6 +151,7 @@ export async function DiscordCreateMessageHandler(
       await parseDiscordEmojiToFluxer(
         sanitizePings(await parseMentions(forwardedMessage ?? message)),
         fluxerClient,
+        channelMap.fluxerGuildId,
       ),
     );
 
@@ -244,6 +255,16 @@ export async function DiscordCreateMessageHandler(
  * @param {FluxerClient} client
  */
 export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
+  const userOptOut = await UserConfig.findOne({
+    where: {
+      userType: "discord",
+      userId: newMsg.author.id,
+      doNotBridgePrefix: "__opted_out__",
+    },
+  });
+
+  if (userOptOut) return;
+
   const messageExisting = await MessageMap.findOne({
     where: {
       discordMessageId: newMsg.id,
@@ -266,7 +287,11 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const channelMap = messageExisting.channelMap;
 
     const newContent = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(sanitizePings(await parseMentions(newMsg)), client),
+      await parseDiscordEmojiToFluxer(
+        sanitizePings(await parseMentions(newMsg)),
+        client,
+        channelMap.fluxerGuildId,
+      ),
     );
 
     await client.rest.patch(
@@ -283,7 +308,11 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     );
 
     messageExisting.content = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(sanitizePings(await parseMentions(newMsg)), client),
+      await parseDiscordEmojiToFluxer(
+        sanitizePings(await parseMentions(newMsg)),
+        client,
+        channelMap.fluxerGuildId,
+      ),
     );
     await messageExisting.save();
   }

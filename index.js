@@ -27,6 +27,7 @@ import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import changeBotBios from "./utils/ChangeBotBio.js";
+import { setupReactionHandling } from "./utils/ReactionHandler.js";
 
 const discordClient = new DiscordClient({
   intents: [
@@ -313,6 +314,8 @@ if ((Config.VoiceChannelMaps ?? []).length > 0) {
     `Voice bridging active for ${Config.VoiceChannelMaps.length} channel map(s)`,
   );
 }
+
+setupReactionHandling(discordClient, fluxerClient);
 
 discordClient.login(Config.DiscordBotToken);
 fluxerClient.login(Config.FluxerBotToken);

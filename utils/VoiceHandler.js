@@ -62,9 +62,12 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
   _discordClient = discordClient;
   _fluxerClient = fluxerClient;
 
+  log("VOICE", `Loaded ${(Config.VoiceChannelMaps ?? []).length} voice map(s)`);
+
   discordClient.ws.on(GatewayDispatchEvents.VoiceStateUpdate, (data) => {
     if (data.user_id !== discordClient.user?.id) return;
     const { guild_id: guildId, channel_id: channelId, session_id: sessionId } = data;
+    log("VOICE", `Discord gateway VoiceStateUpdate guild=${guildId} channel=${channelId ?? "null"} session=${sessionId ?? "null"}`);
     if (channelId) {
       const creds = pending.get(guildId) ?? {};
       creds.sessionId = sessionId;
@@ -72,12 +75,14 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
       pending.set(guildId, creds);
       maybeLaunch(discordClient, guildId);
     } else {
+      log("VOICE", `Clearing pending credentials for guild ${guildId} after disconnect`);
       pending.delete(guildId);
     }
   });
 
   discordClient.ws.on(GatewayDispatchEvents.VoiceServerUpdate, (data) => {
     const { guild_id: guildId, endpoint, token } = data;
+    log("VOICE", `Discord gateway VoiceServerUpdate guild=${guildId} endpoint=${endpoint ?? "null"}`);
     const creds = pending.get(guildId) ?? {};
     creds.endpoint = endpoint;
     creds.token = token;
@@ -90,7 +95,12 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
     if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
     const voiceMap = (Config.VoiceChannelMaps ?? []).find((m) => m.fluxerGuildId === fluxerGuildId);
-    if (!voiceMap) return;
+    if (!voiceMap) {
+      log("VOICE", `Fluxer VoiceServerUpdate for guild ${fluxerGuildId} had no configured map`);
+      return;
+    }
+
+    log("VOICE", `Fluxer VoiceServerUpdate matched map discordGuild=${voiceMap.discordGuildId}`);
 
     const creds = pending.get(voiceMap.discordGuildId) ?? {};
     creds.livekitUrl = livekitUrl;
@@ -107,7 +117,15 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
     const joinedId = newState.channelId;
     const leftId = oldState.channelId;
 
+    if (joinedId || leftId) {
+      log(
+        "VOICE",
+        `User voice state guild=${guildId} user=${newState.member?.user?.id ?? oldState.member?.user?.id ?? "unknown"} joined=${joinedId ?? "null"} left=${leftId ?? "null"}`,
+      );
+    }
+
     if (joinedId && findVoiceMap(guildId, joinedId) && !sessions.has(joinedId)) {
+      log("VOICE", `Mapped Discord join detected for guild=${guildId} channel=${joinedId}`);
       sendJoinOp(discordClient, newState.guild, guildId, joinedId);
     }
 
@@ -121,11 +139,20 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
     if (data.user_id === fluxerClient.user?.id) return;
     if (data.member?.user?.bot) return;
 
+    log(
+      "VOICE",
+      `Fluxer voiceStateUpdate guild=${data.guild_id} channel=${data.channel_id} user=${data.user_id}`,
+    );
+
     const voiceMap = findVoiceMapByFluxer(data.guild_id, data.channel_id);
-    if (!voiceMap) return;
+    if (!voiceMap) {
+      log("VOICE", `Fluxer voiceStateUpdate had no configured map for guild=${data.guild_id} channel=${data.channel_id}`);
+      return;
+    }
     if (sessions.has(voiceMap.discordChannelId)) return;
 
     const guild = discordClient.guilds.cache.get(voiceMap.discordGuildId) ?? null;
+    log("VOICE", `Mapped Fluxer join detected; requesting Discord join for channel ${voiceMap.discordChannelId}`);
     sendJoinOp(discordClient, guild, voiceMap.discordGuildId, voiceMap.discordChannelId);
   });
 }
@@ -138,7 +165,10 @@ export function setupVoiceHandling(discordClient, fluxerClient) {
  */
 function sendJoinOp(discordClient, guild, guildId, channelId) {
   const voiceMap = findVoiceMap(guildId, channelId);
-  if (!voiceMap) return;
+  if (!voiceMap) {
+    log("VOICE", `sendJoinOp ignored; no map for guild=${guildId} channel=${channelId}`);
+    return;
+  }
   if (!hasRunner()) {
     log("VOICE", `No runner available, not joining VC ${channelId}`);
     return;
@@ -168,10 +198,19 @@ function maybeLaunch(discordClient, guildId) {
   const creds = pending.get(guildId);
   if (!creds) return;
   const { sessionId, endpoint, token, channelId, livekitUrl, livekitToken } = creds;
-  if (!sessionId || !endpoint || !token || !channelId || !livekitUrl || !livekitToken) return;
+  if (!sessionId || !endpoint || !token || !channelId || !livekitUrl || !livekitToken) {
+    log(
+      "VOICE",
+      `Waiting launch prerequisites for guild=${guildId}: session=${!!sessionId} endpoint=${!!endpoint} token=${!!token} channel=${!!channelId} livekitUrl=${!!livekitUrl} livekitToken=${!!livekitToken}`,
+    );
+    return;
+  }
 
   const voiceMap = findVoiceMap(guildId, channelId);
-  if (!voiceMap) return;
+  if (!voiceMap) {
+    log("VOICE", `maybeLaunch aborted; no map for guild=${guildId} channel=${channelId}`);
+    return;
+  }
   if (sessions.has(channelId)) return;
 
   pending.delete(guildId);

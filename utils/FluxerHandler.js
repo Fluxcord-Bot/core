@@ -117,6 +117,7 @@ export async function FluxerCreateMessageHandler(
         await parseFluxerEmojiToDiscord(
           sanitizePings(await parseMentions(forwardedMessage ?? message)),
           discordClient,
+          channelMap.discordGuildId,
         ),
       )) +
       userJoin +
@@ -156,6 +157,7 @@ export async function FluxerCreateMessageHandler(
           await parseFluxerEmojiToDiscord(
             sanitizePings(await parseMentions(forwardedMessage ?? message)),
             discordClient,
+            channelMap.discordGuildId,
           ),
         )),
       });
@@ -229,13 +231,18 @@ export async function FluxerUpdateMessageHandler(
           await parseFluxerEmojiToDiscord(
             sanitizePings(await parseMentions(newMessage)),
             client,
+            channelMap.discordGuildId,
           ),
         )),
       files: newMessage.attachments.map((a) => a.url ?? ""),
     });
 
     ((messageExisting.content = await traverseMessageLinks(
-      await parseFluxerEmojiToDiscord(sanitizePings(await parseMentions(newMessage)), client),
+      await parseFluxerEmojiToDiscord(
+        sanitizePings(await parseMentions(newMessage)),
+        client,
+        channelMap.discordGuildId,
+      ),
     )),
       await messageExisting.save());
   }
