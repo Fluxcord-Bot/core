@@ -1,3 +1,5 @@
+LABEL org.opencontainers.image.source=https://github.com/fluxcord-bot/core
+
 FROM node:20-trixie
 
 ENV PNPM_HOME="/pnpm"
