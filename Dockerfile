@@ -1,7 +1,5 @@
 FROM node:20-trixie
 
-LABEL org.opencontainers.image.source https://github.com/Fluxcord-Bot/core
-
 ENV PNPM_HOME="/pnpm"
 
 ENV PATH="$PNPM_HOME:$PATH"
@@ -21,3 +19,5 @@ COPY . .
 RUN sed -i 's/\r//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 CMD ["./docker-entrypoint.sh"]
+
+LABEL org.opencontainers.image.source https://github.com/Fluxcord-Bot/core
