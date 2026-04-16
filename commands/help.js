@@ -80,11 +80,13 @@ const command = {
       const isUserBotAdmin = Config.AdminAccountIds.find(
         (x) => x === message.author.id,
       );
-      const isUserGuildAdmin = checkManageServerPerms(
+      const isUserGuildAdmin = await checkManageServerPerms(
         message.guildId ?? "",
         message.author.id,
         message.client,
       );
+
+      console.log("guild admin?", isUserGuildAdmin)
 
       let cmds = (await getCommands()).filter((x) => !x.hideFromHelp);
 

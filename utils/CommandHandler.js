@@ -71,11 +71,11 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
 
   if (
     commandToRun?.requireElevated &&
-    !checkManageServerPerms(
+    !(await checkManageServerPerms(
       message.guildId ?? "",
       message.author.id,
       message.client,
-    )
+    ))
   ) {
     await message.reply(
       `You need at least **Manage ${message instanceof FluxerMessage ? "Community" : "Server"}** permissions to run this command!`,

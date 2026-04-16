@@ -112,15 +112,16 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.GuildDelete, async (guild) => {
-  if (guild.unavailable) return;
+// prob contributed on the sudden deletions, will comment this for now
+// fluxerClient.on(FluxerEvents.GuildDelete, async (guild) => {
+//   if (guild.unavailable) return;
 
-  await GuildMap.destroy({
-    where: {
-      guildId: guild.id
-    }
-  })
-})
+//   await GuildMap.destroy({
+//     where: {
+//       guildId: guild.id
+//     }
+//   })
+// })
 
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
   try {
