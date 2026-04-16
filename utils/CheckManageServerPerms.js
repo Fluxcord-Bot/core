@@ -1,5 +1,5 @@
 import { PermissionFlagsBits } from "discord.js";
-import { PermissionFlags } from "@fluxerjs/core";
+import { Client, PermissionFlags } from "@fluxerjs/core";
 import DefaultConfig from "./ConfigHandler.js";
 
 /**
@@ -13,15 +13,16 @@ export async function checkManageServerPerms(guildId, userId, client) {
 
   if (DefaultConfig.AdminAccountIds.includes(userId)) return true;
 
-  const member = await guild.members.fetch(userId);
+  const member = await guild.members.fetch((client instanceof Client) ? { id: userId } : userId);
+
   if (!member) return false;
 
   if (Array.isArray(member)) {
-    const target = member.find((m) => m.user?.id === userId || m.id === userId);
+    const target = member[0]
     if (!target) return false;
     return (
-      target.permissions.has(PermissionFlagsBits.ManageGuild) ||
-      target.permissions.has(PermissionFlags.ManageGuild)
+      target.permissions.has(PermissionFlags.ManageGuild) ||
+      target.permissions.has(PermissionFlags.Administrator)
     );
   }
 
