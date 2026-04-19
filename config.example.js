@@ -22,6 +22,11 @@ const Config = {
   // also allows verifying bridging without having Manage Channel perms.
   AdminAccountIds: ["0000000000000000000"],
 
+  // The start line of the per-server bios of the bot.
+  // Changes every bot start
+  FluxerBioStart: "",
+  DiscordBioStart: "",
+
   // The footer of every embed sent by Fluxcord. Optional.
   EmbedFooterContent: "",
 

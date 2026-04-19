@@ -11,6 +11,8 @@ const DefaultConfig = {
   EmbedFooterContent: "",
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
   BotPrefix: "fc!",
+  FluxerBioStart: "",
+  DiscordBioStart: "",
 
   // VoiceChannelMaps: [{ discordGuildId, discordChannelId, fluxerGuildId, fluxerChannelId }]
   VoiceChannelMaps: [],

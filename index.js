@@ -26,6 +26,7 @@ import fs from "node:fs";
 import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
+import changeBotBios from "./utils/ChangeBotBio.js";
 
 const discordClient = new DiscordClient({
   intents: [
@@ -60,10 +61,10 @@ discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
 
   await GuildMap.destroy({
     where: {
-      guildId: guild.id
-    }
-  })
-})
+      guildId: guild.id,
+    },
+  });
+});
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
@@ -166,16 +167,6 @@ let discordReady = false;
 let fluxerReady = false;
 
 async function onBothReady() {
-  renderBox([
-    "To invite Fluxcord to your server, here's the invite links:",
-    "",
-    "Discord:",
-    genAuthLink(Config.DiscordClientId),
-    "",
-    "Fluxer:",
-    genAuthLink(fluxerClient.user?.id, true),
-  ]);
-
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
     try {
@@ -198,7 +189,7 @@ async function onBothReady() {
             name: "reply_r",
           },
         ]);
-      } catch { }
+      } catch {}
 
       const fluxerEmojiReplyL = await fluxerClient.resolveEmoji(
         ":reply_l:",
@@ -215,7 +206,7 @@ async function onBothReady() {
           attachment: replyL,
           name: "reply_l",
         });
-      } catch { }
+      } catch {}
 
       let discordEmojiReplyR;
       try {
@@ -223,7 +214,7 @@ async function onBothReady() {
           attachment: replyR,
           name: "reply_r",
         });
-      } catch { }
+      } catch {}
 
       if (!discordEmojiReplyL || !discordEmojiReplyR) {
         const existing = await discordClient.application?.emojis.fetch();
@@ -251,6 +242,18 @@ async function onBothReady() {
       log("META", "First time setup failed:", e);
     }
   }
+
+  await changeBotBios(fluxerClient, discordClient);
+
+  renderBox([
+    "To invite Fluxcord to your server, here's the invite links:",
+    "",
+    "Discord:",
+    genAuthLink(Config.DiscordClientId),
+    "",
+    "Fluxer:",
+    genAuthLink(fluxerClient.user?.id, true),
+  ]);
 }
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
@@ -278,11 +281,11 @@ process.on("uncaughtException", (error) => {
 
   try {
     discordClient.destroy();
-  } catch { }
+  } catch {}
 
   try {
     fluxerClient.destroy();
-  } catch { }
+  } catch {}
 
   process.exit(1);
 });
@@ -293,11 +296,11 @@ process.on("unhandledRejection", (reason, promise) => {
 
   try {
     discordClient.destroy();
-  } catch { }
+  } catch {}
 
   try {
     fluxerClient.destroy();
-  } catch { }
+  } catch {}
 
   process.exit(1);
 });
@@ -305,7 +308,10 @@ process.on("unhandledRejection", (reason, promise) => {
 if ((Config.VoiceChannelMaps ?? []).length > 0) {
   const { setupVoiceHandling } = await import("./utils/VoiceHandler.js");
   setupVoiceHandling(discordClient, fluxerClient);
-  log("VOICE", `Voice bridging active for ${Config.VoiceChannelMaps.length} channel map(s)`);
+  log(
+    "VOICE",
+    `Voice bridging active for ${Config.VoiceChannelMaps.length} channel map(s)`,
+  );
 }
 
 discordClient.login(Config.DiscordBotToken);
