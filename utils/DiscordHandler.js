@@ -169,8 +169,8 @@ export async function DiscordCreateMessageHandler(
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2)
         ? "*Components V2 message*"
-        : "");
-    parsedContent +
+        : "") +
+      parsedContent +
       stickerMsg +
       userJoin +
       (overAttachmentsStr
