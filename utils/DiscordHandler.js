@@ -1,4 +1,4 @@
-import { MessageType } from "discord.js";
+import { MessageFlags, MessageType } from "discord.js";
 import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
@@ -145,7 +145,7 @@ export async function DiscordCreateMessageHandler(
     let guildUser = undefined;
     try {
       guildUser = await message.guild.members.fetch(message.author.id);
-    } catch { }
+    } catch {}
 
     const parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
@@ -167,7 +167,10 @@ export async function DiscordCreateMessageHandler(
       (interactingUser
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
-      parsedContent +
+      (message.flags.has(MessageFlags.IsComponentsV2)
+        ? "*Components V2 message*"
+        : "");
+    parsedContent +
       stickerMsg +
       userJoin +
       (overAttachmentsStr
@@ -243,7 +246,7 @@ export async function DiscordCreateMessageHandler(
             const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
             await message.delete();
           }
-        } catch { }
+        } catch {}
       }
     }, 1000);
   }
@@ -300,7 +303,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         body: {
           content: newContent,
           embeds: await Promise.all(
-            newMsg.embeds.map(async (x) => await discordEmbedToFluxer(x, client)),
+            newMsg.embeds.map(
+              async (x) => await discordEmbedToFluxer(x, client),
+            ),
           ),
         },
         auth: false,
@@ -339,7 +344,7 @@ export async function DiscordDeleteMessageHandler(msg, client) {
         messageExisting.fluxerMessageId,
       );
       await message.delete();
-    } catch { }
+    } catch {}
     await messageExisting.destroy();
   }
 }
