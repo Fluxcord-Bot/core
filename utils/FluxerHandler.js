@@ -143,8 +143,6 @@ export async function FluxerCreateMessageHandler(
         await channel.messages.fetch(message.id);
       }
 
-      console.log(messageReference)
-
       await MessageMap.create({
         messageSource: "fluxer",
         discordMessageId: msg.id,
