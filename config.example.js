@@ -43,20 +43,9 @@ const Config = {
   // Secret shared between the core bot and voice runners. Set to a long random string.
   RunnerSecret: "",
 
-  // Voice channel bridge mappings (optional).
-  // Each entry links a Discord voice channel to a Fluxer voice channel.
-  // Leave empty (or omit) to disable voice bridging entirely.
-  //
-  // Requires voice/node_modules to be installed: cd voice && pnpm install (or npm install)
-  //
-  // VoiceChannelMaps: [
-  //   {
-  //     discordGuildId: "123456789012345678",   // Discord server ID
-  //     discordChannelId: "234567890123456789", // Discord voice channel ID
-  //     fluxerGuildId: "345678901234567890",    // Fluxer community ID
-  //     fluxerChannelId: "456789012345678901",  // Fluxer voice channel ID
-  //   },
-  // ],
+  // Enable voice channel bridging. Manage mappings with voicebridge/voiceunbridge commands.
+  // Requires the voice repository.
+  // VoiceBridgingEnabled: false,
 };
 
 export default Config;

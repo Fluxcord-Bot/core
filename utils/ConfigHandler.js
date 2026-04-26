@@ -14,8 +14,7 @@ const DefaultConfig = {
   FluxerBioStart: "",
   DiscordBioStart: "",
 
-  // VoiceChannelMaps: [{ discordGuildId, discordChannelId, fluxerGuildId, fluxerChannelId }]
-  VoiceChannelMaps: [],
+  VoiceBridgingEnabled: false,
 
   RunnerWsPort: 8765,
   RunnerSecret: "",

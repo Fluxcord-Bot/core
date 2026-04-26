@@ -14,6 +14,12 @@ class ChannelMap extends Model { }
 class MessageMap extends Model { }
 class UserConfig extends Model { }
 class GuildMap extends Model { }
+class VoiceChannelMap extends Model {
+  /** @type {string} */ discordGuildId;
+  /** @type {string} */ discordChannelId;
+  /** @type {string} */ fluxerGuildId;
+  /** @type {string} */ fluxerChannelId;
+}
 
 GuildMap.init(
   {
@@ -125,4 +131,14 @@ GuildMap.hasMany(ChannelMap, {
   as: "fluxerChannelMaps",
 });
 
-export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap };
+VoiceChannelMap.init(
+  {
+    discordGuildId: { type: DataTypes.STRING, allowNull: false },
+    discordChannelId: { type: DataTypes.STRING, allowNull: false },
+    fluxerGuildId: { type: DataTypes.STRING, allowNull: false },
+    fluxerChannelId: { type: DataTypes.STRING, allowNull: false },
+  },
+  { sequelize, modelName: "VoiceChannelMap" },
+);
+
+export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap, VoiceChannelMap };

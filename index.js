@@ -306,13 +306,9 @@ process.on("unhandledRejection", (reason, promise) => {
   process.exit(1);
 });
 
-if ((Config.VoiceChannelMaps ?? []).length > 0) {
+if (Config.VoiceBridgingEnabled) {
   const { setupVoiceHandling } = await import("./utils/VoiceHandler.js");
-  setupVoiceHandling(discordClient, fluxerClient);
-  log(
-    "VOICE",
-    `Voice bridging active for ${Config.VoiceChannelMaps.length} channel map(s)`,
-  );
+  await setupVoiceHandling(discordClient, fluxerClient);
 }
 
 setupReactionHandling(discordClient, fluxerClient);
@@ -329,4 +325,3 @@ function checkIfFluxerConnected() {
 
 setInterval(() => checkIfFluxerConnected(), 10000);
 
-// TODO: Make VC mappings automatic instead of assigning them, like in the example config
