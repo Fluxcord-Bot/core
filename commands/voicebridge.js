@@ -1,6 +1,6 @@
 //@ts-check
 import Config from "../utils/ConfigHandler.js";
-import { VoiceChannelMap } from "../db/index.js";
+import { VoiceChannelMap, ChannelMap } from "../db/index.js";
 import { ChannelType } from "discord.js";
 
 /**
@@ -44,6 +44,16 @@ ${Config.BotPrefix}voicebridge <discordVoiceChannelId> <fluxerVoiceChannelId>
     }
     if (!fluxerChannel || !fluxerChannel.isVoice()) {
       await message.reply("Fluxer channel not found or is not a voice channel.");
+      return;
+    }
+
+    const guildBridge = await ChannelMap.findOne({
+      where: { discordGuildId: discordChannel.guildId, fluxerGuildId: fluxerChannel.guildId },
+    });
+    if (!guildBridge) {
+      await message.reply(
+        "These guilds are not bridged. Set up a text channel bridge between them first.",
+      );
       return;
     }
 
