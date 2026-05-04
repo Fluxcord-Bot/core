@@ -104,6 +104,14 @@ export async function FluxerCreateMessageHandler(
     channelMap.discordWebhookId,
     channelMap.discordWebhookToken,
   );
+
+  let guildUser = undefined;
+  try {
+    guildUser = await message.guild.fetchMember(message.author.id);
+  } catch {
+    guildUser = undefined;
+  }
+
   const msg = await webhook.send({
     content:
       // @ts-expect-error
@@ -128,7 +136,10 @@ export async function FluxerCreateMessageHandler(
     files: (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 9999000)
       .map((a) => a.proxy_url ?? a.url ?? ""),
-    username: message.author.globalName ?? message.author.username,
+    username:
+      guildUser?.displayName ??
+      message.author.globalName ??
+      message.author.username,
     embeds: await fluxerEmbedToDiscord(
       forwardedMessage ?? message,
       discordClient,
@@ -151,13 +162,13 @@ export async function FluxerCreateMessageHandler(
         discordReplyId: messageReference?.discordMessageId ?? null,
         channelMapId: channelMap.id,
         authorId: message.author.id,
-        content: (await traverseMessageLinks(
+        content: await traverseMessageLinks(
           await parseFluxerEmojiToDiscord(
             sanitizePings(await parseMentions(forwardedMessage ?? message)),
             discordClient,
             channelMap.discordGuildId,
           ),
-        )),
+        ),
       });
     } catch {
       // pretend msg is deleted
@@ -263,8 +274,13 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
     try {
       if (messageExisting.messageSource === "discord") {
-        const channel = await client.channels.fetch(channelMap.discordChannelId);
-        const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(messageExisting.discordMessageId);
+        const channel = await client.channels.fetch(
+          channelMap.discordChannelId,
+        );
+        const discordMessage =
+          await /** @type {import("discord.js").TextChannel} */ (
+            channel
+          ).messages.fetch(messageExisting.discordMessageId);
         await discordMessage.delete();
       } else {
         const webhook = await client.fetchWebhook(
@@ -273,7 +289,7 @@ export async function FluxerDeleteMessageHandler(message, client) {
         );
         await webhook.deleteMessage(messageExisting.discordMessageId);
       }
-    } catch { }
+    } catch {}
 
     await messageExisting.destroy();
   }
@@ -282,11 +298,12 @@ export async function FluxerDeleteMessageHandler(message, client) {
     where: {
       [Op.or]: {
         fluxerReplyId: message.id,
-        discordReplyId: messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH"
-      }
+        discordReplyId:
+          messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH",
+      },
     },
     include: ["channelMap"],
-  })
+  });
 
   if (replies.length > 0) {
     for (let reply of replies) {
@@ -298,8 +315,8 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
       await webhook.editMessage(reply.discordMessageId, {
         content: `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*
-${reply.content}`
-      })
+${reply.content}`,
+      });
       reply.discordReplyId = null;
       reply.fluxerReplyId = null;
       await reply.save();
@@ -337,10 +354,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
         await channel.bulkDelete(
           messagesExisting.map((x) => x.discordMessageId),
         );
-      } catch { }
+      } catch {}
 
       await reply.delete();
-    } catch { }
+    } catch {}
 
     await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
   }
