@@ -14,12 +14,7 @@ class ChannelMap extends Model { }
 class MessageMap extends Model { }
 class UserConfig extends Model { }
 class GuildMap extends Model { }
-class VoiceChannelMap extends Model {
-  /** @type {string} */ discordGuildId;
-  /** @type {string} */ discordChannelId;
-  /** @type {string} */ fluxerGuildId;
-  /** @type {string} */ fluxerChannelId;
-}
+class VoiceChannelMap extends Model { }
 
 GuildMap.init(
   {

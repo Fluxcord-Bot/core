@@ -6,6 +6,17 @@ import { spawnBridge, killBridge, hasRunner } from "./VoiceRunnerServer.js";
 import { VoiceChannelMap } from "../db/index.js";
 
 /**
+ * Sequelize model instance shape for a voice bridge row.
+ * This is type-only — pls do not mirror these as runtime class fields.
+ * @typedef {import("sequelize").Model & {
+ *   discordGuildId: string,
+ *   discordChannelId: string,
+ *   fluxerGuildId: string,
+ *   fluxerChannelId: string,
+ * }} VoiceChannelMapRecord
+ */
+
+/**
  * Active voice sessions keyed by discord channel ID.
  * @type {Map<string, { guildId: string, fluxerGuildId: string, fluxerEmpty: boolean }>}
  */
@@ -23,18 +34,28 @@ let _discordClient = null;
 /** @type {import("@fluxerjs/core").Client | null} */
 let _fluxerClient = null;
 
-/** @param {string} guildId @param {string} channelId */
+/**
+ * @param {string} guildId
+ * @param {string} channelId
+ * @returns {Promise<VoiceChannelMapRecord | null>}
+ */
 async function findVoiceMap(guildId, channelId) {
-  return VoiceChannelMap.findOne({
+  if (!guildId || !channelId) return null;
+  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (VoiceChannelMap.findOne({
     where: { discordGuildId: guildId, discordChannelId: channelId },
-  });
+  }));
 }
 
-/** @param {string} fluxerGuildId @param {string} fluxerChannelId */
+/**
+ * @param {string} fluxerGuildId
+ * @param {string} fluxerChannelId
+ * @returns {Promise<VoiceChannelMapRecord | null>}
+ */
 async function findVoiceMapByFluxer(fluxerGuildId, fluxerChannelId) {
-  return VoiceChannelMap.findOne({
+  if (!fluxerGuildId || !fluxerChannelId) return null;
+  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (VoiceChannelMap.findOne({
     where: { fluxerGuildId, fluxerChannelId },
-  });
+  }));
 }
 
 /**
@@ -95,7 +116,7 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
     const { guild_id: fluxerGuildId, endpoint: livekitUrl, token: livekitToken } = data;
     if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
-    const voiceMap = await VoiceChannelMap.findOne({ where: { fluxerGuildId } });
+    const voiceMap = /** @type {VoiceChannelMapRecord | null} */ (await VoiceChannelMap.findOne({ where: { fluxerGuildId } }));
     if (!voiceMap) {
       log("VOICE", `Fluxer VoiceServerUpdate for guild ${fluxerGuildId} had no configured map`);
       return;
@@ -165,6 +186,7 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
  * @param {string} channelId
  */
 async function sendJoinOp(discordClient, guild, guildId, channelId) {
+  if (!guildId || !channelId) return;
   const voiceMap = await findVoiceMap(guildId, channelId);
   if (!voiceMap) {
     log("VOICE", `sendJoinOp ignored; no map for guild=${guildId} channel=${channelId}`);
