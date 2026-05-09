@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: April 20, 2026**
+**Last updated: May 9, 2026**
 
 This Privacy Policy describes what data Fluxcord collects, why it collects it, and how it's used. Fluxcord is a Discord <-> Fluxer message bridge bot. If you're a server administrator setting up bridging, or a user in a bridged channel, this document explains what happens to your data.
 
@@ -60,7 +60,8 @@ The following passes through Fluxcord but is **not saved to disk**:
 ## 2. What We Don't Collect
 
 - We do not build profiles on individual users. Author IDs are stored only in relation to specific bridged messages — used for edit bridging, delete bridging, and attributing replies back to the original sender — not for any tracking purpose.
-- We do not use analytics or tracking tools.
+- We do not use analytics or tracking tools to profile users or monitor behavior across communities.
+- We may collect aggregate operational telemetry and service logs for reliability, debugging, abuse prevention, and performance monitoring. This may include counters and technical events related to bridge health, but does not include recorded voice audio and is not used to build user profiles.
 
 ---
 
