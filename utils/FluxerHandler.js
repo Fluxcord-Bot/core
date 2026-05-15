@@ -12,6 +12,7 @@ import {
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
+import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -148,12 +149,16 @@ export async function FluxerCreateMessageHandler(
   });
 
   setTimeout(async () => {
-    try {
-      const channel = message.channel;
-      if (channel && channel.isTextBased()) {
+    const channel = message.channel;
+    if (channel?.isTextBased() && channel.messages) {
+      try {
         await channel.messages.fetch(message.id);
+      } catch (e) {
+        log("FLUXER", "Source message fetch failed", e);
       }
+    }
 
+    try {
       await MessageMap.create({
         messageSource: "fluxer",
         discordMessageId: msg.id,
@@ -170,10 +175,8 @@ export async function FluxerCreateMessageHandler(
           ),
         ),
       });
-    } catch {
-      // pretend msg is deleted
-      await msg.delete();
-      return;
+    } catch (e) {
+      log("DB", "Failed to save Fluxer -> Discord message map", e);
     }
   }, 1000);
 }

@@ -14,6 +14,7 @@ import {
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
+import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -225,7 +226,15 @@ export async function DiscordCreateMessageHandler(
         if (channel.isSendable()) {
           await channel.messages.fetch(message.id);
         }
+      } catch (e) {
+        log(
+          "DISCORD",
+          "Could not verify source Discord message before mapping bridged Fluxer message",
+          e,
+        );
+      }
 
+      try {
         await MessageMap.create({
           messageSource: "discord",
           discordMessageId: message.id,
@@ -236,17 +245,8 @@ export async function DiscordCreateMessageHandler(
           channelMapId: channelMap.id,
           authorId: message.author.id,
         });
-      } catch {
-        // pretend msg is deleted
-        try {
-          const fluxerChannel = await fluxerClient.channels.fetch(
-            channelMap.fluxerChannelId,
-          );
-          if (fluxerChannel.isTextBased()) {
-            const message = await fluxerChannel.messages.fetch(msg?.id ?? "");
-            await message.delete();
-          }
-        } catch {}
+      } catch (e) {
+        log("DB", "Failed to save Discord -> Fluxer message map", e);
       }
     }, 1000);
   }
