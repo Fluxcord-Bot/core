@@ -67,6 +67,14 @@ discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   });
 });
 
+discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
+  await ChannelMap.destroy({
+    where: {
+      discordChannelId: chnl.id,
+    },
+  });
+});
+
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
   try {
@@ -124,6 +132,14 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
 //     }
 //   })
 // })
+
+fluxerClient.on(FluxerEvents.ChannelDelete, async (chnl) => {
+  await ChannelMap.destroy({
+    where: {
+      fluxerChannelId: chnl.id,
+    },
+  });
+});
 
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
   try {
