@@ -1,4 +1,5 @@
 import { MessageFlags, MessageType } from "discord.js";
+import { Routes as FluxerRoutes } from "@fluxerjs/core";
 import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
@@ -17,6 +18,39 @@ import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
+
+function isDiscordUnknownMessageError(error) {
+  return (
+    error?.code === 10008 ||
+    (error?.status === 404 && /unknown message/i.test(error?.message ?? ""))
+  );
+}
+
+function isFluxerUnknownMessageError(error) {
+  return (
+    error?.code === "MESSAGE_NOT_FOUND" ||
+    error?.code === "UNKNOWN_MESSAGE" ||
+    error?.status === 404 ||
+    error?.statusCode === 404 ||
+    error?.cause?.statusCode === 404
+  );
+}
+
+async function deleteFluxerMessage(client, channelMap, messageId) {
+  await client.rest.delete(
+    FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId),
+  );
+}
+
+async function deleteFluxerMessageIfExists(client, channelMap, messageId) {
+  if (!messageId) return;
+
+  try {
+    await deleteFluxerMessage(client, channelMap, messageId);
+  } catch (e) {
+    if (!isFluxerUnknownMessageError(e)) throw e;
+  }
+}
 
 /**
  * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>>} message
@@ -220,6 +254,22 @@ export async function DiscordCreateMessageHandler(
       );
     }
 
+    let bridgedMessageMap;
+    try {
+      bridgedMessageMap = await MessageMap.create({
+        messageSource: "discord",
+        discordMessageId: message.id,
+        fluxerMessageId: msg?.id,
+        fluxerReplyId: messageReference?.fluxerMessageId ?? null,
+        discordReplyId: message.reference?.messageId ?? null,
+        content: parsedContent,
+        channelMapId: channelMap.id,
+        authorId: message.author.id,
+      });
+    } catch (e) {
+      log("DB", "Failed to save Discord -> Fluxer message map", e);
+    }
+
     setTimeout(async () => {
       try {
         const channel = await message.channel.fetch();
@@ -227,26 +277,26 @@ export async function DiscordCreateMessageHandler(
           await channel.messages.fetch(message.id);
         }
       } catch (e) {
+        if (isDiscordUnknownMessageError(e)) {
+          try {
+            await deleteFluxerMessageIfExists(fluxerClient, channelMap, msg?.id);
+          } catch (deleteError) {
+            log(
+              "FLUXER",
+              `Failed to delete bridged Fluxer message ${msg?.id}`,
+              deleteError,
+            );
+          }
+
+          await bridgedMessageMap?.destroy();
+          return;
+        }
+
         log(
           "DISCORD",
           "Could not verify source Discord message before mapping bridged Fluxer message",
           e,
         );
-      }
-
-      try {
-        await MessageMap.create({
-          messageSource: "discord",
-          discordMessageId: message.id,
-          fluxerMessageId: msg?.id,
-          fluxerReplyId: messageReference?.fluxerMessageId ?? null,
-          discordReplyId: message.reference?.messageId ?? null,
-          content: parsedContent,
-          channelMapId: channelMap.id,
-          authorId: message.author.id,
-        });
-      } catch (e) {
-        log("DB", "Failed to save Discord -> Fluxer message map", e);
       }
     }, 1000);
   }
@@ -258,10 +308,12 @@ export async function DiscordCreateMessageHandler(
  * @param {FluxerClient} client
  */
 export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
+  const authorId = newMsg.author?.id ?? oldMsg.author?.id ?? "";
+
   const userOptOut = await UserConfig.findOne({
     where: {
       userType: "discord",
-      userId: newMsg.author.id,
+      userId: authorId,
       doNotBridgePrefix: "__opted_out__",
     },
   });
@@ -278,8 +330,8 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
-        discordWebhookId: newMsg.author.id,
-        fluxerWebhookId: newMsg.author.id,
+        discordWebhookId: authorId,
+        fluxerWebhookId: authorId,
       },
     },
   });
@@ -335,18 +387,36 @@ export async function DiscordDeleteMessageHandler(msg, client) {
     include: ["channelMap"],
   });
 
-  if (messageExisting) {
-    const channelMap = messageExisting.channelMap;
-    const channel = await client.channels.fetch(channelMap.fluxerChannelId);
-
-    try {
-      const message = await /** @type {TextChannel} */ (channel).messages.fetch(
-        messageExisting.fluxerMessageId,
-      );
-      await message.delete();
-    } catch {}
-    await messageExisting.destroy();
+  if (!messageExisting) {
+    return;
   }
+
+  const channelMap = messageExisting.channelMap;
+  if (!channelMap) {
+    log(
+      "DISCORD",
+      `Message map ${messageExisting.id} for Discord message ${msg.id} has no channel map`,
+    );
+    await messageExisting.destroy();
+    return;
+  }
+
+  try {
+    await deleteFluxerMessageIfExists(
+      client,
+      channelMap,
+      messageExisting.fluxerMessageId,
+    );
+  } catch (e) {
+    log(
+      "FLUXER",
+      `Failed to delete bridged Fluxer message ${messageExisting.fluxerMessageId} for Discord message ${msg.id}`,
+      e,
+    );
+    return;
+  }
+
+  await messageExisting.destroy();
 }
 
 /**
