@@ -67,6 +67,14 @@ discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   });
 });
 
+discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
+  await ChannelMap.destroy({
+    where: {
+      discordChannelId: chnl.id,
+    },
+  });
+});
+
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
   try {
@@ -125,6 +133,14 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
 //   })
 // })
 
+fluxerClient.on(FluxerEvents.ChannelDelete, async (chnl) => {
+  await ChannelMap.destroy({
+    where: {
+      fluxerChannelId: chnl.id,
+    },
+  });
+});
+
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
   try {
     if (msg.author.id === fluxerClient.user?.id) return;
@@ -142,7 +158,7 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
 });
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
   try {
-    FluxerDeleteMessageHandler(msg, discordClient);
+    await FluxerDeleteMessageHandler(msg, discordClient);
   } catch (e) {
     log("DISCORD", e);
   }
@@ -150,7 +166,7 @@ fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
 
 fluxerClient.on(FluxerEvents.MessageDeleteBulk, async (msgs) => {
   try {
-    FluxerBulkDeleteMessageHandler(msgs, discordClient);
+    await FluxerBulkDeleteMessageHandler(msgs, discordClient);
   } catch (e) {
     log("DISCORD", e);
   }
@@ -158,7 +174,7 @@ fluxerClient.on(FluxerEvents.MessageDeleteBulk, async (msgs) => {
 
 fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
   try {
-    FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient);
+    await FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", e);
   }

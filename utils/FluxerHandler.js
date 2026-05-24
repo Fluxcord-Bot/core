@@ -12,8 +12,26 @@ import {
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
+import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
+
+function isFluxerMessageNotFoundError(error) {
+  return (
+    error?.code === "MESSAGE_NOT_FOUND" ||
+    error?.code === "UNKNOWN_MESSAGE" ||
+    error?.statusCode === 404 ||
+    (error?.cause?.statusCode === 404 &&
+      /message .* not found/i.test(error?.message ?? ""))
+  );
+}
+
+function isDiscordUnknownMessageError(error) {
+  return (
+    error?.code === 10008 ||
+    (error?.status === 404 && /unknown message/i.test(error?.message ?? ""))
+  );
+}
 
 /**
  * @param {import("@fluxerjs/core").Message} message
@@ -104,6 +122,22 @@ export async function FluxerCreateMessageHandler(
     channelMap.discordWebhookId,
     channelMap.discordWebhookToken,
   );
+
+  let guildUser = undefined;
+  try {
+    guildUser = await message.guild.fetchMember(message.author.id);
+  } catch {
+    guildUser = undefined;
+  }
+
+  const parsedContent = await traverseMessageLinks(
+    await parseFluxerEmojiToDiscord(
+      sanitizePings(await parseMentions(forwardedMessage ?? message)),
+      discordClient,
+      channelMap.discordGuildId,
+    ),
+  );
+
   const msg = await webhook.send({
     content:
       // @ts-expect-error
@@ -113,13 +147,7 @@ export async function FluxerCreateMessageHandler(
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
         : "") +
-      (await traverseMessageLinks(
-        await parseFluxerEmojiToDiscord(
-          sanitizePings(await parseMentions(forwardedMessage ?? message)),
-          discordClient,
-          channelMap.discordGuildId,
-        ),
-      )) +
+      parsedContent +
       userJoin +
       stickerMsg +
       (overAttachmentsStr
@@ -128,7 +156,10 @@ export async function FluxerCreateMessageHandler(
     files: (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 9999000)
       .map((a) => a.proxy_url ?? a.url ?? ""),
-    username: message.author.globalName ?? message.author.username,
+    username:
+      guildUser?.displayName ??
+      message.author.globalName ??
+      message.author.username,
     embeds: await fluxerEmbedToDiscord(
       forwardedMessage ?? message,
       discordClient,
@@ -136,33 +167,36 @@ export async function FluxerCreateMessageHandler(
     avatarURL: message.author.avatarURL() ?? undefined,
   });
 
-  setTimeout(async () => {
-    try {
-      const channel = message.channel;
-      if (channel && channel.isTextBased()) {
-        await channel.messages.fetch(message.id);
-      }
+  let bridgedMessageMap;
+  try {
+    bridgedMessageMap = await MessageMap.create({
+      messageSource: "fluxer",
+      discordMessageId: msg.id,
+      fluxerMessageId: message.id,
+      fluxerReplyId: message.messageReference?.message_id ?? null,
+      discordReplyId: messageReference?.discordMessageId ?? null,
+      channelMapId: channelMap.id,
+      authorId: message.author.id,
+      content: parsedContent,
+    });
+  } catch (e) {
+    log("DB", "Failed to save Fluxer -> Discord message map", e);
+  }
 
-      await MessageMap.create({
-        messageSource: "fluxer",
-        discordMessageId: msg.id,
-        fluxerMessageId: message.id,
-        fluxerReplyId: message.messageReference?.message_id ?? null,
-        discordReplyId: messageReference?.discordMessageId ?? null,
-        channelMapId: channelMap.id,
-        authorId: message.author.id,
-        content: (await traverseMessageLinks(
-          await parseFluxerEmojiToDiscord(
-            sanitizePings(await parseMentions(forwardedMessage ?? message)),
-            discordClient,
-            channelMap.discordGuildId,
-          ),
-        )),
-      });
-    } catch {
-      // pretend msg is deleted
-      await msg.delete();
-      return;
+  setTimeout(async () => {
+    const channel = message.channel;
+    if (channel?.isTextBased() && channel.messages) {
+      try {
+        await channel.messages.fetch(message.id);
+      } catch (e) {
+        if (isFluxerMessageNotFoundError(e)) {
+          await msg.delete();
+          await bridgedMessageMap?.destroy();
+          return;
+        }
+
+        log("FLUXER", "Source message fetch failed", e);
+      }
     }
   }, 1000);
 }
@@ -258,13 +292,22 @@ export async function FluxerDeleteMessageHandler(message, client) {
     include: ["channelMap"],
   });
 
-  if (messageExisting) {
+  if (messageExisting && !messageExisting.channelMap) {
+    log(
+      "FLUXER",
+      `Message map ${messageExisting.id} for Fluxer message ${message.id} has no channel map`,
+    );
+    await messageExisting.destroy();
+  } else if (messageExisting) {
     const channelMap = messageExisting.channelMap;
 
     try {
       if (messageExisting.messageSource === "discord") {
         const channel = await client.channels.fetch(channelMap.discordChannelId);
-        const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(messageExisting.discordMessageId);
+        const discordMessage =
+          await /** @type {import("discord.js").TextChannel} */ (
+            channel
+          ).messages.fetch(messageExisting.discordMessageId);
         await discordMessage.delete();
       } else {
         const webhook = await client.fetchWebhook(
@@ -273,7 +316,16 @@ export async function FluxerDeleteMessageHandler(message, client) {
         );
         await webhook.deleteMessage(messageExisting.discordMessageId);
       }
-    } catch { }
+    } catch (e) {
+      if (!isDiscordUnknownMessageError(e)) {
+        log(
+          "DISCORD",
+          `Failed to delete bridged Discord message ${messageExisting.discordMessageId} for Fluxer message ${message.id}`,
+          e,
+        );
+        return;
+      }
+    }
 
     await messageExisting.destroy();
   }
@@ -282,11 +334,12 @@ export async function FluxerDeleteMessageHandler(message, client) {
     where: {
       [Op.or]: {
         fluxerReplyId: message.id,
-        discordReplyId: messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH"
-      }
+        discordReplyId:
+          messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH",
+      },
     },
     include: ["channelMap"],
-  })
+  });
 
   if (replies.length > 0) {
     for (let reply of replies) {
@@ -298,8 +351,8 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
       await webhook.editMessage(reply.discordMessageId, {
         content: `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*
-${reply.content}`
-      })
+${reply.content}`,
+      });
       reply.discordReplyId = null;
       reply.fluxerReplyId = null;
       await reply.save();
@@ -337,10 +390,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
         await channel.bulkDelete(
           messagesExisting.map((x) => x.discordMessageId),
         );
-      } catch { }
+      } catch {}
 
       await reply.delete();
-    } catch { }
+    } catch {}
 
     await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
   }

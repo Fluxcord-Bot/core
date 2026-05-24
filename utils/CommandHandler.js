@@ -4,6 +4,7 @@ import fs from "node:fs";
 import ExpiryMap from "expiry-map";
 import { checkManageServerPerms } from "./CheckManageServerPerms.js";
 import { log } from "./Logger.js";
+import { sanitizePings } from "./SanitizePings.js";
 
 export let BridgeMap = new ExpiryMap(120000);
 /**
@@ -60,9 +61,19 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
       );
       isGrouped = true;
     } else {
-      await message.reply(
-        `Command \`${Config.BotPrefix + command}\` does not exist!`,
-      );
+      await message.reply({
+        embeds: [
+          {
+            description: `Command \`${Config.BotPrefix + command}\` does not exist!`,
+            color: 0xef0000,
+          },
+        ],
+        allowedMentions: {
+          roles: [],
+          users: [],
+          repliedUser: true,
+        },
+      });
       return;
     }
   }
