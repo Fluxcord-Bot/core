@@ -182,6 +182,8 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
 
 let discordReady = false;
 let fluxerReady = false;
+/** @type {null | (() => void)} */
+let startVoiceRecovery = null;
 
 async function onBothReady() {
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
@@ -271,6 +273,8 @@ async function onBothReady() {
     "Fluxer:",
     genAuthLink(fluxerClient.user?.id, true),
   ]);
+
+  startVoiceRecovery?.();
 }
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
@@ -323,7 +327,9 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 if (Config.VoiceBridgingEnabled) {
-  const { setupVoiceHandling } = await import("./utils/VoiceHandler.js");
+  const voiceHandler = await import("./utils/VoiceHandler.js");
+  const { setupVoiceHandling } = voiceHandler;
+  startVoiceRecovery = voiceHandler.startVoiceRecovery;
   await setupVoiceHandling(discordClient, fluxerClient);
 }
 
@@ -340,4 +346,3 @@ function checkIfFluxerConnected() {
 }
 
 setInterval(() => checkIfFluxerConnected(), 10000);
-
