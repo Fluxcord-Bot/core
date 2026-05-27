@@ -30,11 +30,41 @@ import { VoiceChannelMap } from "../db/index.js";
 const sessions = new Map();
 
 /**
- * Credentials gathered before spawning the bridge
- * Keyed by discord guild ID.
- * @type {Map<string, { channelId?: string, sessionId?: string, endpoint?: string, token?: string, livekitUrl?: string, livekitToken?: string }>}
+ * Credentials gathered before spawning the bridge.
+ * Keyed by Discord voice channel ID so separate channels in the same guild
+ * cannot overwrite each other's pending launch state.
+ * @type {Map<string, {
+ *   guildId: string,
+ *   channelId: string,
+ *   fluxerGuildId: string,
+ *   fluxerChannelId: string,
+ *   discordVoiceServerGeneration: number,
+ *   sessionId?: string,
+ *   endpoint?: string,
+ *   token?: string,
+ *   livekitUrl?: string,
+ *   livekitToken?: string,
+ * }>}
  */
 const pending = new Map();
+
+/**
+ * Latest Discord gateway voice state for the bot, keyed by guild ID.
+ * @type {Map<string, { channelId?: string, sessionId?: string }>}
+ */
+const latestDiscordVoiceState = new Map();
+
+/**
+ * Latest Discord gateway voice server payload for the bot, keyed by guild ID.
+ * @type {Map<string, { endpoint?: string, token?: string, generation?: number }>}
+ */
+const latestDiscordVoiceServer = new Map();
+
+/**
+ * Latest Fluxer voice server payload for the bot, keyed by Fluxer guild ID.
+ * @type {Map<string, { livekitUrl?: string, livekitToken?: string }>}
+ */
+const latestFluxerVoiceServer = new Map();
 
 /**
  * Session restarts waiting for a runner to become available again.
@@ -188,6 +218,69 @@ function updateFluxerVoiceState(guildId, userId, channelId) {
 }
 
 /**
+ * @param {string} channelId
+ */
+function clearPendingChannel(channelId) {
+  pending.delete(channelId);
+}
+
+/**
+ * @param {string} guildId
+ * @param {string} [keepChannelId]
+ */
+function clearPendingForDiscordGuild(guildId, keepChannelId) {
+  for (const [channelId, creds] of pending) {
+    if (creds.guildId !== guildId || channelId === keepChannelId) continue;
+    pending.delete(channelId);
+  }
+}
+
+/**
+ * @param {string} fluxerGuildId
+ * @param {string} [keepChannelId]
+ */
+function clearPendingForFluxerGuild(fluxerGuildId, keepChannelId) {
+  for (const [channelId, creds] of pending) {
+    if (creds.fluxerGuildId !== fluxerGuildId || channelId === keepChannelId) continue;
+    pending.delete(channelId);
+  }
+}
+
+/**
+ * @param {string} guildId
+ * @param {string} channelId
+ * @returns {{
+ *   guildId: string,
+ *   channelId: string,
+ *   fluxerGuildId: string,
+ *   fluxerChannelId: string,
+ *   discordVoiceServerGeneration: number,
+ *   sessionId?: string,
+ *   endpoint?: string,
+ *   token?: string,
+ *   livekitUrl?: string,
+ *   livekitToken?: string,
+ * } | null}
+ */
+function getPendingChannelForGuild(guildId, channelId) {
+  const creds = pending.get(channelId);
+  if (!creds || creds.guildId !== guildId) return null;
+  return creds;
+}
+
+/**
+ * Make the next join wait for a fresh Discord VoiceServerUpdate.
+ * @param {string} guildId
+ * @returns {number}
+ */
+function bumpDiscordVoiceServerGeneration(guildId) {
+  const current = latestDiscordVoiceServer.get(guildId);
+  const generation = (current?.generation ?? 0) + 1;
+  latestDiscordVoiceServer.set(guildId, { generation });
+  return generation;
+}
+
+/**
  * @param {string} guildId
  * @param {string} fluxerGuildId
  * @param {boolean} leaveDiscord
@@ -298,14 +391,17 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
     const { guild_id: guildId, channel_id: channelId, session_id: sessionId } = data;
     log("VOICE", `Discord gateway VoiceStateUpdate guild=${guildId} channel=${channelId ?? "null"} session=${sessionId ?? "null"}`);
     if (channelId) {
-      const creds = pending.get(guildId) ?? {};
-      creds.sessionId = sessionId;
-      creds.channelId = channelId;
-      pending.set(guildId, creds);
-      await maybeLaunch(discordClient, guildId);
+      latestDiscordVoiceState.set(guildId, { channelId, sessionId });
+      const creds = getPendingChannelForGuild(guildId, channelId);
+      if (creds) {
+        creds.sessionId = sessionId;
+        pending.set(channelId, creds);
+        await maybeLaunch(discordClient, channelId);
+      }
     } else {
+      latestDiscordVoiceState.delete(guildId);
       log("VOICE", `Clearing pending credentials for guild ${guildId} after disconnect`);
-      pending.delete(guildId);
+      clearPendingForDiscordGuild(guildId);
       const activeChannelId = findSessionChannelByGuild(guildId);
       if (activeChannelId) {
         requestSessionRestart(activeChannelId, "Discord bot voice state disconnected");
@@ -316,30 +412,32 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
   discordClient.ws.on(GatewayDispatchEvents.VoiceServerUpdate, async (data) => {
     const { guild_id: guildId, endpoint, token } = data;
     log("VOICE", `Discord gateway VoiceServerUpdate guild=${guildId} endpoint=${endpoint ?? "null"}`);
-    const creds = pending.get(guildId) ?? {};
-    creds.endpoint = endpoint;
-    creds.token = token;
-    pending.set(guildId, creds);
-    await maybeLaunch(discordClient, guildId);
+    const current = latestDiscordVoiceServer.get(guildId);
+    const generation = current?.generation ?? 0;
+    latestDiscordVoiceServer.set(guildId, { endpoint, token, generation });
+    for (const [channelId, creds] of pending) {
+      if (creds.guildId !== guildId) continue;
+      if (creds.discordVoiceServerGeneration !== generation) continue;
+      creds.endpoint = endpoint;
+      creds.token = token;
+      pending.set(channelId, creds);
+      await maybeLaunch(discordClient, channelId);
+    }
   });
 
   fluxerClient.on(FluxerEvents.VoiceServerUpdate, async (data) => {
     const { guild_id: fluxerGuildId, endpoint: livekitUrl, token: livekitToken } = data;
     if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
-    const voiceMap = /** @type {VoiceChannelMapRecord | null} */ (await VoiceChannelMap.findOne({ where: { fluxerGuildId } }));
-    if (!voiceMap) {
-      log("VOICE", `Fluxer VoiceServerUpdate for guild ${fluxerGuildId} had no configured map`);
-      return;
+    latestFluxerVoiceServer.set(fluxerGuildId, { livekitUrl, livekitToken });
+    for (const [channelId, creds] of pending) {
+      if (creds.fluxerGuildId !== fluxerGuildId) continue;
+      creds.livekitUrl = livekitUrl;
+      creds.livekitToken = livekitToken;
+      pending.set(channelId, creds);
+      log("VOICE", `Fluxer VoiceServerUpdate matched pending channel ${channelId}`);
+      await maybeLaunch(discordClient, channelId);
     }
-
-    log("VOICE", `Fluxer VoiceServerUpdate matched map discordGuild=${voiceMap.discordGuildId}`);
-
-    const creds = pending.get(voiceMap.discordGuildId) ?? {};
-    creds.livekitUrl = livekitUrl;
-    creds.livekitToken = livekitToken;
-    pending.set(voiceMap.discordGuildId, creds);
-    await maybeLaunch(discordClient, voiceMap.discordGuildId);
   });
 
   fluxerClient.on(FluxerEvents.VoiceStatesSync, (data) => {
@@ -428,9 +526,21 @@ async function sendJoinOp(discordClient, guild, guildId, channelId) {
   }
 
   log("VOICE", `Joining Discord VC ${channelId}`);
-  const creds = pending.get(guildId) ?? {};
-  creds.channelId = channelId;
-  pending.set(guildId, creds);
+  clearPendingForDiscordGuild(guildId, channelId);
+  clearPendingForFluxerGuild(voiceMap.fluxerGuildId, channelId);
+  const discordVoiceServerGeneration = bumpDiscordVoiceServerGeneration(guildId);
+  const discordState = latestDiscordVoiceState.get(guildId);
+  const fluxerServer = latestFluxerVoiceServer.get(voiceMap.fluxerGuildId);
+  pending.set(channelId, {
+    guildId,
+    channelId,
+    fluxerGuildId: voiceMap.fluxerGuildId,
+    fluxerChannelId: voiceMap.fluxerChannelId,
+    discordVoiceServerGeneration,
+    sessionId: discordState?.channelId === channelId ? discordState.sessionId : undefined,
+    livekitUrl: fluxerServer?.livekitUrl,
+    livekitToken: fluxerServer?.livekitToken,
+  });
 
   guild?.shard.send({
     op: 4,
@@ -445,12 +555,12 @@ async function sendJoinOp(discordClient, guild, guildId, channelId) {
 
 /**
  * @param {import("discord.js").Client} discordClient
- * @param {string} guildId
+ * @param {string} channelId
  */
-async function maybeLaunch(discordClient, guildId) {
-  const creds = pending.get(guildId);
+async function maybeLaunch(discordClient, channelId) {
+  const creds = pending.get(channelId);
   if (!creds) return;
-  const { sessionId, endpoint, token, channelId, livekitUrl, livekitToken } = creds;
+  const { guildId, sessionId, endpoint, token, livekitUrl, livekitToken } = creds;
   if (!sessionId || !endpoint || !token || !channelId || !livekitUrl || !livekitToken) {
     log(
       "VOICE",
@@ -466,7 +576,7 @@ async function maybeLaunch(discordClient, guildId) {
   }
   if (sessions.has(channelId)) return;
 
-  pending.delete(guildId);
+  clearPendingChannel(channelId);
   log("VOICE", `Spawning bridge for channel ${channelId}`);
 
   const spawned = spawnBridge(
