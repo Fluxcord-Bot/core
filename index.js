@@ -185,6 +185,22 @@ let fluxerReady = false;
 /** @type {null | (() => void)} */
 let startVoiceRecovery = null;
 
+/** @param {unknown} error */
+function isRecoverableRuntimeError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message) return false;
+
+  return [
+    "WebSocket error",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "EPIPE",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "Connect Timeout Error",
+  ].some((needle) => message.includes(needle));
+}
+
 async function onBothReady() {
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
@@ -300,6 +316,11 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
 process.on("uncaughtException", (error) => {
   log("META", "A uncaught exception occurred.", error);
 
+  if (isRecoverableRuntimeError(error)) {
+    log("META", "Ignoring recoverable runtime error and keeping the process alive.");
+    return;
+  }
+
   try {
     discordClient.destroy();
   } catch {}
@@ -312,8 +333,13 @@ process.on("uncaughtException", (error) => {
 });
 
 // @ts-ignore
-process.on("unhandledRejection", (reason, promise) => {
+process.on("unhandledRejection", /** @param {unknown} reason */ (reason, promise) => {
   log("META", "A unhandled rejection occurred.", reason);
+
+  if (isRecoverableRuntimeError(reason)) {
+    log("META", "Ignoring recoverable runtime rejection and keeping the process alive.");
+    return;
+  }
 
   try {
     discordClient.destroy();
