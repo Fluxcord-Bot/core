@@ -55,6 +55,21 @@ const command = {
             value: fluxerMemberCount + "",
             inline: true,
           },
+          {
+            name: "Process PID",
+            value: process.pid + "",
+            inline: true,
+          },
+          {
+            name: "Memory usage",
+            value: process.memoryUsage().heapUsed + "",
+            inline: true,
+          },
+          {
+            name: "Node.js Version",
+            value: process.version + "",
+            inline: true,
+          },
         ),
       ],
     });

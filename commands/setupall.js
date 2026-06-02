@@ -121,10 +121,12 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLi
         );
 
         if (matchedChannel) {
-          msg.edit({
-            content: `Trying to bridge <#${isFluxer ? matchedChannel.id : channel[1].name}> to #${isFluxer ? channel[1].name : matchedChannel.name}...
-Success: ${results.filter((x) => x?.success).length}, Failed: ${results.filter((x) => !x?.success).length}`,
-          });
+          try {
+            msg.edit({
+              content: `Trying to bridge <#${isFluxer ? matchedChannel.id : channel[1].name}> to #${isFluxer ? channel[1].name : matchedChannel.name}...
+  Success: ${results.filter((x) => x?.success).length}, Failed: ${results.filter((x) => !x?.success).length}`,
+            });
+          } catch {}
           try {
             const result = await bridgeChannel(
               matchedChannel,
