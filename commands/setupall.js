@@ -116,8 +116,8 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLi
       for (let channel of discordChannels) {
         const channelName = channel[1].name.toLowerCase();
 
-        const matchedChannel = fluxerChannels.find(
-          (x) => x.name.toLowerCase() === channelName,
+        const matchedChannel = fluxerChannels.find((x) =>
+          x.name.toLowerCase().endsWith(channelName),
         );
 
         if (matchedChannel) {
