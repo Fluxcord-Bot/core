@@ -68,7 +68,7 @@ const command = {
       .map((x) => `#${x.name} (${x.id}): ${x.perms.join(", ")}`)
       .join("\n");
 
-    const strBuf = Buffer.from(str);
+    const strBuf = Buffer.from(str, "utf-8");
 
     if (message instanceof FluxerMessage) {
       await message.reply({ files: [{ name: "probed.txt", data: strBuf }] });
