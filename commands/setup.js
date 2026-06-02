@@ -19,14 +19,12 @@ const command = {
   description: "Set up bridging",
   requireElevated: true,
   params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both]",
-  additionalInfo: `Known issues:
-- Bridge "eats" attachments, basically happens when fluxer cdn just explodes (corrupted attachment), also happens when discord cdn also explodes (missing attachment)
-- Due to fluxer limitations, edits from Discord to Fluxer will not bridge
-- Due to Fluxer limitations, NSFW channels cannot be bridged to Discord`,
+  additionalInfo: `(code) - the code of the setup to send to the other side
+both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaults to both`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     /**
-     * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d"}
+     * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d" | "template"}
      */
     const directionOrCode = params[0] ?? "both";
 
