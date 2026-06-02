@@ -26,7 +26,7 @@ jobs:
         with:
           registry: git.gay
           username: jbcarreon123
-          password: ${{ secrets.FORGEJO_TOKEN }}
+          password: ${{ secrets.FJ_TOKEN }}
 
       - name: Log in to GitHub Registry
         uses: docker/login-action@v3
