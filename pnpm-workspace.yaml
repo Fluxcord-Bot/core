@@ -1,3 +1,8 @@
+allowBuilds:
+  cpu-features: true
+  protobufjs: true
+  sqlite3: true
+  ssh2: true
 onlyBuiltDependencies:
   - node-webcodecs
   - esbuild
