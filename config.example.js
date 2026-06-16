@@ -5,6 +5,7 @@ const Config = {
 
   // Optional. Self-hosted instances serve avatars/media from `/media`.
   // FluxerCDNBaseURL: "https://example.com/media",
+  FluxerCDNBaseURL: "https://fluxerusercontent.com",
 
   // The path for the bot's data directory. Probably do not touch if you're using Docker.
   DataFolderPath: "/data",
