@@ -13,6 +13,7 @@ import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
+import { processReplyContent } from "./ProcessReplyContent.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -145,7 +146,7 @@ export async function FluxerCreateMessageHandler(
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Forwarded message\n`
         : "") +
       (messageReference
-        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${processReplyContent(message.referencedMessage.content)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
       parsedContent +
       userJoin +
@@ -177,7 +178,6 @@ export async function FluxerCreateMessageHandler(
       discordReplyId: messageReference?.discordMessageId ?? null,
       channelMapId: channelMap.id,
       authorId: message.author.id,
-      content: parsedContent,
     });
   } catch (e) {
     log("DB", "Failed to save Fluxer -> Discord message map", e);
@@ -257,7 +257,7 @@ export async function FluxerUpdateMessageHandler(
       content:
         // @ts-expect-error
         (messageReference
-          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`} (https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}): ${removeLinkEmbeds(truncate(messageReference.content, 25))}\n`
+          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${processReplyContent(newMessage.referencedMessage.content)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
           : "") +
         (await traverseMessageLinks(
           await parseFluxerEmojiToDiscord(
@@ -303,7 +303,9 @@ export async function FluxerDeleteMessageHandler(message, client) {
 
     try {
       if (messageExisting.messageSource === "discord") {
-        const channel = await client.channels.fetch(channelMap.discordChannelId);
+        const channel = await client.channels.fetch(
+          channelMap.discordChannelId,
+        );
         const discordMessage =
           await /** @type {import("discord.js").TextChannel} */ (
             channel

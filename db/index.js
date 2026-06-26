@@ -10,11 +10,11 @@ const sequelize = new Sequelize({
   logging: (msg) => log("DB", msg),
 });
 
-class ChannelMap extends Model { }
-class MessageMap extends Model { }
-class UserConfig extends Model { }
-class GuildMap extends Model { }
-class VoiceChannelMap extends Model { }
+class ChannelMap extends Model {}
+class MessageMap extends Model {}
+class UserConfig extends Model {}
+class GuildMap extends Model {}
+class VoiceChannelMap extends Model {}
 
 GuildMap.init(
   {
@@ -78,7 +78,6 @@ MessageMap.init(
     discordReplyId: { type: DataTypes.STRING, allowNull: true },
     fluxerReplyId: { type: DataTypes.STRING, allowNull: true },
     authorId: { type: DataTypes.STRING, allowNull: false },
-    content: { type: DataTypes.STRING, allowNull: false },
     channelMapId: {
       type: DataTypes.INTEGER,
       field: "ChannelMapId",
@@ -136,4 +135,11 @@ VoiceChannelMap.init(
   { sequelize, modelName: "VoiceChannelMap" },
 );
 
-export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap, VoiceChannelMap };
+export {
+  sequelize,
+  ChannelMap,
+  MessageMap,
+  UserConfig,
+  GuildMap,
+  VoiceChannelMap,
+};

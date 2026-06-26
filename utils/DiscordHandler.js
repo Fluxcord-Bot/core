@@ -262,7 +262,6 @@ export async function DiscordCreateMessageHandler(
         fluxerMessageId: msg?.id,
         fluxerReplyId: messageReference?.fluxerMessageId ?? null,
         discordReplyId: message.reference?.messageId ?? null,
-        content: parsedContent,
         channelMapId: channelMap.id,
         authorId: message.author.id,
       });
@@ -279,7 +278,11 @@ export async function DiscordCreateMessageHandler(
       } catch (e) {
         if (isDiscordUnknownMessageError(e)) {
           try {
-            await deleteFluxerMessageIfExists(fluxerClient, channelMap, msg?.id);
+            await deleteFluxerMessageIfExists(
+              fluxerClient,
+              channelMap,
+              msg?.id,
+            );
           } catch (deleteError) {
             log(
               "FLUXER",
@@ -363,15 +366,6 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         auth: false,
       },
     );
-
-    messageExisting.content = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(
-        sanitizePings(await parseMentions(newMsg)),
-        client,
-        channelMap.fluxerGuildId,
-      ),
-    );
-    await messageExisting.save();
   }
 }
 
