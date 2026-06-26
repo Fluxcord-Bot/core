@@ -17,6 +17,18 @@ import { processReplyContent } from "./ProcessReplyContent.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
+function getFluxerAvatarURL(user) {
+  if (!user?.avatarURL) return undefined;
+  if (!Config.FluxerCDNBaseURL || !user.avatar) {
+    return user.avatarURL() ?? undefined;
+  }
+
+  const cdnBase = Config.FluxerCDNBaseURL.replace(/\/$/, "");
+  const extension = user.avatar.startsWith("a_") ? "gif" : "webp";
+
+  return `${cdnBase}/avatars/${user.id}/${user.avatar}.${extension}?size=160`;
+}
+
 function isFluxerMessageNotFoundError(error) {
   return (
     error?.code === "MESSAGE_NOT_FOUND" ||
@@ -165,7 +177,7 @@ export async function FluxerCreateMessageHandler(
       forwardedMessage ?? message,
       discordClient,
     ),
-    avatarURL: message.author.avatarURL() ?? undefined,
+    avatarURL: getFluxerAvatarURL(message.author),
   });
 
   let bridgedMessageMap;
