@@ -10,8 +10,8 @@ export function processReplyContent(content) {
   let secondProcess = removeLinkEmbeds(
     truncate(sanitizePings(firstProcess), 25),
   );
-  if (!secondProcess.endsWith("...") && firstProcess.length > 1) {
-    secondProcess += "...";
+  if (!secondProcess.endsWith("…") && firstProcess.length > 1) {
+    secondProcess += "…";
   }
   return secondProcess;
 }
