@@ -16,6 +16,7 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
+import { fluxerMessageFlags } from "./FluxerMessageFlags.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -218,7 +219,20 @@ export async function DiscordCreateMessageHandler(
       "Fluxcord";
     const webhookFiles = (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 24999900)
-      .map((a) => ({ name: a.name, url: a.url }));
+      .map((a) => ({
+        name: a.name,
+        url: a.url,
+      }));
+
+    const webhookAttachments = (forwardedMessage ?? message).attachments
+      .filter((x) => x.size < 24999900)
+      .map((a, i) => ({
+        id: i,
+        filename: a.name,
+        flags: fluxerMessageFlags({
+          spoiler: a.spoiler,
+        }),
+      }));
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
@@ -236,6 +250,7 @@ export async function DiscordCreateMessageHandler(
             avatar_url: message.author.avatarURL() ?? undefined,
             embeds: webhookEmbeds,
             files: webhookFiles,
+            attachments: webhookAttachments,
             message_reference: messageReferenceOption,
           },
           auth: false,
@@ -248,6 +263,7 @@ export async function DiscordCreateMessageHandler(
           username: webhookUsername,
           avatar_url: message.author.avatarURL() ?? undefined,
           files: webhookFiles,
+          attachments: webhookAttachments,
           embeds: webhookEmbeds,
         },
         true,

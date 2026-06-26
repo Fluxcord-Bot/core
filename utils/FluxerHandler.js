@@ -14,6 +14,7 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
+import { AttachmentBuilder } from "discord.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -168,7 +169,12 @@ export async function FluxerCreateMessageHandler(
         : ""),
     files: (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 9999000)
-      .map((a) => a.proxy_url ?? a.url ?? ""),
+      .map((a) =>
+        new AttachmentBuilder(a.proxy_url ?? a.url ?? "", {
+          name: a.filename,
+          description: a.description,
+        }).setSpoiler((flags & 8) !== 0),
+      ),
     username:
       guildUser?.displayName ??
       message.author.globalName ??
