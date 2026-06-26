@@ -10,6 +10,9 @@ const sequelize = new Sequelize({
   logging: (msg) => log("DB", msg),
 });
 
+await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
+await sequelize.query("VACUUM;");
+
 class ChannelMap extends Model {}
 class MessageMap extends Model {}
 class UserConfig extends Model {}
