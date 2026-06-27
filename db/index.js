@@ -14,7 +14,7 @@ const sequelize = new Sequelize({
 
 if (Config.DatabaseEncryptionToken) {
   sequelize.afterConnect(async (connection) => {
-    await new Promise<void>((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       connection.exec("PRAGMA cipher_compatibility = 4;", (err) => {
         if (err) return reject(err);
 
