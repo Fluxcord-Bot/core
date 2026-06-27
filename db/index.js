@@ -5,12 +5,6 @@ import { DataTypes, Model } from "sequelize";
 import DefaultConfig from "../utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
-function runRaw(connection, sql) {
-  return new Promise((resolve, reject) => {
-    connection.run(sql, (err) => (err ? reject(err) : resolve()));
-  });
-}
-
 const sequelize = new Sequelize({
   dialect: "sqlite",
   dialectModule: sqlite3,
