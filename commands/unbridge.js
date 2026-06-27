@@ -1,4 +1,4 @@
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap, MessageMap, sequelize } from "../db/index.js";
 import { Op } from "sequelize";
 import { BridgeMap } from "../utils/CommandHandler.js";
 
@@ -50,7 +50,13 @@ const command = {
       await webhook?.delete();
     } catch {}
 
-    await channelMap.destroy();
+    await sequelize.transaction(async (t) => {
+      await MessageMap.destroy({
+        where: { channelMapId: channelMap.id },
+        transaction: t,
+      });
+      await channelMap.destroy({ transaction: t });
+    });
 
     await message.reply("Successfully unbridged!");
   },
