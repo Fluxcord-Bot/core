@@ -216,7 +216,7 @@ export async function FluxerCreateMessageHandler(
 /**
  * @param {FluxerMessage | null} oldMessage
  * @param {import("@fluxerjs/core").Message} newMessage
- * @param {DiscordClient} client
+ * @param {import("discord.js").Client} client
  */
 export async function FluxerUpdateMessageHandler(
   oldMessage,
@@ -280,23 +280,19 @@ export async function FluxerUpdateMessageHandler(
         )),
       files: newMessage.attachments.map((a) => a.url ?? ""),
     });
-
-    ((messageExisting.content = await traverseMessageLinks(
-      await parseFluxerEmojiToDiscord(
-        sanitizePings(await parseMentions(newMessage)),
-        client,
-        channelMap.discordGuildId,
-      ),
-    )),
-      await messageExisting.save());
   }
 }
 
 /**
  * @param {import("@fluxerjs/core").PartialMessage} message
- * @param {DiscordClient} client
+ * @param {import("discord.js").Client} client
+ * @param {import("@fluxerjs/core").Client} fluxerClient
  */
-export async function FluxerDeleteMessageHandler(message, client) {
+export async function FluxerDeleteMessageHandler(
+  message,
+  client,
+  fluxerClient,
+) {
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: message.id,
@@ -362,10 +358,23 @@ export async function FluxerDeleteMessageHandler(message, client) {
         channelMap.discordWebhookId,
         channelMap.discordWebhookToken,
       );
+      let replyContent = "";
+      if (reply.messageSource === "fluxer") {
+        const channel = await fluxerClient.channels.fetch(
+          channelMap.fluxerChannelId,
+        );
+        if (!channel || !channel.isTextBased()) continue;
+        const message = await channel.messages.fetch(reply.fluxerMessageId);
+        if (!message) continue;
+        replyContent = message.content;
+      } else {
+        // native message
+        continue;
+      }
 
       await webhook.editMessage(reply.discordMessageId, {
         content: `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> *Deleted message*
-${reply.content}`,
+${replyContent}`,
       });
       reply.discordReplyId = null;
       reply.fluxerReplyId = null;

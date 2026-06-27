@@ -280,7 +280,6 @@ export function setupReactionHandling(discordClient, fluxerClient) {
   });
 
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async (reaction, user) => {
-    console.log(reaction);
     if (
       reaction.emoji.name === "information_source" ||
       reaction.emoji.name === "ℹ️"

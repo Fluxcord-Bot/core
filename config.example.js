@@ -10,6 +10,10 @@ const Config = {
   // The path for the bot's data directory. Probably do not touch if you're using Docker.
   DataFolderPath: "/data",
 
+  // The database encryption token. If you're just running a instance for yourself
+  // you don't really need to set this.
+  DatabaseEncryptionToken: "",
+
   // The Discord bot token
   DiscordBotToken: "DISCORD_BOT_TOKEN",
 

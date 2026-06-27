@@ -13,6 +13,7 @@ const DefaultConfig = {
   BotPrefix: "fc!",
   FluxerBioStart: "",
   DiscordBioStart: "",
+  DatabaseEncryptionToken: "",
 
   VoiceBridgingEnabled: false,
 

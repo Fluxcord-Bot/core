@@ -158,7 +158,7 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
 });
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
   try {
-    await FluxerDeleteMessageHandler(msg, discordClient);
+    await FluxerDeleteMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", e);
   }
@@ -317,7 +317,10 @@ process.on("uncaughtException", (error) => {
   log("META", "A uncaught exception occurred.", error);
 
   if (isRecoverableRuntimeError(error)) {
-    log("META", "Ignoring recoverable runtime error and keeping the process alive.");
+    log(
+      "META",
+      "Ignoring recoverable runtime error and keeping the process alive.",
+    );
     return;
   }
 
@@ -333,24 +336,30 @@ process.on("uncaughtException", (error) => {
 });
 
 // @ts-ignore
-process.on("unhandledRejection", /** @param {unknown} reason */ (reason, promise) => {
-  log("META", "A unhandled rejection occurred.", reason);
+process.on(
+  "unhandledRejection",
+  /** @param {unknown} reason */ (reason, promise) => {
+    log("META", "A unhandled rejection occurred.", reason);
 
-  if (isRecoverableRuntimeError(reason)) {
-    log("META", "Ignoring recoverable runtime rejection and keeping the process alive.");
-    return;
-  }
+    if (isRecoverableRuntimeError(reason)) {
+      log(
+        "META",
+        "Ignoring recoverable runtime rejection and keeping the process alive.",
+      );
+      return;
+    }
 
-  try {
-    discordClient.destroy();
-  } catch {}
+    try {
+      discordClient.destroy();
+    } catch {}
 
-  try {
-    fluxerClient.destroy();
-  } catch {}
+    try {
+      fluxerClient.destroy();
+    } catch {}
 
-  process.exit(1);
-});
+    process.exit(1);
+  },
+);
 
 if (Config.VoiceBridgingEnabled) {
   const voiceHandler = await import("./utils/VoiceHandler.js");

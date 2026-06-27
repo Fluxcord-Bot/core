@@ -27,6 +27,7 @@ export async function sendBridgeInfo(
     },
     include: ["channelMap"],
   });
+  if (!messageMap) return;
   const origChannel =
     messageMap.messageSource === "fluxer"
       ? await fluxerClient.channels.fetch(messageMap.channelMap.fluxerChannelId)
@@ -34,10 +35,7 @@ export async function sendBridgeInfo(
           messageMap.channelMap.discordChannelId,
         );
   if (!origChannel) return;
-  if (
-    origChannel instanceof FluxerTextChannel &&
-    origChannel.canSendMessage()
-  ) {
+  if (origChannel instanceof FluxerTextChannel) {
     const message = await origChannel.messages.fetch(
       messageMap.fluxerMessageId,
     );
@@ -50,7 +48,7 @@ export async function sendBridgeInfo(
       value: `@${message.author.username}#${message.author.discriminator} (${message.author.id})`,
       inline: true,
     });
-  } else if (origChannel.type === ChannelType.GuildText) {
+  } else if (origChannel.isTextBased()) {
     const message = await origChannel.messages.fetch(
       messageMap.discordMessageId,
     );

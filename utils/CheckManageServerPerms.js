@@ -13,13 +13,16 @@ export async function checkManageServerPerms(guildId, userId, client) {
 
   if (DefaultConfig.AdminAccountIds.includes(userId)) return true;
 
-  const member = (client instanceof Client) ? await guild.fetchMember(userId) : await guild.members.fetch(userId);
+  const member =
+    client instanceof Client
+      ? await guild.fetchMember(userId)
+      : await guild.members.fetch(userId);
 
   if (!member) return false;
 
-  console.log(member.permissions)
-
-  return (
-    member.permissions.has((client instanceof Client) ? PermissionFlags.ManageGuild : PermissionFlagsBits.ManageGuild)
+  return member.permissions.has(
+    client instanceof Client
+      ? PermissionFlags.ManageGuild
+      : PermissionFlagsBits.ManageGuild,
   );
 }
