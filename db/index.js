@@ -10,6 +10,7 @@ const sequelize = new Sequelize({
   dialectModule: sqlite3,
   storage: Config.DataFolderPath + "/fluxcord.db",
   logging: (msg) => log("DB", msg),
+  pool: { max: 1 },
 });
 
 if (DefaultConfig.DatabaseEncryptionToken) {
