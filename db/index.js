@@ -10,27 +10,16 @@ const sequelize = new Sequelize({
   dialectModule: sqlite3,
   storage: Config.DataFolderPath + "/fluxcord.db",
   logging: (msg) => log("DB", msg),
-  ...(Config.DatabaseEncryptionToken
-    ? {
-        hooks: {
-          afterConnect: async (connection) => {
-            await new Promise((resolve, reject) => {
-              connection.exec("PRAGMA cipher_compatibility = 4;", (err) => {
-                if (err) return reject(err);
-
-                connection.exec(
-                  `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
-                  (err) => (err ? reject(err) : resolve()),
-                );
-              });
-            });
-          },
-        },
-      }
-    : {}),
+  password: !!DefaultConfig.DatabaseEncryptionToken
+    ? DefaultConfig.DatabaseEncryptionToken
+    : undefined,
 });
 
-if (Config.DatabaseEncryptionToken) {
+if (DefaultConfig.DatabaseEncryptionToken) {
+  await sequelize.query("PRAGMA cipher_compatibility = 4;");
+  await sequelize.query(
+    `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
+  );
 }
 
 await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
