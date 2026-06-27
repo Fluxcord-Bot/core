@@ -50,13 +50,8 @@ const command = {
       await webhook?.delete();
     } catch {}
 
-    await sequelize.transaction(async (t) => {
-      await MessageMap.destroy({
-        where: { channelMapId: channelMap.id },
-        transaction: t,
-      });
-      await channelMap.destroy({ transaction: t });
-    });
+    await MessageMap.destroy({ where: { channelMapId: channelMap.id } });
+    await channelMap.destroy();
 
     await message.reply("Successfully unbridged!");
   },
