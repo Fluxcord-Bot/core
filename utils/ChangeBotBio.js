@@ -1,4 +1,4 @@
-import { ChannelMap, sequelize } from "../db/index.js";
+import { ChannelMap, GuildMap, sequelize } from "../db/index.js";
 import DefaultConfig from "./ConfigHandler.js";
 
 /**

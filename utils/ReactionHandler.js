@@ -10,6 +10,7 @@ import {
   clearFluxEmojiCache,
   clearBotEmojiCache,
 } from "./EmojiCache.js";
+import { sendBridgeInfo } from "./MessageBridgeInfo.js";
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -252,7 +253,21 @@ async function relayFluxerReaction(
  * @param {import("@fluxerjs/core").Client} fluxerClient fluxer instance
  */
 export function setupReactionHandling(discordClient, fluxerClient) {
-  discordClient.on(DiscordEvents.MessageReactionAdd, (reaction, user) => {
+  discordClient.on(DiscordEvents.MessageReactionAdd, async (reaction, user) => {
+    if (
+      reaction.emoji.name === "information_source" ||
+      reaction.emoji.name === "ℹ️"
+    ) {
+      await reaction.remove();
+      await sendBridgeInfo(
+        await reaction.message.fetch(),
+        user,
+        discordClient,
+        fluxerClient,
+      );
+      return;
+    }
+
     relayDiscordReaction(reaction, user, "add", fluxerClient).catch((e) =>
       log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`),
     );
@@ -264,7 +279,19 @@ export function setupReactionHandling(discordClient, fluxerClient) {
     );
   });
 
-  fluxerClient.on(FluxerEvents.MessageReactionAdd, (reaction, user) => {
+  fluxerClient.on(FluxerEvents.MessageReactionAdd, async (reaction, user) => {
+    console.log(reaction);
+    if (
+      reaction.emoji.name === "information_source" ||
+      reaction.emoji.name === "ℹ️"
+    ) {
+      const message = await reaction.fetchMessage();
+      message.removeReactionEmoji(":information_source:");
+
+      await sendBridgeInfo(message, user, discordClient, fluxerClient);
+      return;
+    }
+
     relayFluxerReaction(
       reaction,
       user,

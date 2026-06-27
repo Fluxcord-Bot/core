@@ -2,6 +2,7 @@ import { EmbedBuilder, Message } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import { GuildMap } from "../db/index.js";
 import { log } from "./Logger.js";
+import { genMsgLink } from "./GenMsgLink.js";
 
 /**
  * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | Message} message
@@ -37,7 +38,7 @@ export async function sendErrorMessage(
                 .setTitle("Error occurred while bridging a message")
                 .addFields({
                   name: "Message",
-                  value: `${message.author.globalName} in <#${message.channelId}>: ${message.content}`,
+                  value: `${message.author.globalName} (${genMsgLink(message)}): ${message.content}`,
                 })
                 .addFields({
                   name: "Stack trace",
