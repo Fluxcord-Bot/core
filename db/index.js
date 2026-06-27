@@ -12,11 +12,19 @@ const sequelize = new Sequelize({
   logging: (msg) => log("DB", msg),
 });
 
-if (DefaultConfig.DatabaseEncryptionToken) {
-  await sequelize.query("PRAGMA cipher_compatibility = 4;");
-  await sequelize.query(
-    `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
-  );
+if (Config.DatabaseEncryptionToken) {
+  sequelize.afterConnect(async (connection) => {
+    await new Promise<void>((resolve, reject) => {
+      connection.exec("PRAGMA cipher_compatibility = 4;", (err) => {
+        if (err) return reject(err);
+
+        connection.exec(
+          `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
+          (err) => (err ? reject(err) : resolve()),
+        );
+      });
+    });
+  });
 }
 
 await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
