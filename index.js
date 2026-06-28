@@ -36,6 +36,7 @@ const discordClient = new DiscordClient({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMessageTyping,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -73,6 +74,24 @@ discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
       discordChannelId: chnl.id,
     },
   });
+});
+
+discordClient.on(DiscordEvents.TypingStart, async (type) => {
+  if (type.user.id === discordClient.user?.id) return;
+
+  const channelMap = await ChannelMap.findOne({
+    where: {
+      discordChannelId: type.channel.id,
+    },
+  });
+
+  if (channelMap) {
+    const channel = await fluxerClient.channels.fetch(
+      //@ts-expect-error
+      channelMap.fluxerChannelId,
+    );
+    channel.sendTyping();
+  }
 });
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
@@ -177,6 +196,26 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
     await FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
+  if (type.user_id === fluxerClient.user?.id) return;
+
+  const channelMap = await ChannelMap.findOne({
+    where: {
+      fluxerChannelId: type.channel_id,
+    },
+  });
+
+  if (channelMap) {
+    try {
+      const channel = await discordClient.channels.fetch(
+        //@ts-expect-error
+        channelMap.discordChannelId,
+      );
+      if (channel && channel.isSendable()) channel.sendTyping();
+    } catch {}
   }
 });
 
@@ -298,6 +337,17 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     "FLUXER",
     `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
   );
+
+  fluxerClient.sendToGateway(0, {
+    op: 3,
+    d: {
+      custom_status: {
+        text: `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
+      },
+      status: "online",
+    },
+  });
+
   fluxerReady = true;
   if (discordReady) onBothReady();
 });
