@@ -202,7 +202,9 @@ export async function FluxerCreateMessageHandler(
         await channel.messages.fetch(message.id);
       } catch (e) {
         if (isFluxerMessageNotFoundError(e)) {
-          await msg.delete();
+          try {
+            await msg.delete();
+          } catch {}
           await bridgedMessageMap?.destroy();
           return;
         }
