@@ -275,7 +275,10 @@ export function removeLinkEmbeds(str) {
  * @returns {string}
  */
 export function sanitizeLinks(str) {
-  return str.replace("://", "\u200b://");
+  return str.replace(
+    /https?:\/\/[^\s]+/g,
+    (url) => `*${new URL(url).hostname}*`,
+  );
 }
 
 /**
