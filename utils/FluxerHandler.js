@@ -167,9 +167,10 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
-    files: (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 9999000)
-      .map((a) => a.proxy_url ?? a.url ?? ""),
+    files:
+      (forwardedMessage ?? message).attachments
+        ?.filter((x) => x.size < 9999000)
+        .map((a) => a.proxy_url ?? a.url ?? "") ?? [],
     username:
       guildUser?.displayName ??
       message.author.globalName ??
