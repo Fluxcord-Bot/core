@@ -124,9 +124,10 @@ export async function FluxerCreateMessageHandler(
       ? `${message.stickers.map((x) => `[${x.name}](https://fluxerusercontent.com/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
       : "";
 
-  const overAttachments = (forwardedMessage ?? message).attachments.filter(
-    (x) => x.size > 9999000,
-  );
+  const overAttachments =
+    (forwardedMessage ?? message).attachments?.filter(
+      (x) => x.size > 9999000,
+    ) ?? [];
   const overAttachmentsStr = overAttachments
     .map((x) => `[${x.filename}](${x.url})`)
     .join(" ");
