@@ -1,6 +1,7 @@
 import truncate from "truncate";
 import {
   removeLinkEmbeds,
+  sanitizeLinks,
   traverseMessageLinks,
 } from "./EmojiStickerParser.js";
 import { sanitizePings } from "./SanitizePings.js";
@@ -17,9 +18,7 @@ export async function processReplyContent(message) {
   const firstProcess = (
     await traverseMessageLinks(await parseMentions(message))
   ).split("\n")[0];
-  let secondProcess = removeLinkEmbeds(
-    truncate(sanitizePings(firstProcess), 35),
-  );
+  let secondProcess = sanitizeLinks(truncate(sanitizePings(firstProcess), 35));
   if (!secondProcess.endsWith("…") && message.content.split("\n").length > 1) {
     secondProcess += "…";
   }
