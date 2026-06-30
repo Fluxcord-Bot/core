@@ -99,13 +99,7 @@ discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   try {
     await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
-    if (`${e}`.includes("Explicit content")) {
-      try {
-        await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
-      } catch (e) {
-        await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
-      }
-    } else await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
+    await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
   }
 });
 

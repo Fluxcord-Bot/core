@@ -16,6 +16,7 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
+import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -166,7 +167,7 @@ export async function DiscordCreateMessageHandler(
       ? `*@${message.author.tag} joined the bridged server*`
       : "";
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
-  const webhooks = await /** @type {FluxerGuildChannel} */ (
+  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (
     channel
   ).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
@@ -218,41 +219,26 @@ export async function DiscordCreateMessageHandler(
       "Fluxcord";
     const webhookFiles = (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 24999900)
-      .map((a) => ({ name: a.name, url: a.url }));
+      .map((a) => ({ name: a.name, url: a.proxyURL ?? a.url }));
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
       ),
     );
 
-    let msg;
-    if (messageReferenceOption) {
-      msg = await fluxerClient.rest.post(
-        `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}?wait=true`,
-        {
-          body: {
-            content: webhookContent,
-            username: webhookUsername,
-            avatar_url: message.author.avatarURL() ?? undefined,
-            embeds: webhookEmbeds,
-            files: webhookFiles,
-            message_reference: messageReferenceOption,
-          },
-          auth: false,
-        },
-      );
-    } else {
-      msg = await webhook.send(
-        {
-          content: webhookContent,
-          username: webhookUsername,
-          avatar_url: message.author.avatarURL() ?? undefined,
-          files: webhookFiles,
-          embeds: webhookEmbeds,
-        },
-        true,
-      );
-    }
+    let msg = await sendFluxerWebhook(
+      channelMap.fluxerWebhookId,
+      channelMap.fluxerWebhookToken,
+      fluxerClient,
+      {
+        content: webhookContent,
+        username: webhookUsername,
+        avatar_url: message.author.avatarURL() ?? undefined,
+        embeds: webhookEmbeds,
+        files: webhookFiles,
+        message_reference: messageReferenceOption,
+      },
+    );
 
     let bridgedMessageMap;
     try {

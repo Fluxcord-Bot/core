@@ -81,7 +81,7 @@ export async function fluxerEmbedToDiscord(message, discordClient) {
         .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
         .setDescription(
           await parseFluxerEmojiToDiscord(
-            embed.description ?? "",
+            embed.description ?? null,
             discordClient,
           ),
         );

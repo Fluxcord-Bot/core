@@ -58,7 +58,7 @@ export async function sendErrorMessage(
                   .setTitle("Error occurred while bridging a message")
                   .addFields({
                     name: "Message",
-                    value: `${message.author.globalName} in <#${message.channelId}>: ${message.content}`,
+                    value: `${message.author.globalName} (${genMsgLink(message)}): ${message.content}`,
                   })
                   .addFields({
                     name: "Stack trace",

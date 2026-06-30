@@ -38,3 +38,8 @@ export async function getFluxerWebappUrl() {
   const endpoints = await getFluxerUrls();
   return endpoints.webapp;
 }
+
+export async function getFluxerApiUrl() {
+  const endpoints = await getFluxerUrls();
+  return endpoints.api;
+}

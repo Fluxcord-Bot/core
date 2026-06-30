@@ -143,7 +143,7 @@ export async function parseDiscordEmojiToFluxer(
 }
 
 /**
- * @param {string} content
+ * @param {string | null} content
  * @param {DiscordClient} discordClient
  * @param {string | null} targetDiscordGuildId
  */
