@@ -42,6 +42,9 @@ const Config = {
   // Categories: FLUXER, DISCORD, DB, META, VOICE, DEBUG
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
 
+  // The list of MOTDs for the bot. If not specified or it is empty, it'll be disabled.
+  Motds: [],
+
   // The prefix of the bot
   BotPrefix: "fc!",
 

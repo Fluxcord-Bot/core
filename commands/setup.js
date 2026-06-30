@@ -10,6 +10,7 @@ import { genAuthLink } from "../utils/GenAuthLink.js";
 import { ChannelMap, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { GuildChannel as DiscordGuildChannel } from "discord.js";
+import changeBotBio from "../utils/ChangeBotBio.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -237,6 +238,9 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLi
           (!isFluxer ? "Fluxer" : "Discord") +
           "!",
       });
+
+      await changeBotBio(channel.guild);
+      await changeBotBio(message.guild);
     }
   },
 };

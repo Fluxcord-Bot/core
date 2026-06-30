@@ -3,7 +3,6 @@
  * @property {{name: string, url: string}[] | undefined} files
  */
 
-import { getFluxerApiUrl, getFluxerWebappUrl } from "./GetFluxerUrls.js";
 import { log } from "./Logger.js";
 
 /**
@@ -21,8 +20,6 @@ export async function sendFluxerWebhook(
   const attachments = [];
   const formData = new FormData();
   const { files, ...jsonPayload } = params;
-
-  const fluxerApiUrl = await getFluxerApiUrl();
 
   if (files) {
     for (let i = 0; i < files.length; i++) {

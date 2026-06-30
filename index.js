@@ -26,7 +26,6 @@ import fs from "node:fs";
 import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
-import changeBotBios from "./utils/ChangeBotBio.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 
 const discordClient = new DiscordClient({
@@ -311,7 +310,19 @@ async function onBothReady() {
     }
   }
 
-  await changeBotBios(fluxerClient, discordClient);
+  if (
+    Config.Motds &&
+    Config.Motds.length > 0 &&
+    Config.Motds.every((x) => !!x)
+  ) {
+    setInterval(
+      () => {
+        motdLoop();
+      },
+      10 * 60 * 1000,
+    );
+    motdLoop();
+  }
 
   renderBox([
     "To invite Fluxcord to your server, here's the invite links:",
@@ -336,7 +347,7 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     op: 3,
     d: {
       custom_status: {
-        text: `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
+        text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
       },
       status: "online",
     },
@@ -350,7 +361,7 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
   log("DISCORD", `${discordClient.user?.tag} is ready!`);
 
   discordClient.user?.setActivity(
-    `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
+    `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
   );
 
   discordReady = true;
@@ -422,6 +433,32 @@ function checkIfFluxerConnected() {
     log("DEBUG", "Fluxer didn't connect after 10 seconds, restarting...");
     process.exit(1);
   }
+}
+
+function motdLoop() {
+  const motds = Config.Motds;
+  const motd = motds[Math.floor(Math.random() * motds.length)];
+
+  console.log(motds, motd);
+
+  if (motd) updateBotStatus(motd);
+}
+
+/**
+ * @param {string} status
+ */
+function updateBotStatus(status) {
+  fluxerClient.sendToGateway(0, {
+    op: 3,
+    d: {
+      custom_status: {
+        text: `${Config.BotPrefix}help | ${status}`,
+      },
+      status: "online",
+    },
+  });
+
+  discordClient.user?.setActivity(`${Config.BotPrefix}help | ${status}`);
 }
 
 setInterval(() => checkIfFluxerConnected(), 10000);

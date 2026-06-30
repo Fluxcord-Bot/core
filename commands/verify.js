@@ -138,6 +138,9 @@ const command = {
         (!isFluxer ? "Fluxer" : "Discord") +
         "!",
     });
+
+    await changeBotBio(channel.guild);
+    await changeBotBio(message.guild);
   },
 };
 

@@ -14,6 +14,8 @@ const DefaultConfig = {
   FluxerBioStart: "",
   DiscordBioStart: "",
   DatabaseEncryptionToken: "",
+  /** @type {string[]} */
+  Motds: [],
 
   VoiceBridgingEnabled: false,
 
