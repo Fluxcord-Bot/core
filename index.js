@@ -439,8 +439,6 @@ function motdLoop() {
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
 
-  console.log(motds, motd);
-
   if (motd) updateBotStatus(motd);
 }
 
