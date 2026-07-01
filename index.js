@@ -315,9 +315,12 @@ async function onBothReady() {
     Config.Motds.length > 0 &&
     Config.Motds.every((x) => !!x)
   ) {
-    setInterval(() => {
-      motdLoop();
-    }, 5000);
+    setInterval(
+      () => {
+        motdLoop();
+      },
+      10 * 60 * 1000,
+    );
     motdLoop();
   }
 
