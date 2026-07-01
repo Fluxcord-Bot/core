@@ -258,7 +258,9 @@ export function setupReactionHandling(discordClient, fluxerClient) {
       reaction.emoji.name === "information_source" ||
       reaction.emoji.name === "ℹ️"
     ) {
-      await reaction.remove();
+      try {
+        await reaction.remove();
+      } catch {}
       await sendBridgeInfo(
         await reaction.message.fetch(),
         user,
@@ -285,7 +287,9 @@ export function setupReactionHandling(discordClient, fluxerClient) {
       reaction.emoji.name === "ℹ️"
     ) {
       const message = await reaction.fetchMessage();
-      message.removeReactionEmoji(":information_source:");
+      try {
+        message.removeReactionEmoji(":information_source:");
+      } catch {}
 
       await sendBridgeInfo(message, user, discordClient, fluxerClient);
       return;
