@@ -43,6 +43,10 @@ const Config = {
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],
 
   // The list of MOTDs for the bot. If not specified or it is empty, it'll be disabled.
+  // Examples:
+  //  { name: "MOTD 1!" }
+  //  { name: "MOTD 2!", emoji: "✉️" },
+  //  { name: "MOTD 3!", emoji: { discord: "✉️", fluxer: { name: "customEmoji", id: "123456789000000" } } }
   Motds: [],
 
   // The prefix of the bot

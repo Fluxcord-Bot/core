@@ -315,12 +315,9 @@ async function onBothReady() {
     Config.Motds.length > 0 &&
     Config.Motds.every((x) => !!x)
   ) {
-    setInterval(
-      () => {
-        motdLoop();
-      },
-      10 * 60 * 1000,
-    );
+    setInterval(() => {
+      motdLoop();
+    }, 5000);
     motdLoop();
   }
 
@@ -443,20 +440,43 @@ function motdLoop() {
 }
 
 /**
- * @param {string} status
+ * @param {{ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined }} status
  */
 function updateBotStatus(status) {
+  let emoji = undefined;
+
+  if (status.emoji)
+    if (status.emoji instanceof Object) {
+      emoji = {
+        discord: status.emoji.discord,
+        fluxer: {
+          emoji_id: status.emoji.fluxer.id,
+          emoji_name: status.emoji.fluxer.name,
+        },
+      };
+    } else {
+      emoji = {
+        discord: status.emoji,
+        fluxer: {
+          emoji_name: status.emoji,
+        },
+      };
+    }
+
   fluxerClient.sendToGateway(0, {
     op: 3,
     d: {
       custom_status: {
-        text: `${Config.BotPrefix}help | ${status}`,
+        text: `${Config.BotPrefix}help | ${status.text}`,
+        ...(emoji ? emoji.fluxer : {}),
       },
       status: "online",
     },
   });
 
-  discordClient.user?.setActivity(`${Config.BotPrefix}help | ${status}`);
+  discordClient.user?.setActivity(
+    `${emoji?.discord ? `${emoji.discord} ` : ""}${Config.BotPrefix}help | ${status.text}`,
+  );
 }
 
 setInterval(() => checkIfFluxerConnected(), 10000);
