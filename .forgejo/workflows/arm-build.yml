@@ -57,6 +57,8 @@ jobs:
           context: .
           push: true
           platforms: linux/arm64
+          labels: |
+            org.opencontainers.image.source=https://git.gay/Fluxcord/core
           tags: |
             git.gay/fluxcord/core-arm64:latest
             git.gay/fluxcord/core-arm64:${{ steps.pkg.outputs.version }}
