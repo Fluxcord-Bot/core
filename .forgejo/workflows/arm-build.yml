@@ -1,12 +1,15 @@
-name: Build docker image
+name: Build ARM docker image
+
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
 jobs:
   build:
-    runs-on: rotfront-node
+    runs-on: debian
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,18 +51,18 @@ jobs:
           driver-opts: |
             image=code.forgejo.org/oci/buildkit:buildx-stable-1
 
-      - name: Build and push image
+      - name: Build and push ARM image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: linux/arm64
           labels: |
             org.opencontainers.image.source=https://git.gay/Fluxcord/core
           tags: |
-            git.gay/fluxcord/core-amd64:latest
-            git.gay/fluxcord/core-amd64:${{ steps.pkg.outputs.version }}
-            ghcr.io/fluxcord-bot/core-amd64:latest
-            ghcr.io/fluxcord-bot/core-amd64:${{ steps.pkg.outputs.version }}
-            jbcrn/fluxcord-core-amd64:latest
-            jbcrn/fluxcord-core-amd64:${{ steps.pkg.outputs.version }}
+            git.gay/fluxcord/core-arm64:latest
+            git.gay/fluxcord/core-arm64:${{ steps.pkg.outputs.version }}
+            ghcr.io/fluxcord-bot/core-arm64:latest
+            ghcr.io/fluxcord-bot/core-arm64:${{ steps.pkg.outputs.version }}
+            jbcrn/fluxcord-core-arm64:latest
+            jbcrn/fluxcord-core-arm64:${{ steps.pkg.outputs.version }}
