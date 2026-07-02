@@ -43,3 +43,8 @@ export async function getFluxerApiUrl() {
   const endpoints = await getFluxerUrls();
   return endpoints.api;
 }
+
+export async function getFluxerMediaBaseUrl() {
+  const endpoints = await getFluxerUrls();
+  return endpoints.media;
+}

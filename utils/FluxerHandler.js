@@ -14,16 +14,20 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
+import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
-function getFluxerAvatarURL(user) {
+async function getFluxerAvatarURL(user) {
   if (!user?.avatarURL) return undefined;
-  if (!Config.FluxerCDNBaseURL || !user.avatar) {
+  if (!user.avatar) {
     return user.avatarURL() ?? undefined;
   }
 
-  const cdnBase = Config.FluxerCDNBaseURL.replace(/\/$/, "");
+  const mediaBase =
+    (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
+    Config.FluxerCDNBaseURL;
+  const cdnBase = mediaBase.replace(/\/$/, "");
   const extension = user.avatar.startsWith("a_") ? "gif" : "webp";
 
   return `${cdnBase}/avatars/${user.id}/${user.avatar}.${extension}?size=160`;
@@ -119,9 +123,12 @@ export async function FluxerCreateMessageHandler(
 
   const stickers = message.stickers.map((x) => `${x.name}`);
 
-  let stickerMsg =
+  const mediaBase =
+    (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
+    Config.FluxerCDNBaseURL;
+  const stickerMsg =
     stickers.length > 0
-      ? `${message.stickers.map((x) => `[${x.name}](https://fluxerusercontent.com/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
+      ? `${message.stickers.map((x) => `[${x.name}](${mediaBase}/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
       : "";
 
   const overAttachments =
@@ -179,7 +186,7 @@ export async function FluxerCreateMessageHandler(
       forwardedMessage ?? message,
       discordClient,
     ),
-    avatarURL: getFluxerAvatarURL(message.author),
+    avatarURL: await getFluxerAvatarURL(message.author),
   });
 
   let bridgedMessageMap;

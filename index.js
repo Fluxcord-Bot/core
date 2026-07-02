@@ -328,10 +328,10 @@ async function onBothReady() {
     "To invite Fluxcord to your server, here's the invite links:",
     "",
     "Discord:",
-    genAuthLink(Config.DiscordClientId),
+    await genAuthLink(Config.DiscordClientId),
     "",
     "Fluxer:",
-    genAuthLink(fluxerClient.user?.id, true),
+    await genAuthLink(fluxerClient.user?.id, true),
   ]);
 
   startVoiceRecovery?.();
