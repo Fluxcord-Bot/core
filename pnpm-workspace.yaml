@@ -1,6 +1,7 @@
 allowBuilds:
   "@journeyapps/sqlcipher": true
   cpu-features: true
+  esbuild: true
   protobufjs: true
   sqlite3: true
   ssh2: true
