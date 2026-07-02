@@ -1,15 +1,12 @@
-name: Build ARM docker image
-
+name: Build voice docker image
 on:
   push:
     branches:
-      - main
+      - voice
   workflow_dispatch:
-
 jobs:
   build:
-    runs-on: debian
-
+    runs-on: rotfront-node
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,16 +48,16 @@ jobs:
           driver-opts: |
             image=code.forgejo.org/oci/buildkit:buildx-stable-1
 
-      - name: Build and push ARM image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/arm64
+          platforms: linux/amd64
           tags: |
-            git.gay/fluxcord/core-arm64:latest
-            git.gay/fluxcord/core-arm64:${{ steps.pkg.outputs.version }}
-            ghcr.io/fluxcord-bot/core-arm64:latest
-            ghcr.io/fluxcord-bot/core-arm64:${{ steps.pkg.outputs.version }}
-            jbcrn/fluxcord-core-arm64:latest
-            jbcrn/fluxcord-core-arm64:${{ steps.pkg.outputs.version }}
+            git.gay/fluxcord/core-voice-amd64:latest
+            git.gay/fluxcord/core-voice-amd64:${{ steps.pkg.outputs.version }}
+            ghcr.io/fluxcord-bot/core-voice-amd64:latest
+            ghcr.io/fluxcord-bot/core-voice-amd64:${{ steps.pkg.outputs.version }}
+            jbcrn/fluxcord-core-voice-amd64:latest
+            jbcrn/fluxcord-core-voice-amd64:${{ steps.pkg.outputs.version }}

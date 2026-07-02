@@ -53,10 +53,11 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: |
-            git.gay/fluxcord/core:latest
-            git.gay/fluxcord/core:${{ steps.pkg.outputs.version }}
-            ghcr.io/fluxcord-bot/core:latest
-            ghcr.io/fluxcord-bot/core:${{ steps.pkg.outputs.version }}
-            jbcrn/fluxcord-core:latest
-            jbcrn/fluxcord-core:${{ steps.pkg.outputs.version }}
+            git.gay/fluxcord/core-amd64:latest
+            git.gay/fluxcord/core-amd64:${{ steps.pkg.outputs.version }}
+            ghcr.io/fluxcord-bot/core-amd64:latest
+            ghcr.io/fluxcord-bot/core-amd64:${{ steps.pkg.outputs.version }}
+            jbcrn/fluxcord-core-amd64:latest
+            jbcrn/fluxcord-core-amd64:${{ steps.pkg.outputs.version }}

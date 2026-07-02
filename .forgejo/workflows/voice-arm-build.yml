@@ -1,9 +1,9 @@
-name: Build ARM docker image
+name: Build voice ARM docker image
 
 on:
   push:
     branches:
-      - main
+      - voice
   workflow_dispatch:
 
 jobs:
@@ -58,9 +58,9 @@ jobs:
           push: true
           platforms: linux/arm64
           tags: |
-            git.gay/fluxcord/core-arm64:latest
-            git.gay/fluxcord/core-arm64:${{ steps.pkg.outputs.version }}
-            ghcr.io/fluxcord-bot/core-arm64:latest
-            ghcr.io/fluxcord-bot/core-arm64:${{ steps.pkg.outputs.version }}
-            jbcrn/fluxcord-core-arm64:latest
-            jbcrn/fluxcord-core-arm64:${{ steps.pkg.outputs.version }}
+            git.gay/fluxcord/core-voice-arm64:latest
+            git.gay/fluxcord/core-voice-arm64:${{ steps.pkg.outputs.version }}
+            ghcr.io/fluxcord-bot/core-voice-arm64:latest
+            ghcr.io/fluxcord-bot/core-voice-arm64:${{ steps.pkg.outputs.version }}
+            jbcrn/fluxcord-core-voice-arm64:latest
+            jbcrn/fluxcord-core-voice-arm64:${{ steps.pkg.outputs.version }}
