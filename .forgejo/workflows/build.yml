@@ -98,7 +98,7 @@ jobs:
 
   merge:
     needs: build
-    runs-on: debian
+    runs-on: rotfront-node
     steps:
       - name: Install Docker CLI
         run: apt-get update && apt-get install -y docker.io
