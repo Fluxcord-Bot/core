@@ -14,7 +14,12 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
+<<<<<<< HEAD
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
+=======
+import { AttachmentBuilder } from "discord.js";
+import { MessageAttachmentFlags } from "@fluxerjs/core";
+>>>>>>> e4be3b7 (fix: bridge spoiler attachments correctly)
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -174,10 +179,23 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
+<<<<<<< HEAD
     files:
       (forwardedMessage ?? message).attachments
         ?.filter((x) => x.size < 9999000)
         .map((a) => a.proxy_url ?? a.url ?? "") ?? [],
+=======
+    files: (forwardedMessage ?? message).attachments
+      .filter((x) => x.size < 9999000)
+      .map((a) =>
+        new AttachmentBuilder(a.proxy_url ?? a.url ?? "", {
+          name: a.filename,
+          description: a.description,
+        }).setSpoiler(
+          ((a.flags ?? 0) & MessageAttachmentFlags.IS_SPOILER) !== 0,
+        ),
+      ),
+>>>>>>> e4be3b7 (fix: bridge spoiler attachments correctly)
     username:
       guildUser?.displayName ??
       message.author.globalName ??
