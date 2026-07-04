@@ -34,7 +34,7 @@ jobs:
           version: 10
 
       - name: Check for any issues
-        run: pnpm i && pnpx tsc --noEmit
+        run: pnpm i && pnpm --package=typescript dlx tsc --noEmit
 
       - name: Install Docker CLI
         run: apt-get update && apt-get install -y docker.io jq
