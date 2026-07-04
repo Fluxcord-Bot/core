@@ -439,6 +439,7 @@ function motdLoop() {
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
 
+  //@ts-expect-error
   if (motd) updateBotStatus(motd);
 }
 

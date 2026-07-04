@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -26,6 +27,14 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: github.com/pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Check for any issues
+        run: pnpm i && pnpx tsc --noEmit
 
       - name: Install Docker CLI
         run: apt-get update && apt-get install -y docker.io jq
