@@ -24,7 +24,10 @@ ${Config.BotPrefix}voiceunbridge <channelId>
 
     const voiceMap = await VoiceChannelMap.findOne({
       where: {
-        [Op.or]: [{ discordChannelId: channelId }, { fluxerChannelId: channelId }],
+        [Op.or]: [
+          { discordChannelId: channelId },
+          { fluxerChannelId: channelId },
+        ],
       },
     });
     if (!voiceMap) {
@@ -32,6 +35,7 @@ ${Config.BotPrefix}voiceunbridge <channelId>
       return;
     }
 
+    // @ts-expect-error
     const { discordChannelId, fluxerChannelId } = voiceMap;
     await voiceMap.destroy();
     await message.reply(

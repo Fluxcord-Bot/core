@@ -313,6 +313,7 @@ async function onBothReady() {
   if (
     Config.Motds &&
     Config.Motds.length > 0 &&
+    // @ts-ignore
     Config.Motds.every((x) => !!x)
   ) {
     setInterval(
@@ -439,7 +440,7 @@ function motdLoop() {
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
 
-  //@ts-expect-error
+  //@ts-ignore
   if (motd) updateBotStatus(motd);
 }
 
