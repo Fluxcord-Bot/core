@@ -68,7 +68,7 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
  * @returns {Promise<DiscordEmbedBuilder[] | undefined>}
  */
 export async function fluxerEmbedToDiscord(message, discordClient) {
-  const embeds = message.embeds ?? [];
+  const embeds = message.embeds;
 
   if (!embeds) return undefined;
 

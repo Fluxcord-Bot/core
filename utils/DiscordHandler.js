@@ -37,24 +37,6 @@ function isFluxerUnknownMessageError(error) {
   );
 }
 
-async function resolveFluxerUploadFiles(files) {
-  return await Promise.all(
-    files.map(async (file) => {
-      const response = await fetch(file.url);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch attachment ${file.name}: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      return {
-        name: file.name,
-        data: await response.arrayBuffer(),
-      };
-    }),
-  );
-}
-
 async function deleteFluxerMessage(client, channelMap, messageId) {
   await client.rest.delete(
     FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId),
@@ -235,49 +217,15 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-<<<<<<< HEAD
     const webhookFiles = (forwardedMessage ?? message).attachments
       .filter((x) => x.size < 24999900)
       .map((a) => ({ name: a.name, url: a.proxyURL ?? a.url }));
-=======
-    const sourceAttachments = [
-      ...(forwardedMessage ?? message).attachments
-        .filter((x) => x.size < 24999900)
-        .values(),
-    ];
-    const hasSpoilerAttachments = sourceAttachments.some(
-      (a) => (((a.flags?.bitfield ?? 0) & 8) !== 0 || a.spoiler) && a.name,
-    );
-    const webhookFiles = sourceAttachments
-      .map((a) => ({
-        name:
-          !hasSpoilerAttachments &&
-          ((((a.flags?.bitfield ?? 0) & 8) !== 0 || a.spoiler) &&
-          a.name &&
-          !a.name.startsWith("SPOILER_"))
-            ? `SPOILER_${a.name}`
-            : a.name,
-        url: a.proxyURL ?? a.url,
-      }));
-    const spoilerAttachments = sourceAttachments.map((a, i) => ({
-      id: i,
-      filename: a.name,
-      flags: fluxerMessageFlags({
-        spoiler: (((a.flags?.bitfield ?? 0) & 8) !== 0 || a.spoiler) && a.name,
-      }),
-    }));
->>>>>>> e4be3b7 (fix: bridge spoiler attachments correctly)
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
       ),
     );
-    const resolvedWebhookFiles =
-      hasSpoilerAttachments || messageReferenceOption
-        ? await resolveFluxerUploadFiles(webhookFiles)
-        : undefined;
 
-<<<<<<< HEAD
     let msg = await sendFluxerWebhook(
       channelMap.fluxerWebhookId,
       channelMap.fluxerWebhookToken,
@@ -291,53 +239,6 @@ export async function DiscordCreateMessageHandler(
         message_reference: messageReferenceOption,
       },
     );
-=======
-    let msg;
-    if (hasSpoilerAttachments) {
-      const spoilerBody = {
-        username: webhookUsername,
-        avatar_url: message.author.avatarURL() ?? undefined,
-        embeds: webhookEmbeds,
-        attachments: spoilerAttachments,
-        message_reference: messageReferenceOption,
-      };
-      if (webhookContent) spoilerBody.content = webhookContent;
-      msg = await fluxerClient.rest.post(
-        `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}?wait=true`,
-        {
-          body: spoilerBody,
-          files: resolvedWebhookFiles,
-          auth: false,
-        },
-      );
-    } else if (messageReferenceOption) {
-      msg = await fluxerClient.rest.post(
-        `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}?wait=true`,
-        {
-          body: {
-            content: webhookContent,
-            username: webhookUsername,
-            avatar_url: message.author.avatarURL() ?? undefined,
-            embeds: webhookEmbeds,
-            message_reference: messageReferenceOption,
-          },
-          files: resolvedWebhookFiles,
-          auth: false,
-        },
-      );
-    } else {
-      msg = await webhook.send(
-        {
-          content: webhookContent,
-          username: webhookUsername,
-          avatar_url: message.author.avatarURL() ?? undefined,
-          files: webhookFiles,
-          embeds: webhookEmbeds,
-        },
-        true,
-      );
-    }
->>>>>>> e4be3b7 (fix: bridge spoiler attachments correctly)
 
     let bridgedMessageMap;
     try {
