@@ -1,6 +1,6 @@
 /**
  * @typedef {Object} FileOptions
- * @property {{name: string, url: string}[] | undefined} files
+ * @property {{name: string, url: string, flags?: number}[] | undefined} files
  */
 
 import { log } from "./Logger.js";
@@ -18,7 +18,7 @@ export async function sendFluxerWebhook(
   params,
 ) {
   const attachments = [];
-  const formData = new FormData();
+  const resolvedFiles = [];
   const { files, ...jsonPayload } = params;
 
   if (files) {
@@ -26,13 +26,18 @@ export async function sendFluxerWebhook(
       try {
         const file = files[i];
         const res = await fetch(file.url);
-        const blob = await res.blob();
+        const data = await res.arrayBuffer();
 
-        formData.append(`files[${i}]`, blob, file.name);
+        resolvedFiles.push({
+          name: file.name,
+          filename: file.name,
+          data,
+        });
 
         attachments.push({
           id: i,
           filename: file.name,
+          flags: file.flags,
         });
       } catch (e) {
         log("FLUXER", `Failed to fetch: ${e}`);
@@ -41,12 +46,12 @@ export async function sendFluxerWebhook(
   }
 
   jsonPayload.attachments = attachments;
-  formData.append("payload_json", JSON.stringify(jsonPayload));
 
   const result = await fluxerClient.rest.post(
     `/webhooks/${webhookId}/${webhookToken}?wait=true`,
     {
-      body: formData,
+      body: jsonPayload,
+      files: resolvedFiles,
       auth: false,
     },
   );

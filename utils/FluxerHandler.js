@@ -15,6 +15,10 @@ import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
+import {
+  isFluxerSpoilerAttachment,
+  toDiscordSpoilerFilename,
+} from "./SpoilerAttachments.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -177,7 +181,13 @@ export async function FluxerCreateMessageHandler(
     files:
       (forwardedMessage ?? message).attachments
         ?.filter((x) => x.size < 9999000)
-        .map((a) => a.proxy_url ?? a.url ?? "") ?? [],
+        .map((a) => ({
+          attachment: a.proxy_url ?? a.url ?? "",
+          name: toDiscordSpoilerFilename(
+            a.filename,
+            isFluxerSpoilerAttachment(a),
+          ),
+        })) ?? [],
     username:
       guildUser?.displayName ??
       message.author.globalName ??

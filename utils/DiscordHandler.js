@@ -17,6 +17,10 @@ import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
+import {
+  isDiscordSpoilerAttachment,
+  SPOILER_ATTACHMENT_FLAG,
+} from "./SpoilerAttachments.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -217,9 +221,16 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-    const webhookFiles = (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 24999900)
-      .map((a) => ({ name: a.name, url: a.proxyURL ?? a.url }));
+    const bridgeAttachments = (forwardedMessage ?? message).attachments
+      .filter((x) => x.size < 24999900);
+    const webhookFiles = bridgeAttachments
+      .map((a) => ({
+        name: a.name,
+        url: a.proxyURL ?? a.url,
+        flags: isDiscordSpoilerAttachment(a)
+          ? SPOILER_ATTACHMENT_FLAG
+          : undefined,
+      }));
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
