@@ -38,7 +38,7 @@ export async function sendErrorMessage(
                 .setTitle("Error occurred while bridging a message")
                 .addFields({
                   name: "Message",
-                  value: `${message.author.globalName} (${genMsgLink(message)}): ${message.content}`,
+                  value: `${message.author.globalName} (${await genMsgLink(message)}): ${message.content}`,
                 })
                 .addFields({
                   name: "Stack trace",
@@ -58,7 +58,7 @@ export async function sendErrorMessage(
                   .setTitle("Error occurred while bridging a message")
                   .addFields({
                     name: "Message",
-                    value: `${message.author.globalName} (${genMsgLink(message)}): ${message.content}`,
+                    value: `${message.author.globalName} (${await genMsgLink(message)}): ${message.content}`,
                   })
                   .addFields({
                     name: "Stack trace",

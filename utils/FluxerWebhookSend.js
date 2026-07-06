@@ -38,6 +38,7 @@ export async function sendFluxerWebhook(
           id: i,
           filename: file.name,
           flags: file.flags,
+          description: file.description,
         });
       } catch (e) {
         log("FLUXER", `Failed to fetch: ${e}`);

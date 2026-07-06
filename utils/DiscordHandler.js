@@ -221,16 +221,17 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-    const bridgeAttachments = (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 24999900);
-    const webhookFiles = bridgeAttachments
-      .map((a) => ({
-        name: a.name,
-        url: a.proxyURL ?? a.url,
-        flags: isDiscordSpoilerAttachment(a)
-          ? SPOILER_ATTACHMENT_FLAG
-          : undefined,
-      }));
+    const bridgeAttachments = (forwardedMessage ?? message).attachments.filter(
+      (x) => x.size < 24999900,
+    );
+    const webhookFiles = bridgeAttachments.map((a) => ({
+      name: a.name,
+      url: a.proxyURL ?? a.url,
+      flags: isDiscordSpoilerAttachment(a)
+        ? SPOILER_ATTACHMENT_FLAG
+        : undefined,
+      description: a.description,
+    }));
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
