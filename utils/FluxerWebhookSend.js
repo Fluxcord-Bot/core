@@ -5,6 +5,18 @@
 
 import { log } from "./Logger.js";
 
+function toAttachmentPayload(file, id) {
+  const attachment = {
+    id,
+    filename: file.name,
+  };
+
+  if (file.flags !== undefined) attachment.flags = file.flags;
+  i (file.description != null) attachment.description = file.description;
+
+  return attachment;
+}
+
 /**
  * @param {string} webhookId
  * @param {string} webhookToken
@@ -34,12 +46,7 @@ export async function sendFluxerWebhook(
           data,
         });
 
-        attachments.push({
-          id: i,
-          filename: file.name,
-          flags: file.flags,
-          description: file.description,
-        });
+        attachments.push(toAttachmentPayload(file, i));
       } catch (e) {
         log("FLUXER", `Failed to fetch: ${e}`);
       }
