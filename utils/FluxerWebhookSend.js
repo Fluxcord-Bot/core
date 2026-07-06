@@ -12,7 +12,7 @@ function toAttachmentPayload(file, id) {
   };
 
   if (file.flags !== undefined) attachment.flags = file.flags;
-  i (file.description != null) attachment.description = file.description;
+  if (file.description != null) attachment.description = file.description;
 
   return attachment;
 }
