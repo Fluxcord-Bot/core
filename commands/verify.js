@@ -6,6 +6,7 @@ import {
 import { ChannelMap, GuildMap } from "../db/index.js";
 import { log } from "../utils/Logger.js";
 import { BridgeMap } from "../utils/CommandHandler.js";
+import changeBotBio from "../utils/ChangeBotBio.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
