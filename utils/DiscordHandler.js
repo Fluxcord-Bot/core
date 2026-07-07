@@ -15,6 +15,7 @@ import {
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
+import { processSticker } from "./StickerProcessor.js";
 import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -110,20 +111,6 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
-  const stickers = message.stickers.map((x) => `${x.name}`);
-
-  let stickerMsg = "";
-
-  if (message.stickers.find((x) => x.url.endsWith("json")))
-    stickerMsg =
-      stickers.length > 0
-        ? `-# Message contains stickers: ${stickers.join(", ")}`
-        : "";
-  else
-    stickerMsg =
-      stickers.length > 0
-        ? `${message.stickers.map((x) => `[${x.name}](${x.url})`).join(", ")}`
-        : "";
 
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -194,6 +181,29 @@ export async function DiscordCreateMessageHandler(
     if (messageReference && !forwardedMessage) {
       messageReferenceOption = { message_id: messageReference.fluxerMessageId };
     }
+    const stickerFiles = [];
+    const stickerFallbacks = []; // Give sticker cdn url if fail
+    const stickerLottie = []; // This is something discord can do apparently :(
+    for (const sticker of message.stickers.values()) {
+      if (sticker.url?.endsWith("json")) {
+        stickerLottie.push(sticker.name);
+        continue;
+      }
+      const stickerUrl = sticker.url;
+      const processed = await processSticker(stickerUrl, { animated: stickerUrl.endsWith(".gif"), name: sticker.name });
+      if (processed) {
+        stickerFiles.push({ name: processed.filename, data: processed.buffer });
+      } else {
+        stickerFallbacks.push(`[${sticker.name}](${stickerUrl})`);
+      }
+    }
+    let stickerMsg = "";
+    if (stickerLottie.length > 0) {
+      stickerMsg = `-# Message contains stickers: ${stickerLottie.join(", ")}`;
+    }
+    if (stickerFallbacks.length > 0) {
+      stickerMsg += (stickerMsg ? "\n" : "") + stickerFallbacks.join(", ");
+    }
 
     const webhookContent =
       (forwardedMessage
@@ -216,9 +226,12 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-    const webhookFiles = (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 24999900)
-      .map((a) => ({ name: a.name, url: a.url }));
+    const webhookFiles = [
+      ...(forwardedMessage ?? message).attachments
+        .filter((x) => x.size < 24999900)
+        .map((a) => ({ name: a.name, url: a.url })),
+      ...stickerFiles,
+    ];
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),

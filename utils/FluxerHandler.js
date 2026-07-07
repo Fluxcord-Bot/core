@@ -12,6 +12,7 @@ import {
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
+import { processSticker } from "./StickerProcessor.js";
 import { log } from "./Logger.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -116,12 +117,18 @@ export async function FluxerCreateMessageHandler(
 
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
 
-  const stickers = message.stickers.map((x) => `${x.name}`);
-
-  let stickerMsg =
-    stickers.length > 0
-      ? `${message.stickers.map((x) => `[${x.name}](https://fluxerusercontent.com/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
-      : "";
+  const stickerFiles = [];
+  const stickerFallbacks = []; // If somehow sticker fails to stick, show the raw link instead
+  for (const sticker of message.stickers) {
+    const url = `https://fluxerusercontent.com/stickers/${sticker.id}.webp?size=320&animated=${sticker.animated}`;
+    const processed = await processSticker(url, { animated: sticker.animated, name: sticker.name });
+    if (processed) {
+      stickerFiles.push({ name: processed.filename, attachment: processed.buffer });
+    } else {
+      stickerFallbacks.push(`[${sticker.name}](${url})`);
+    }
+  }
+  const stickerMsg = stickerFallbacks.join(", ");
 
   const overAttachments = (forwardedMessage ?? message).attachments.filter(
     (x) => x.size > 9999000,
@@ -165,9 +172,12 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
-    files: (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 9999000)
-      .map((a) => a.proxy_url ?? a.url ?? ""),
+    files: [
+      ...(forwardedMessage ?? message).attachments
+        .filter((x) => x.size < 9999000)
+        .map((a) => a.proxy_url ?? a.url ?? ""),
+      ...stickerFiles,
+    ],
     username:
       guildUser?.displayName ??
       message.author.globalName ??
