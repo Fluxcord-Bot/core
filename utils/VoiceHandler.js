@@ -2,6 +2,7 @@
 import { Events as DiscordEvents, GatewayDispatchEvents } from "discord.js";
 import { Events as FluxerEvents } from "@fluxerjs/core";
 import { log } from "./Logger.js";
+import { MAX_REJOIN_ATTEMPTS, shouldScheduleRejoinAttempt } from "./voiceRejoinLimit.js";
 import {
   spawnBridge,
   killBridge,
@@ -277,6 +278,14 @@ function scheduleSessionRejoin(channelId, guildId, options) {
     return;
   }
   const attempt = (existing?.attempt ?? 0) + 1;
+  if (!shouldScheduleRejoinAttempt(attempt)) {
+    clearRestartBackoff(channelId);
+    log(
+      "VOICE",
+      `Not rejoining channel ${channelId}; reached max attempts (${MAX_REJOIN_ATTEMPTS}) after ${options.reason}`,
+    );
+    return;
+  }
   const delay =
     RESTART_DELAYS_MS[Math.min(attempt - 1, RESTART_DELAYS_MS.length - 1)];
   log(
