@@ -13,9 +13,11 @@ const DefaultConfig = {
   BotPrefix: "fc!",
   FluxerBioStart: "",
   DiscordBioStart: "",
+  DatabaseEncryptionToken: "",
+  /** @type {{ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined }[]} */
+  Motds: [],
 
-  // VoiceChannelMaps: [{ discordGuildId, discordChannelId, fluxerGuildId, fluxerChannelId }]
-  VoiceChannelMaps: [],
+  VoiceBridgingEnabled: false,
 
   RunnerWsPort: 8765,
   RunnerSecret: "",

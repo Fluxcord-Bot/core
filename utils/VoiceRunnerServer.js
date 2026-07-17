@@ -5,6 +5,8 @@ import Config from "./ConfigHandler.js";
 
 const PORT = Config.RunnerWsPort;
 const SECRET = Config.RunnerSecret;
+/** @type {Set<() => void>} */
+const runnerAvailableListeners = new Set();
 
 /**
  * @type {Map<WebSocket, { region: string }>}
@@ -47,6 +49,9 @@ wss.on("connection", (ws, req) => {
       const meta = runners.get(ws);
       if (meta) meta.region = msg.region ?? "";
       log("VOICE", `Runner connected (region: ${msg.region || "any"})`);
+      for (const listener of runnerAvailableListeners) {
+        listener();
+      }
       return;
     }
 
@@ -61,6 +66,15 @@ wss.on("connection", (ws, req) => {
     const meta = runners.get(ws);
     log("VOICE", `Runner disconnected (region: ${meta?.region || "any"})`);
     runners.delete(ws);
+
+    for (const [channelId, assignedRunner] of channelRunner) {
+      if (assignedRunner !== ws) continue;
+      channelRunner.delete(channelId);
+      const h = handlers.get(channelId);
+      if (!h) continue;
+      handlers.delete(channelId);
+      h.onExit(null);
+    }
   });
 });
 
@@ -70,6 +84,17 @@ export function hasRunner() {
     if (ws.readyState === WebSocket.OPEN) return true;
   }
   return false;
+}
+
+/**
+ * @param {() => void} listener
+ * @returns {() => void}
+ */
+export function onRunnerAvailable(listener) {
+  runnerAvailableListeners.add(listener);
+  return () => {
+    runnerAvailableListeners.delete(listener);
+  };
 }
 
 /** @param {string} livekitUrl @returns {WebSocket | null} */

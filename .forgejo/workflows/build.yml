@@ -1,18 +1,40 @@
-name: Build docker image
+name: Build and publish multi-arch image
+
 on:
   push:
     branches:
       - main
+      - "**"
   workflow_dispatch:
+
 jobs:
   build:
-    runs-on: rotfront-node
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs-on: rotfront-node
+          - arch: arm64
+            runs-on: debian
+    runs-on: ${{ matrix.runs-on }}
+    outputs:
+      version: ${{ steps.pkg.outputs.version }}
+      channel: ${{ steps.tag.outputs.channel }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: https://github.com/pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Check for any issues
+        run: pnpm i && pnpm --package=typescript dlx tsc --noEmit
 
       - name: Install Docker CLI
         run: apt-get update && apt-get install -y docker.io jq
@@ -21,12 +43,29 @@ jobs:
         id: pkg
         run: echo "version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
 
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "channel=latest" >> $GITHUB_OUTPUT
+          else
+            safe_branch=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            echo "channel=$safe_branch" >> $GITHUB_OUTPUT
+          fi
+
       - name: Log in to git.gay Registry
         uses: docker/login-action@v3
         with:
           registry: git.gay
           username: jbcarreon123
           password: ${{ secrets.FJ_TOKEN }}
+
+      - name: Log in to TNC Registry
+        uses: docker/login-action@v3
+        with:
+          registry: git.tokyonight.city
+          username: jb
+          password: ${{ secrets.TNC_FJ_TOKEN }}
 
       - name: Log in to GitHub Registry
         uses: docker/login-action@v3
@@ -48,18 +87,78 @@ jobs:
           driver-opts: |
             image=code.forgejo.org/oci/buildkit:buildx-stable-1
 
-      - name: Build and push image
+      - name: Build and push per-arch image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           labels: |
             org.opencontainers.image.source=https://git.gay/Fluxcord/core
           tags: |
-            git.gay/fluxcord/core-amd64:latest
-            git.gay/fluxcord/core-amd64:${{ steps.pkg.outputs.version }}
-            ghcr.io/fluxcord-bot/core-amd64:latest
-            ghcr.io/fluxcord-bot/core-amd64:${{ steps.pkg.outputs.version }}
-            jbcrn/fluxcord-core-amd64:latest
-            jbcrn/fluxcord-core-amd64:${{ steps.pkg.outputs.version }}
+            git.gay/fluxcord/core:${{ steps.tag.outputs.channel }}-${{ matrix.arch }}
+            git.gay/fluxcord/core:${{ steps.pkg.outputs.version }}-${{ matrix.arch }}
+            git.tokyonight.city/fluxcord/core:${{ steps.tag.outputs.channel }}-${{ matrix.arch }}
+            git.tokyonight.city/fluxcord/core:${{ steps.pkg.outputs.version }}-${{ matrix.arch }}
+            ghcr.io/fluxcord-bot/core:${{ steps.tag.outputs.channel }}-${{ matrix.arch }}
+            ghcr.io/fluxcord-bot/core:${{ steps.pkg.outputs.version }}-${{ matrix.arch }}
+            jbcrn/fluxcord-core:${{ steps.tag.outputs.channel }}-${{ matrix.arch }}
+            jbcrn/fluxcord-core:${{ steps.pkg.outputs.version }}-${{ matrix.arch }}
+
+  merge:
+    needs: build
+    runs-on: rotfront-node
+    steps:
+      - name: Install Docker CLI
+        run: apt-get update && apt-get install -y docker.io
+
+      - name: Log in to git.gay Registry
+        uses: docker/login-action@v3
+        with:
+          registry: git.gay
+          username: jbcarreon123
+          password: ${{ secrets.FJ_TOKEN }}
+
+      - name: Log in to TNC Registry
+        uses: docker/login-action@v3
+        with:
+          registry: git.tokyonight.city
+          username: jb
+          password: ${{ secrets.TNC_FJ_TOKEN }}
+
+      - name: Log in to GitHub Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: jbcarreon123
+          password: ${{ secrets.GH_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: jbcrn
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create and push multi-arch manifests
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
+        run: |
+          for pair in \
+            "git.gay/fluxcord/core" \
+            "git.tokyonight.city/fluxcord/core" \
+            "ghcr.io/fluxcord-bot/core" \
+            "jbcrn/fluxcord-core"; do
+            docker buildx imagetools create \
+              -t "$pair:$CHANNEL" \
+              "$pair:$CHANNEL-amd64" \
+              "$pair:$CHANNEL-arm64"
+            docker buildx imagetools create \
+              -t "$pair:$VERSION" \
+              "$pair:$VERSION-amd64" \
+              "$pair:$VERSION-arm64"
+          done

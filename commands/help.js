@@ -86,8 +86,6 @@ const command = {
         message.client,
       );
 
-      console.log("guild admin?", isUserGuildAdmin)
-
       let cmds = (await getCommands()).filter((x) => !x.hideFromHelp);
 
       if (!isUserBotAdmin) {

@@ -10,6 +10,7 @@ import { genAuthLink } from "../utils/GenAuthLink.js";
 import { ChannelMap, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { GuildChannel as DiscordGuildChannel } from "discord.js";
+import changeBotBio from "../utils/ChangeBotBio.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -68,7 +69,7 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
               `# \`${Config.BotPrefix}setup ${code}\`
 Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.
 
-${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLink(message.client.user.id, !isFluxer)})!`,
+${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`,
             )
             .setFooter(
               Config.EmbedFooterContent
@@ -237,6 +238,9 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${genAuthLi
           (!isFluxer ? "Fluxer" : "Discord") +
           "!",
       });
+
+      await changeBotBio(channel.guild);
+      await changeBotBio(message.guild);
     }
   },
 };

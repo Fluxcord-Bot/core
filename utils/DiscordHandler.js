@@ -16,6 +16,11 @@ import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
+import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
+import {
+  isDiscordSpoilerAttachment,
+  SPOILER_ATTACHMENT_FLAG,
+} from "./SpoilerAttachments.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -166,7 +171,7 @@ export async function DiscordCreateMessageHandler(
       ? `*@${message.author.tag} joined the bridged server*`
       : "";
   const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
-  const webhooks = await /** @type {FluxerGuildChannel} */ (
+  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (
     channel
   ).fetchWebhooks();
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
@@ -216,43 +221,36 @@ export async function DiscordCreateMessageHandler(
       message.author.displayName ??
       message.author.globalName ??
       "Fluxcord";
-    const webhookFiles = (forwardedMessage ?? message).attachments
-      .filter((x) => x.size < 24999900)
-      .map((a) => ({ name: a.name, url: a.url }));
+    const bridgeAttachments = (forwardedMessage ?? message).attachments.filter(
+      (x) => x.size < 24999900,
+    );
+    const webhookFiles = bridgeAttachments.map((a) => ({
+      name: a.name,
+      url: a.proxyURL ?? a.url,
+      flags: isDiscordSpoilerAttachment(a)
+        ? SPOILER_ATTACHMENT_FLAG
+        : undefined,
+      description: a.description,
+    }));
     const webhookEmbeds = await Promise.all(
       (forwardedMessage ?? message).embeds.map(
         async (x) => await discordEmbedToFluxer(x, fluxerClient),
       ),
     );
 
-    let msg;
-    if (messageReferenceOption) {
-      msg = await fluxerClient.rest.post(
-        `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}?wait=true`,
-        {
-          body: {
-            content: webhookContent,
-            username: webhookUsername,
-            avatar_url: message.author.avatarURL() ?? undefined,
-            embeds: webhookEmbeds,
-            files: webhookFiles,
-            message_reference: messageReferenceOption,
-          },
-          auth: false,
-        },
-      );
-    } else {
-      msg = await webhook.send(
-        {
-          content: webhookContent,
-          username: webhookUsername,
-          avatar_url: message.author.avatarURL() ?? undefined,
-          files: webhookFiles,
-          embeds: webhookEmbeds,
-        },
-        true,
-      );
-    }
+    let msg = await sendFluxerWebhook(
+      channelMap.fluxerWebhookId,
+      channelMap.fluxerWebhookToken,
+      fluxerClient,
+      {
+        content: webhookContent,
+        username: webhookUsername,
+        avatar_url: message.author.avatarURL() ?? undefined,
+        embeds: webhookEmbeds,
+        files: webhookFiles,
+        message_reference: messageReferenceOption,
+      },
+    );
 
     let bridgedMessageMap;
     try {
@@ -262,7 +260,6 @@ export async function DiscordCreateMessageHandler(
         fluxerMessageId: msg?.id,
         fluxerReplyId: messageReference?.fluxerMessageId ?? null,
         discordReplyId: message.reference?.messageId ?? null,
-        content: parsedContent,
         channelMapId: channelMap.id,
         authorId: message.author.id,
       });
@@ -279,7 +276,11 @@ export async function DiscordCreateMessageHandler(
       } catch (e) {
         if (isDiscordUnknownMessageError(e)) {
           try {
-            await deleteFluxerMessageIfExists(fluxerClient, channelMap, msg?.id);
+            await deleteFluxerMessageIfExists(
+              fluxerClient,
+              channelMap,
+              msg?.id,
+            );
           } catch (deleteError) {
             log(
               "FLUXER",
@@ -363,15 +364,6 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         auth: false,
       },
     );
-
-    messageExisting.content = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(
-        sanitizePings(await parseMentions(newMsg)),
-        client,
-        channelMap.fluxerGuildId,
-      ),
-    );
-    await messageExisting.save();
   }
 }
 

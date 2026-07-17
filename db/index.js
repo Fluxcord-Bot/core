@@ -3,17 +3,33 @@ import Config from "../utils/ConfigHandler.js";
 import { log } from "../utils/Logger.js";
 import { DataTypes, Model } from "sequelize";
 import DefaultConfig from "../utils/ConfigHandler.js";
+import sqlite3 from "@journeyapps/sqlcipher";
 
 const sequelize = new Sequelize({
   dialect: "sqlite",
+  dialectModule: sqlite3,
   storage: Config.DataFolderPath + "/fluxcord.db",
   logging: (msg) => log("DB", msg),
+  password: !!DefaultConfig.DatabaseEncryptionToken
+    ? DefaultConfig.DatabaseEncryptionToken
+    : undefined,
 });
 
-class ChannelMap extends Model { }
-class MessageMap extends Model { }
-class UserConfig extends Model { }
-class GuildMap extends Model { }
+if (DefaultConfig.DatabaseEncryptionToken) {
+  await sequelize.query("PRAGMA cipher_compatibility = 4;");
+  await sequelize.query(
+    `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
+  );
+}
+
+await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
+await sequelize.query("VACUUM;");
+
+class ChannelMap extends Model {}
+class MessageMap extends Model {}
+class UserConfig extends Model {}
+class GuildMap extends Model {}
+class VoiceChannelMap extends Model {}
 
 GuildMap.init(
   {
@@ -77,7 +93,6 @@ MessageMap.init(
     discordReplyId: { type: DataTypes.STRING, allowNull: true },
     fluxerReplyId: { type: DataTypes.STRING, allowNull: true },
     authorId: { type: DataTypes.STRING, allowNull: false },
-    content: { type: DataTypes.STRING, allowNull: false },
     channelMapId: {
       type: DataTypes.INTEGER,
       field: "ChannelMapId",
@@ -125,4 +140,21 @@ GuildMap.hasMany(ChannelMap, {
   as: "fluxerChannelMaps",
 });
 
-export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap };
+VoiceChannelMap.init(
+  {
+    discordGuildId: { type: DataTypes.STRING, allowNull: false },
+    discordChannelId: { type: DataTypes.STRING, allowNull: false },
+    fluxerGuildId: { type: DataTypes.STRING, allowNull: false },
+    fluxerChannelId: { type: DataTypes.STRING, allowNull: false },
+  },
+  { sequelize, modelName: "VoiceChannelMap" },
+);
+
+export {
+  sequelize,
+  ChannelMap,
+  MessageMap,
+  UserConfig,
+  GuildMap,
+  VoiceChannelMap,
+};

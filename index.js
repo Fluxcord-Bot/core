@@ -26,7 +26,6 @@ import fs from "node:fs";
 import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
-import changeBotBios from "./utils/ChangeBotBio.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 
 const discordClient = new DiscordClient({
@@ -36,6 +35,7 @@ const discordClient = new DiscordClient({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMessageTyping,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -75,18 +75,30 @@ discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
   });
 });
 
+discordClient.on(DiscordEvents.TypingStart, async (type) => {
+  if (type.user.id === discordClient.user?.id) return;
+
+  const channelMap = await ChannelMap.findOne({
+    where: {
+      discordChannelId: type.channel.id,
+    },
+  });
+
+  if (channelMap) {
+    const channel = await fluxerClient.channels.fetch(
+      //@ts-expect-error
+      channelMap.fluxerChannelId,
+    );
+    channel.sendTyping();
+  }
+});
+
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
   if (msg.author.id === discordClient.user?.id) return;
   try {
     await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
-    if (`${e}`.includes("Explicit content")) {
-      try {
-        await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
-      } catch (e) {
-        await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
-      }
-    } else await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
+    await sendErrorMessage(msg, discordClient, fluxerClient, e, true);
   }
 });
 
@@ -158,7 +170,7 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
 });
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
   try {
-    await FluxerDeleteMessageHandler(msg, discordClient);
+    await FluxerDeleteMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", e);
   }
@@ -180,8 +192,46 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
   }
 });
 
+fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
+  if (type.user_id === fluxerClient.user?.id) return;
+
+  const channelMap = await ChannelMap.findOne({
+    where: {
+      fluxerChannelId: type.channel_id,
+    },
+  });
+
+  if (channelMap) {
+    try {
+      const channel = await discordClient.channels.fetch(
+        //@ts-expect-error
+        channelMap.discordChannelId,
+      );
+      if (channel && channel.isSendable()) channel.sendTyping();
+    } catch {}
+  }
+});
+
 let discordReady = false;
 let fluxerReady = false;
+/** @type {null | (() => void)} */
+let startVoiceRecovery = null;
+
+/** @param {unknown} error */
+function isRecoverableRuntimeError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message) return false;
+
+  return [
+    "WebSocket error",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "EPIPE",
+    "UND_ERR_CONNECT_TIMEOUT",
+    "Connect Timeout Error",
+  ].some((needle) => message.includes(needle));
+}
 
 async function onBothReady() {
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
@@ -260,17 +310,32 @@ async function onBothReady() {
     }
   }
 
-  await changeBotBios(fluxerClient, discordClient);
+  if (
+    Config.Motds &&
+    Config.Motds.length > 0 &&
+    // @ts-ignore
+    Config.Motds.every((x) => !!x)
+  ) {
+    setInterval(
+      () => {
+        motdLoop();
+      },
+      10 * 60 * 1000,
+    );
+    motdLoop();
+  }
 
   renderBox([
     "To invite Fluxcord to your server, here's the invite links:",
     "",
     "Discord:",
-    genAuthLink(Config.DiscordClientId),
+    await genAuthLink(Config.DiscordClientId),
     "",
     "Fluxer:",
-    genAuthLink(fluxerClient.user?.id, true),
+    await genAuthLink(fluxerClient.user?.id, true),
   ]);
+
+  startVoiceRecovery?.();
 }
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
@@ -278,6 +343,17 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     "FLUXER",
     `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
   );
+
+  fluxerClient.sendToGateway(0, {
+    op: 3,
+    d: {
+      custom_status: {
+        text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
+      },
+      status: "online",
+    },
+  });
+
   fluxerReady = true;
   if (discordReady) onBothReady();
 });
@@ -286,7 +362,7 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
   log("DISCORD", `${discordClient.user?.tag} is ready!`);
 
   discordClient.user?.setActivity(
-    `${Config.BotPrefix}help | bridging ${maps.length}  channel${maps.length > 1 ? "s" : ""}`,
+    `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
   );
 
   discordReady = true;
@@ -295,6 +371,14 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
 
 process.on("uncaughtException", (error) => {
   log("META", "A uncaught exception occurred.", error);
+
+  if (isRecoverableRuntimeError(error)) {
+    log(
+      "META",
+      "Ignoring recoverable runtime error and keeping the process alive.",
+    );
+    return;
+  }
 
   try {
     discordClient.destroy();
@@ -308,27 +392,36 @@ process.on("uncaughtException", (error) => {
 });
 
 // @ts-ignore
-process.on("unhandledRejection", (reason, promise) => {
-  log("META", "A unhandled rejection occurred.", reason);
+process.on(
+  "unhandledRejection",
+  /** @param {unknown} reason */ (reason, promise) => {
+    log("META", "A unhandled rejection occurred.", reason);
 
-  try {
-    discordClient.destroy();
-  } catch {}
+    if (isRecoverableRuntimeError(reason)) {
+      log(
+        "META",
+        "Ignoring recoverable runtime rejection and keeping the process alive.",
+      );
+      return;
+    }
 
-  try {
-    fluxerClient.destroy();
-  } catch {}
+    try {
+      discordClient.destroy();
+    } catch {}
 
-  process.exit(1);
-});
+    try {
+      fluxerClient.destroy();
+    } catch {}
 
-if ((Config.VoiceChannelMaps ?? []).length > 0) {
-  const { setupVoiceHandling } = await import("./utils/VoiceHandler.js");
-  setupVoiceHandling(discordClient, fluxerClient);
-  log(
-    "VOICE",
-    `Voice bridging active for ${Config.VoiceChannelMaps.length} channel map(s)`,
-  );
+    process.exit(1);
+  },
+);
+
+if (Config.VoiceBridgingEnabled) {
+  const voiceHandler = await import("./utils/VoiceHandler.js");
+  const { setupVoiceHandling } = voiceHandler;
+  startVoiceRecovery = voiceHandler.startVoiceRecovery;
+  await setupVoiceHandling(discordClient, fluxerClient);
 }
 
 setupReactionHandling(discordClient, fluxerClient);
@@ -343,6 +436,52 @@ function checkIfFluxerConnected() {
   }
 }
 
-setInterval(() => checkIfFluxerConnected(), 10000);
+function motdLoop() {
+  const motds = Config.Motds;
+  const motd = motds[Math.floor(Math.random() * motds.length)];
 
-// TODO: Make VC mappings automatic instead of assigning them, like in the example config
+  //@ts-ignore
+  if (motd) updateBotStatus(motd);
+}
+
+/**
+ * @param {{ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined }} status
+ */
+function updateBotStatus(status) {
+  let emoji = undefined;
+
+  if (status.emoji)
+    if (status.emoji instanceof Object) {
+      emoji = {
+        discord: status.emoji.discord,
+        fluxer: {
+          emoji_id: status.emoji.fluxer.id,
+          emoji_name: status.emoji.fluxer.name,
+        },
+      };
+    } else {
+      emoji = {
+        discord: status.emoji,
+        fluxer: {
+          emoji_name: status.emoji,
+        },
+      };
+    }
+
+  fluxerClient.sendToGateway(0, {
+    op: 3,
+    d: {
+      custom_status: {
+        text: `${Config.BotPrefix}help | ${status.text}`,
+        ...(emoji ? emoji.fluxer : {}),
+      },
+      status: "online",
+    },
+  });
+
+  discordClient.user?.setActivity(
+    `${emoji?.discord ? `${emoji.discord} ` : ""}${Config.BotPrefix}help | ${status.text}`,
+  );
+}
+
+setInterval(() => checkIfFluxerConnected(), 10000);

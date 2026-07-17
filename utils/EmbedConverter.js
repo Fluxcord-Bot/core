@@ -65,10 +65,12 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
 /**
  * @param {Message} message
  * @param {DiscordClient} discordClient
- * @returns {Promise<DiscordEmbedBuilder[]>}
+ * @returns {Promise<DiscordEmbedBuilder[] | undefined>}
  */
 export async function fluxerEmbedToDiscord(message, discordClient) {
   const embeds = message.embeds;
+
+  if (!embeds) return undefined;
 
   const embedsOut = await Promise.all(
     embeds.map(async (embed) => {
@@ -79,7 +81,7 @@ export async function fluxerEmbedToDiscord(message, discordClient) {
         .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
         .setDescription(
           await parseFluxerEmojiToDiscord(
-            embed.description ?? "",
+            embed.description ?? null,
             discordClient,
           ),
         );

@@ -10,8 +10,8 @@ const command = {
   requireElevated: false,
   requireOwner: true,
   async run(params, message, discordClient, fluxerClient) {
-    const messagesBridged = await MessageMap.findAndCountAll();
-    const channelsBridged = await ChannelMap.findAndCountAll();
+    const messagesBridged = await MessageMap.count();
+    const channelsBridged = await ChannelMap.count();
     const discordGuildCount = discordClient.guilds.cache.size;
     const fluxerGuildCount = fluxerClient.guilds.size;
     const discordMemberCount = discordClient.guilds.cache.reduce(
@@ -27,12 +27,12 @@ const command = {
         new EmbedBuilder().setTitle("Stats").addFields(
           {
             name: "Messages bridged",
-            value: messagesBridged.count + "",
+            value: messagesBridged + "",
             inline: true,
           },
           {
             name: "Channels bridged",
-            value: channelsBridged.count + "",
+            value: channelsBridged + "",
             inline: true,
           },
           {
