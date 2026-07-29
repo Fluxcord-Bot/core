@@ -58,7 +58,7 @@ const Config = {
   // Secret shared between the core bot and voice runners. Set to a long random string.
   RunnerSecret: "",
 
-  // Enable voice channel bridging. Manage mappings with voicebridge/voiceunbridge commands.
+  // Enable voice channel bridging. Manage mappings with setup and unbridge commands.
   // Requires the voice repository.
   // VoiceBridgingEnabled: false,
 };

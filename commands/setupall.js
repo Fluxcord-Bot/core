@@ -7,14 +7,41 @@ import RandomString from "../utils/RandomString.js";
 import { PendingSetup } from "../utils/CommandHandler.js";
 import Config from "../utils/ConfigHandler.js";
 import { genAuthLink } from "../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap } from "../db/index.js";
+import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
-import { GuildChannel as DiscordGuildChannel } from "discord.js";
+import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 
-/**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
- */
+function normalizeChannelName(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function findMatchingChannel(fluxerChannels, discordChannel) {
+  const channelName = normalizeChannelName(discordChannel.name);
+  const isVoice = discordChannel.type === ChannelType.GuildVoice;
+
+  const sameType = fluxerChannels.filter(
+    (x) => (x.type === ChannelType.GuildVoice) === isVoice,
+  );
+
+  const exact = sameType.find(
+    (x) => normalizeChannelName(x.name) === channelName,
+  );
+  if (exact) return exact;
+
+  const fuzzyMatches = sameType.filter((x) =>
+    normalizeChannelName(x.name).endsWith(channelName),
+  );
+
+  return fuzzyMatches[0] ?? null;
+}
+
 const command = {
   name: "setupall",
   description: "Set up bridging for all channels",
@@ -24,9 +51,6 @@ const command = {
 both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaults to both`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
-    /**
-     * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d" | "template"}
-     */
     const directionOrCode = params[0] ?? "both";
 
     if (directionOrCode.length !== 6) {
@@ -91,35 +115,27 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         "Getting all channels and trying to bridge them...",
       );
 
-      /**
-       * @type {import("discord.js").Collection<string, import("discord.js").GuildBasedChannel>}
-       */
       let discordChannels;
-      /**
-       * @type {import("@fluxerjs/core").GuildChannel[]}
-       */
       let fluxerChannels;
+      let discordGuild;
+      let fluxerGuild;
 
       if (isFluxer) {
-        const discordGuild = await discordClient.guilds.fetch(setup.guildId);
+        discordGuild = await discordClient.guilds.fetch(setup.guildId);
         discordChannels = discordGuild.channels.cache;
-        const fluxerGuild = await fluxerClient.guilds.fetch(message.guildId);
+        fluxerGuild = await fluxerClient.guilds.fetch(message.guildId);
         fluxerChannels = await fluxerGuild.fetchChannels();
       } else {
-        const discordGuild = await discordClient.guilds.fetch(message.guild.id);
+        discordGuild = await discordClient.guilds.fetch(message.guild.id);
         discordChannels = discordGuild.channels.cache;
-        const fluxerGuild = await fluxerClient.guilds.fetch(setup.guildId);
+        fluxerGuild = await fluxerClient.guilds.fetch(setup.guildId);
         fluxerChannels = await fluxerGuild.fetchChannels();
       }
 
       const results = [];
 
       for (let channel of discordChannels) {
-        const channelName = channel[1].name.toLowerCase();
-
-        const matchedChannel = fluxerChannels.find((x) =>
-          x.name.toLowerCase().endsWith(channelName),
-        );
+        const matchedChannel = findMatchingChannel(fluxerChannels, channel[1]);
 
         if (matchedChannel) {
           try {
@@ -149,18 +165,14 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         content: `🎉 Successfully bridged ${results.filter((x) => x?.success).length} channels to ${!isFluxer ? "Fluxer" : "Discord"}!`,
       });
 
-      await changeBotBio(channel.guild);
-      await changeBotBio(message.guild);
+      await changeBotBio(discordGuild);
+      await changeBotBio(fluxerGuild);
 
       PendingSetup.delete(directionOrCode);
     }
   },
 };
 
-/**
- * @param {import("@fluxerjs/core").GuildChannel} fluxerChannel
- * @param {import("discord.js").GuildBasedChannel} discordChannel
- */
 async function bridgeChannel(fluxerChannel, discordChannel, setup) {
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -177,6 +189,17 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup) {
       errorType: "CHANNEL_ALREADY_BRIDGED",
     };
   }
+
+  const isFluxerVoice = fluxerChannel.type == ChannelType.GuildVoice;
+  const isDiscordVoice = discordChannel.type == ChannelType.GuildVoice;
+  if (isFluxerVoice !== isDiscordVoice) {
+    return {
+      success: false,
+      errorType: "CHANNEL_NOT_SAME_TYPE",
+    };
+  }
+
+  const voiceText = isFluxerVoice && isDiscordVoice ? "voice" : "text";
 
   if (
     (discordChannel.nsfw && !fluxerChannel.nsfw) ||
@@ -255,12 +278,21 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup) {
           : "both",
   });
 
+  if (isFluxerVoice && isDiscordVoice) {
+    await VoiceChannelMap.create({
+      discordGuildId,
+      discordChannelId,
+      fluxerGuildId,
+      fluxerChannelId,
+    });
+  }
+
   await discordChannel.send({
-    content: "🎉 This channel is now bridged to Fluxer!",
+    content: "🎉 This " + voiceText + " channel is now bridged to Fluxer!",
   });
 
   await fluxerChannel.send({
-    content: "🎉 This channel is now bridged to Discord!",
+    content: "🎉 This " + voiceText + " channel is now bridged to Discord!",
   });
 
   return {

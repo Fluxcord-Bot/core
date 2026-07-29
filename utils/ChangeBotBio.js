@@ -12,7 +12,7 @@ export default async function changeBotBio(guild) {
           (DefaultConfig.FluxerBioStart
             ? DefaultConfig.FluxerBioStart + "\n\n"
             : "") +
-          `Currently bridging ${fluxerGuild.count} channel${fluxerGuild.count != 1 ? "s" : ""} of this community to Discord\n\n` +
+          `Currently bridging ${guild.channels.size} channel${guild.channels.size != 1 ? "s" : ""} of this community to Discord\n\n` +
           "[Docs](https://fluxcord.jbcrn.dev/) // [Support](https://fluxer.gg/jbcrn)",
       });
     } catch (e) {
@@ -25,7 +25,7 @@ export default async function changeBotBio(guild) {
           (DefaultConfig.DiscordBioStart
             ? DefaultConfig.DiscordBioStart + "\n\n"
             : "") +
-          `Currently bridging ${discordGuild.count} channel${discordGuild.count != 1 ? "s" : ""} of this server to Fluxer\n\n` +
+          `Currently bridging ${guild.channels.size} channel${guild.channels.size != 1 ? "s" : ""} of this server to Fluxer\n\n` +
           "Docs: https://fluxcord.jbcrn.dev/",
       });
     } catch (e) {

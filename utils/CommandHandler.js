@@ -12,6 +12,7 @@ export let BridgeMap = new ExpiryMap(120000);
  *  guildId: string,
  *  channelId: string,
  *  isFluxer: boolean,
+ *  isVoice: boolean,
  *  direction: "f2d" | "d2f" | "both"
  * }>}
  */

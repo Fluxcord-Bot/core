@@ -7,9 +7,9 @@ import RandomString from "../utils/RandomString.js";
 import { PendingSetup } from "../utils/CommandHandler.js";
 import Config from "../utils/ConfigHandler.js";
 import { genAuthLink } from "../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap } from "../db/index.js";
+import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
-import { GuildChannel as DiscordGuildChannel } from "discord.js";
+import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 
 /**
@@ -50,9 +50,12 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
 
       const code = RandomString(6);
 
+      let isVoice = message.channel.type == ChannelType.GuildVoice;
+
       PendingSetup.set(code, {
         guildId: message.guildId,
         channelId: message.channelId,
+        isVoice,
         isFluxer,
         direction: directionOrCode.startsWith("f")
           ? "f2d"
@@ -61,13 +64,38 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
             : "both",
       });
 
+      let vcBridgeWarning = isVoice
+        ? "heck <https://fluxcord.jbcrn.dev/vc-bridging/> for disclaimers of Fluxcord's Voice Bridging."
+        : "";
+      if (!!directionOrCode && directionOrCode != "both" && isVoice) {
+        if (isFluxer) {
+          vcBridgeWarning =
+            "\n\n> [!NOTE] `" +
+            directionOrCode +
+            "` only affects the **voice channel chat**, not the actual voice channel itself.\n> Also c" +
+            vcBridgeWarning;
+        } else {
+          vcBridgeWarning =
+            "\n\n> 📝 **Note**\n> `" +
+            directionOrCode +
+            "` only affects the **voice channel chat**, not the actual voice channel itself.\n> Also c" +
+            vcBridgeWarning;
+        }
+      } else if (isVoice) {
+        if (isFluxer) {
+          vcBridgeWarning = "\n\n> [!NOTE] C" + vcBridgeWarning;
+        } else {
+          vcBridgeWarning = "\n\n> 📝 **Note**\n> C" + vcBridgeWarning;
+        }
+      }
+
       await message.reply({
         embeds: [
           new EmbedBuilder()
             .setTitle("Set up Fluxcord")
             .setDescription(
               `# \`${Config.BotPrefix}setup ${code}\`
-Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.
+Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.${vcBridgeWarning}
 
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`,
             )
@@ -100,6 +128,17 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       if (setup.isFluxer === isFluxer) {
         await message.reply(
           `We don't support Fluxer <-> Fluxer or Discord <-> Discord currently.`,
+        );
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
+
+      let isVoice = message.channel.type == ChannelType.GuildVoice;
+      const voiceText = isVoice ? "voice" : "text";
+
+      if (setup.isVoice !== isVoice) {
+        await message.reply(
+          `You can only bridge ${voiceText} channels to ${voiceText} channels on the other side.`,
         );
         PendingSetup.delete(directionOrCode);
         return;
@@ -223,18 +262,31 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
               : "both",
       });
 
+      if (isVoice && setup.isVoice) {
+        await VoiceChannelMap.create({
+          discordGuildId,
+          discordChannelId,
+          fluxerGuildId,
+          fluxerChannelId,
+        });
+      }
+
       PendingSetup.delete(directionOrCode);
 
       await channel.send({
         content:
-          "🎉 This channel is now bridged to " +
+          "🎉 This " +
+          voiceText +
+          " channel is now bridged to " +
           (isFluxer ? "Fluxer" : "Discord") +
           "!",
       });
 
       await message.reply({
         content:
-          "🎉 This channel is now bridged to " +
+          "🎉 This " +
+          voiceText +
+          " channel is now bridged to " +
           (!isFluxer ? "Fluxer" : "Discord") +
           "!",
       });
