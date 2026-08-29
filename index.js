@@ -57,6 +57,10 @@ const fluxerClient = new FluxerClient({
   },
 });
 
+fluxerClient.on(FluxerEvents.Error, (error) => {
+  log("FLUXER", error);
+});
+
 discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   if (!guild.available) return;
 
