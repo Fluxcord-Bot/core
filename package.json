@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "node ./index.js",
-    "migrate": "pnpx tsx ./migrate.ts",
+    "migrate": "tsx ./migrate.ts",
     "encrypt": "node ./encrypt.js"
   },
   "dependencies": {
@@ -28,6 +28,12 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.12"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
