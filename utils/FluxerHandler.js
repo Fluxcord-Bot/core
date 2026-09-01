@@ -22,9 +22,10 @@ import {
 
 let fluxcordBotEmojiCfg = undefined;
 
-async function getFluxerAvatarURL(user) {
+async function getFluxerAvatarURL(user, member) {
   if (!user?.avatarURL) return undefined;
-  if (!user.avatar) {
+  const avatar = member?.avatar ?? user.avatar;
+  if (!avatar) {
     return user.avatarURL() ?? undefined;
   }
 
@@ -32,9 +33,12 @@ async function getFluxerAvatarURL(user) {
     (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
     Config.FluxerCDNBaseURL;
   const cdnBase = mediaBase.replace(/\/$/, "");
-  const extension = user.avatar.startsWith("a_") ? "gif" : "webp";
+  const extension = avatar.startsWith("a_") ? "gif" : "webp";
+  const path = member?.avatar
+    ? `guilds/${member.guild.id}/users/${user.id}/avatars`
+    : `avatars/${user.id}`;
 
-  return `${cdnBase}/avatars/${user.id}/${user.avatar}.${extension}?size=160`;
+  return `${cdnBase}/${path}/${avatar}.${extension}?size=160`;
 }
 
 function isFluxerMessageNotFoundError(error) {
@@ -197,7 +201,7 @@ export async function FluxerCreateMessageHandler(
       forwardedMessage ?? message,
       discordClient,
     ),
-    avatarURL: await getFluxerAvatarURL(message.author),
+    avatarURL: await getFluxerAvatarURL(message.author, guildUser),
   });
 
   let bridgedMessageMap;
