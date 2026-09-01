@@ -9,7 +9,7 @@ import {
   clearFluxEmojiCache,
   clearBotEmojiCache,
 } from "./EmojiCache.js";
-import { getFluxerWebappUrl } from "./GetFluxerUrls.js";
+import { getFluxerMediaBaseUrl, getFluxerWebappUrl } from "./GetFluxerUrls.js";
 
 /**
  * @param {string | null} content Message content
