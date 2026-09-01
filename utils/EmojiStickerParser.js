@@ -294,7 +294,7 @@ export async function traverseMessageLinks(str) {
   const webAppUrl = await getFluxerWebappUrl();
   const webApp = new URL(webAppUrl);
   const regex = new RegExp(
-    `https://(discord\\.com|(?:web\\.)?(?:canary\\.)?${webApp.hostname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/channels/(\\d+)/(\\d+)(?:/(\\d+))?`,
+    `https://(discord\\.com|(?:web.)?(?:canary.)?fluxer.app|${webApp.hostname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/channels/(\\d+)/(\\d+)(?:/(\\d+))?`,
     "g",
   );
 
@@ -317,7 +317,7 @@ export async function traverseMessageLinks(str) {
             include: ["channelMap"],
           });
           if (message) {
-            if (m[1].startsWith("fluxer")) {
+            if (!m[1].includes("discord.com")) {
               result = result.replaceAll(
                 m[0],
                 `https://discord.com/channels/${message.channelMap.discordGuildId}/${message.channelMap.discordChannelId}/${message.discordMessageId}`,
