@@ -9,6 +9,7 @@ import {
   clearFluxEmojiCache,
   clearBotEmojiCache,
 } from "./EmojiCache.js";
+import { getFluxerWebappUrl } from "./GetFluxerUrls.js";
 
 /**
  * @param {string | null} content Message content
@@ -212,9 +213,11 @@ export async function parseFluxerEmojiToDiscord(
             (x) => x.name === emojiName,
           );
 
+          const mediaUrl = await getFluxerMediaBaseUrl();
           if (!existingEmoji) {
             const res = await fetch(
-              "https://fluxerusercontent.com/emojis/" +
+              mediaUrl +
+                "/emojis/" +
                 m[1].replace("a", "") +
                 ".webp?animated=" +
                 (m[1].startsWith("a") ? "true" : "false") +
@@ -288,8 +291,12 @@ export function sanitizeLinks(str) {
 export async function traverseMessageLinks(str) {
   let result = str;
 
-  const regex =
-    /https:\/\/(discord.com|fluxer.app)\/channels\/(\d+)\/(\d+)(?:\/(\d+))?/g;
+  const webAppUrl = await getFluxerWebappUrl();
+  const webApp = new URL(webAppUrl);
+  const regex = new RegExp(
+    `https:\/\/(discord.com|(?:web.)?(?:canary.)?${webApp.hostname})\/channels\/(\d+)\/(\d+)(?:\/(\d+))?`,
+    "g",
+  );
 
   let m;
   while ((m = regex.exec(result)) !== null) {
@@ -318,7 +325,7 @@ export async function traverseMessageLinks(str) {
             } else {
               result = result.replaceAll(
                 m[0],
-                `https://fluxer.app/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`,
+                `${webAppUrl}/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`,
               );
             }
           }
@@ -340,7 +347,7 @@ export async function traverseMessageLinks(str) {
             } else {
               result = result.replaceAll(
                 m[0],
-                `https://fluxer.app/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`,
+                `${webAppUrl}/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`,
               );
             }
           }
