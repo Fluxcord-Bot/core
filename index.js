@@ -57,6 +57,10 @@ const fluxerClient = new FluxerClient({
   },
 });
 
+fluxerClient.on(FluxerEvents.Error, (error) => {
+  log("FLUXER", error);
+});
+
 discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   if (!guild.available) return;
 
@@ -437,6 +441,12 @@ function checkIfFluxerConnected() {
 }
 
 function motdLoop() {
+  /**
+   * @type {{
+   *   text: string,
+   *   emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined
+   * }[]}
+   */
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
 
