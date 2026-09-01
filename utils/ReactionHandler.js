@@ -11,6 +11,7 @@ import {
   clearBotEmojiCache,
 } from "./EmojiCache.js";
 import { sendBridgeInfo } from "./MessageBridgeInfo.js";
+import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -117,8 +118,9 @@ async function mirrorFluxerEmojiToDiscord(
     let existing = [...appEmojis.values()].find((x) => x.name === storeName);
 
     if (!existing) {
+      const mediaUrl = await getFluxerMediaBaseUrl();
       const res = await fetch(
-        `https://fluxerusercontent.com/emojis/${fluxerEmojiId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`,
+        `${mediaUrl}/emojis/${fluxerEmojiId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`,
       );
       const buf = Buffer.from(await res.arrayBuffer());
       existing = await discordClient.application?.emojis.create({
