@@ -23,6 +23,7 @@ export async function parseDiscordEmojiToFluxer(
   attempt = 0,
 ) {
   if (!content) return content;
+
   const regex = /:(a?\d+):/g;
   const emojiIdNameMap = new Map();
 
@@ -76,6 +77,8 @@ export async function parseDiscordEmojiToFluxer(
           }
 
           const emojiName = `e${m[1]}`;
+
+          if (/e\d$/.test(emojiName)) continue;
 
           let existingEmojis = await getFluxEmojis(
             Config.FluxerTempEmojiGuildId,
