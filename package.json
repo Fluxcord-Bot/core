@@ -33,7 +33,11 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "@journeyapps/sqlcipher",
+      "sqlite3",
+      "cpu-features",
+      "ssh2"
     ]
   }
 }
