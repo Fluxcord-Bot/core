@@ -130,7 +130,8 @@ export async function parseDiscordEmojiToFluxer(
               "Cannot convert Discord emoji to Fluxer, deleting 10 oldest emojis and trying again...",
               e,
             );
-            await deleteOldestEmojisFluxer(fluxerClient);
+            const err = await deleteOldestEmojisFluxer(fluxerClient);
+            if (err) attempt = 67;
             return await parseDiscordEmojiToFluxer(
               content,
               fluxerClient,
@@ -368,11 +369,16 @@ export async function traverseMessageLinks(str) {
 async function deleteOldestEmojisFluxer(fluxerClient) {
   const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
   if (guild) {
-    let emojis = await guild.fetchEmojis();
-    emojis = emojis.filter((x) => !x.name.startsWith("reply"));
-    emojis = emojis.slice(-11, -1);
+    try {
+      let emojis = await guild.fetchEmojis();
+      emojis = emojis.filter((x) => !x.name.startsWith("reply"));
+      emojis = emojis.slice(-11, -1);
 
-    await Promise.all(emojis.map(async (x) => await x.delete()));
+      await Promise.all(emojis.map(async (x) => await x.delete()));
+    } catch (e) {
+      log("FLUXER", "Cannot delete oldest emojis on Fluxer: " + e);
+      return true;
+    }
     clearFluxEmojiCache(Config.FluxerTempEmojiGuildId);
   }
 }
