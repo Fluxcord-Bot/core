@@ -27,6 +27,7 @@ import { ChannelMap, GuildMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
+import { setupHealthcheck } from "./utils/HealthCheck.js";
 
 const discordClient = new DiscordClient({
   intents: [
@@ -430,6 +431,8 @@ if (Config.VoiceBridgingEnabled) {
 
 setupReactionHandling(discordClient, fluxerClient);
 
+setupHealthcheck(discordClient, fluxerClient);
+
 discordClient.login(Config.DiscordBotToken);
 fluxerClient.login(Config.FluxerBotToken);
 
@@ -444,7 +447,7 @@ function motdLoop() {
   /**
    * @type {{
    *   text: string,
-   *   emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined
+   *   emoji?: string | { fluxer: { name: string, id: string }, discord: string }
    * }[]}
    */
   const motds = Config.Motds;

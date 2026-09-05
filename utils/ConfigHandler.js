@@ -22,6 +22,10 @@ const DefaultConfig = {
   RunnerWsPort: 8765,
   RunnerSecret: "",
 
+  HealthcheckEnabled: true,
+  HealthcheckPort: 8080,
+  HealthcheckHost: "0.0.0.0",
+
   ...Config,
 };
 

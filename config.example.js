@@ -58,6 +58,13 @@ const Config = {
   // Secret shared between the core bot and voice runners. Set to a long random string.
   RunnerSecret: "",
 
+  // Healthcheck. Returns 200 when both bots are online.
+  // otherwise 503. Used by Docker HEALTHCHECK / compose healthcheck.
+  // Set HealthcheckEnabled to false to disable.
+  // HealthcheckEnabled: true,
+  // HealthcheckPort: 8080,
+  // HealthcheckHost: "0.0.0.0",
+
   // Enable voice channel bridging. Manage mappings with setup and unbridge commands.
   // Requires the voice repository.
   // VoiceBridgingEnabled: false,
