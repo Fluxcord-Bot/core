@@ -378,16 +378,21 @@ async function deleteOldestEmojisFluxer(fluxerClient) {
 }
 
 /**
- * @param {DiscordClient} discordClient
+ * @param {import("discord.js").Client} discordClient
  */
 async function deleteOldestEmojisDiscord(discordClient) {
   let app = await discordClient.application?.fetch();
   if (app) {
-    let emojis = app.emojis.cache.filter((x) => !x.name.startsWith("reply"));
+    let emojis = (await app.emojis.fetch()).filter(
+      (x) => !x.name.startsWith("reply"),
+    );
     let i = 0;
-    for (let emojiKey in emojis.reverse().keys) {
+    for (let emoji of emojis.reverse().values()) {
       if (i > 25) break;
-      const emoji = emojis.get(emojiKey);
+      log(
+        "DEBUG",
+        `Attempting to delete emoji ID ${emoji.id} (${emoji.name})...`,
+      );
       await emoji?.delete();
       i++;
     }
