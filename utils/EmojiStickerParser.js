@@ -247,7 +247,7 @@ export async function parseFluxerEmojiToDiscord(
           if (attempt < 5) {
             log(
               "DISCORD",
-              "Cannot convert Fluxer emoji to Discord, deleting 10 oldest emojis and trying again...",
+              "Cannot convert Fluxer emoji to Discord, deleting 25 oldest emojis and trying again...",
               e,
             );
             await deleteOldestEmojisDiscord(discordClient);
@@ -386,7 +386,7 @@ async function deleteOldestEmojisDiscord(discordClient) {
     let emojis = app.emojis.cache.filter((x) => !x.name.startsWith("reply"));
     let i = 0;
     for (let emojiKey in emojis.reverse().keys) {
-      if (i > 10) break;
+      if (i > 25) break;
       const emoji = emojis.get(emojiKey);
       await emoji?.delete();
       i++;
