@@ -161,7 +161,7 @@ export async function DiscordCreateMessageHandler(
             discordMessageId: message.reference.messageId,
           },
           {
-            discordMessageId: bridgeContent.messageData.messageId,
+            discordMessageId: bridgeContent.messageData.messageId ?? "",
           },
           {
             fluxerMessageId: message.reference.messageId,
