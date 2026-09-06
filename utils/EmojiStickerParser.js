@@ -76,9 +76,12 @@ export async function parseDiscordEmojiToFluxer(
             }
           }
 
-          const emojiName = `e${m[1]}`;
+          const animated = m[1].startsWith("a");
+          const rawId = animated ? m[1].slice(1) : m[1];
 
-          if (/e\d$/.test(emojiName)) continue;
+          if (!/^\d{17,19}$/.test(rawId)) continue;
+
+          const emojiName = `e${m[1]}`;
 
           let existingEmojis = await getFluxEmojis(
             Config.FluxerTempEmojiGuildId,
@@ -89,9 +92,10 @@ export async function parseDiscordEmojiToFluxer(
           if (!existing) {
             const res = await fetch(
               "https://cdn.discordapp.com/emojis/" +
-                m[1].replace("a", "") +
-                (m[1].startsWith("a") ? ".gif" : ".webp"),
+                rawId +
+                (animated ? ".gif" : ".webp"),
             );
+            if (!res.ok) continue;
             const buf = await res.arrayBuffer();
 
             const fluxerGuild = await fluxerClient.guilds.fetch(

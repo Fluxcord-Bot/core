@@ -30,6 +30,9 @@ import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
 
 const discordClient = new DiscordClient({
+  rest: {
+    timeout: 30_000,
+  },
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,

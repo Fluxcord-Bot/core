@@ -249,7 +249,9 @@ export async function DiscordCreateMessageHandler(
     if (typeof bridgeContent.excludeEmbed === "number")
       wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const webhookEmbeds = await Promise.all(
-      wEmbeds.map(async (x) => await discordEmbedToFluxer(x, fluxerClient)),
+      wEmbeds
+        .filter((x) => !x.url || !webhookContent.includes(x.url))
+        .map(async (x) => await discordEmbedToFluxer(x, fluxerClient)),
     );
 
     let msg = await sendFluxerWebhook(
@@ -365,22 +367,30 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const newContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         sanitizePings(
-          await parseMentions(newMsg),
-          bridgeContent.messageData.parsedContent,
+          await parseMentions(
+            newMsg,
+            bridgeContent.messageData.parsedContent,
+          ),
         ),
         client,
         channelMap.fluxerGuildId,
       ),
     );
 
+    const newEmbeds = await Promise.all(
+      wEmbeds
+        .filter((x) => !x.url || !newContent.includes(x.url))
+        .map(async (x) => await discordEmbedToFluxer(x, client)),
+    );
+
+    if (!newContent && newEmbeds.length === 0) return;
+
     await client.rest.patch(
       `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}`,
       {
         body: {
           content: newContent,
-          embeds: await Promise.all(
-            wEmbeds.map(async (x) => await discordEmbedToFluxer(x, client)),
-          ),
+          embeds: newEmbeds,
         },
         auth: false,
       },

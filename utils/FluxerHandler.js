@@ -293,20 +293,25 @@ export async function FluxerUpdateMessageHandler(
       });
     }
 
+    const editContent =
+      // @ts-expect-error
+      (messageReference
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${await processReplyContent(newMessage.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
+        : "") +
+      (await traverseMessageLinks(
+        await parseFluxerEmojiToDiscord(
+          sanitizePings(await parseMentions(newMessage)),
+          client,
+          channelMap.discordGuildId,
+        ),
+      ));
+    const editFiles = newMessage.attachments.map((a) => a.url ?? "");
+
+    if (!editContent && editFiles.length === 0) return;
+
     await webhook.editMessage(messageExisting.discordMessageId, {
-      content:
-        // @ts-expect-error
-        (messageReference
-          ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${await processReplyContent(newMessage.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
-          : "") +
-        (await traverseMessageLinks(
-          await parseFluxerEmojiToDiscord(
-            sanitizePings(await parseMentions(newMessage)),
-            client,
-            channelMap.discordGuildId,
-          ),
-        )),
-      files: newMessage.attachments.map((a) => a.url ?? ""),
+      content: editContent,
+      files: editFiles,
     });
   }
 }

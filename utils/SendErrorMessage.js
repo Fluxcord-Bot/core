@@ -80,7 +80,7 @@ export async function sendErrorMessage(
 
   log(
     message instanceof Message ? "FLUXER" : "DISCORD",
-    "An error occurred",
+    `An error occurred on ${await genMsgLink(message).catch(() => "?")}`,
     error,
   );
 }
