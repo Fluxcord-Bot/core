@@ -215,10 +215,10 @@ export async function DiscordCreateMessageHandler(
 
     const webhookContent =
       (forwardedMessage
-        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
+        ? `-# <:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
       (interactingUser
-        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
+        ? `-# <:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2)
         ? "*Components V2 message*"

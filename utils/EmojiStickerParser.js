@@ -70,7 +70,7 @@ export async function parseDiscordEmojiToFluxer(
                 targetFluxerGuildId,
               );
               if (mapped) {
-                result = result.replaceAll(`:${m[1]}:`, `<${mapped}>`);
+                result = result.replaceAll(`:${m[1]}:`, `<:${mapped}>`);
                 continue;
               }
             }
@@ -122,7 +122,7 @@ export async function parseDiscordEmojiToFluxer(
             Config.FluxerTempEmojiGuildId,
           );
 
-          result = result.replaceAll(`:${m[1]}:`, `<${fluxerEmoji}>`);
+          result = result.replaceAll(`:${m[1]}:`, `<:${fluxerEmoji}>`);
         } catch (e) {
           if (attempt < 5) {
             log(
