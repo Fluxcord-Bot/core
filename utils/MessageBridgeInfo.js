@@ -28,12 +28,19 @@ export async function sendBridgeInfo(
     include: ["channelMap"],
   });
   if (!messageMap) return;
-  const origChannel =
-    messageMap.messageSource === "fluxer"
-      ? await fluxerClient.channels.fetch(messageMap.channelMap.fluxerChannelId)
-      : await discordClient.channels.fetch(
-          messageMap.channelMap.discordChannelId,
-        );
+  let origChannel;
+  try {
+    origChannel =
+      messageMap.messageSource === "fluxer"
+        ? await fluxerClient.channels.fetch(
+            messageMap.channelMap.fluxerChannelId,
+          )
+        : await discordClient.channels.fetch(
+            messageMap.channelMap.discordChannelId,
+          );
+  } catch {
+    return;
+  }
   if (!origChannel) return;
   if (origChannel instanceof FluxerTextChannel) {
     const message = await origChannel.messages.fetch(

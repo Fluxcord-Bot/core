@@ -35,7 +35,12 @@ const command = {
 
     const channelId = params[0];
 
-    const channel = await message.client.channels.fetch(channelId);
+    let channel;
+    try {
+      channel = await message.client.channels.fetch(channelId);
+    } catch {
+      channel = null;
+    }
     if (channel instanceof FluxerChannel) {
       if (!channel.canSendMessage()) {
         await message.reply("The bot cannot send messages on this channel.");

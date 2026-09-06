@@ -50,7 +50,7 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
 
       const code = RandomString(6);
 
-      let isVoice = message.channel.type == ChannelType.GuildVoice;
+      let isVoice = message.channel?.type == ChannelType.GuildVoice;
 
       PendingSetup.set(code, {
         guildId: message.guildId,
@@ -133,7 +133,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      let isVoice = message.channel.type == ChannelType.GuildVoice;
+      let isVoice = message.channel?.type == ChannelType.GuildVoice;
       const voiceText = isVoice ? "voice" : "text";
 
       if (setup.isVoice !== isVoice) {
@@ -162,12 +162,18 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      const channel = await (
-        isFluxer ? discordClient : fluxerClient
-      ).channels.fetch(setup.channelId);
-      const currentChannel = await message.client.channels.fetch(
-        message.channelId,
-      );
+      let channel;
+      let currentChannel;
+      try {
+        channel = await (isFluxer ? discordClient : fluxerClient).channels.fetch(
+          setup.channelId,
+        );
+        currentChannel = await message.client.channels.fetch(message.channelId);
+      } catch {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
 
       if (
         (currentChannel.nsfw && !channel.nsfw) ||
@@ -292,7 +298,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       });
 
       await changeBotBio(channel.guild);
-      await changeBotBio(message.guild);
+      if (message.guild) await changeBotBio(message.guild);
     }
   },
 };

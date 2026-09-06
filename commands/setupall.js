@@ -121,14 +121,31 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       let fluxerGuild;
 
       if (isFluxer) {
-        discordGuild = await discordClient.guilds.fetch(setup.guildId);
+        try {
+          discordGuild = await discordClient.guilds.fetch(setup.guildId);
+          fluxerGuild = await fluxerClient.guilds.fetch(message.guildId);
+        } catch {
+          await message.reply("Guild not found. Maybe invite the bot?");
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
         discordChannels = discordGuild.channels.cache;
-        fluxerGuild = await fluxerClient.guilds.fetch(message.guildId);
         fluxerChannels = await fluxerGuild.fetchChannels();
       } else {
-        discordGuild = await discordClient.guilds.fetch(message.guild.id);
+        if (!message.guildId) {
+          await message.reply("This command can only be used in a server.");
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
+        try {
+          discordGuild = await discordClient.guilds.fetch(message.guildId);
+          fluxerGuild = await fluxerClient.guilds.fetch(setup.guildId);
+        } catch {
+          await message.reply("Guild not found. Maybe invite the bot?");
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
         discordChannels = discordGuild.channels.cache;
-        fluxerGuild = await fluxerClient.guilds.fetch(setup.guildId);
         fluxerChannels = await fluxerGuild.fetchChannels();
       }
 

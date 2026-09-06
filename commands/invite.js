@@ -27,7 +27,12 @@ const command = {
     }
 
     if (message instanceof FluxerMessage) {
-      const guild = await discordClient.guilds.fetch(channelMap.discordGuildId);
+      let guild;
+      try {
+        guild = await discordClient.guilds.fetch(channelMap.discordGuildId);
+      } catch {
+        guild = null;
+      }
 
       if (guild) {
         let guildInvite = "https://discord.gg/";
@@ -47,18 +52,32 @@ const command = {
         );
       }
     } else {
-      const guild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
+      let guild;
+      try {
+        guild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
+      } catch {
+        guild = null;
+      }
 
       if (guild) {
         let guildInvite = "https://fluxer.gg/";
         if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
         else {
           /** @type {import("@fluxerjs/core").GuildChannel} */
-          const channel = await fluxerClient.channels.fetch(
-            channelMap.fluxerChannelId,
-          );
+          let channel;
+          try {
+            channel = await fluxerClient.channels.fetch(
+              channelMap.fluxerChannelId,
+            );
+          } catch {
+            channel = null;
+          }
+          if (!channel) {
+            await message.reply("Bridged Fluxer channel not found.");
+            return;
+          }
           const invite = await channel.createInvite({
-            max_age: 172800,
+            maxAge: 172800,
           });
           guildInvite += invite.code;
         }

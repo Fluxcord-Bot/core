@@ -283,7 +283,8 @@ export function setupReactionHandling(discordClient, fluxerClient) {
     );
   });
 
-  fluxerClient.on(FluxerEvents.MessageReactionAdd, async (reaction, user) => {
+  fluxerClient.on(FluxerEvents.MessageReactionAdd, async (payload) => {
+    const { reaction, user } = payload;
     if (
       reaction.emoji.name === "information_source" ||
       reaction.emoji.name === "ℹ️"
@@ -308,7 +309,8 @@ export function setupReactionHandling(discordClient, fluxerClient) {
     );
   });
 
-  fluxerClient.on(FluxerEvents.MessageReactionRemove, (reaction, user) => {
+  fluxerClient.on(FluxerEvents.MessageReactionRemove, (payload) => {
+    const { reaction, user } = payload;
     relayFluxerReaction(
       reaction,
       user,

@@ -5,6 +5,14 @@ allowBuilds:
   protobufjs: true
   sqlite3: true
   ssh2: true
+minimumReleaseAgeExclude:
+  - '@fluxerjs/builders@3.0.0'
+  - '@fluxerjs/collection@3.0.0'
+  - '@fluxerjs/core@3.0.0'
+  - '@fluxerjs/rest@3.0.0'
+  - '@fluxerjs/types@3.0.0'
+  - '@fluxerjs/util@3.0.0'
+  - '@fluxerjs/ws@3.0.0'
 onlyBuiltDependencies:
   - node-webcodecs
   - esbuild

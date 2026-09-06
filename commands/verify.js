@@ -30,12 +30,20 @@ const command = {
       ? bridgeMap.discordChannel
       : bridgeMap.fluxerChannel;
     const type = bridgeMap.bridgeType;
-    const thisChannel = await message.client.channels.fetch(message.channelId);
-    const channel = await (
-      isFluxer ? discordClient : fluxerClient
-    ).channels.fetch(channelId);
+    let thisChannel;
+    let channel;
+    try {
+      thisChannel = await message.client.channels.fetch(message.channelId);
+      channel = await (isFluxer ? discordClient : fluxerClient).channels.fetch(
+        channelId,
+      );
+    } catch {
+      thisChannel = null;
+      channel = null;
+    }
 
     if (!thisChannel || !channel) {
+      await message.reply("Channel not found. Maybe invite the bot?");
       log(
         isFluxer ? "FLUXER" : "DISCORD",
         `channel ${message.channelId} is on non expected value. report it on https://codeberg.org/jbcarreon123/fluxcord as this SHOULD NOT happen`,
@@ -140,8 +148,8 @@ const command = {
         "!",
     });
 
-    await changeBotBio(channel.guild);
-    await changeBotBio(message.guild);
+    if (channel.guild) await changeBotBio(channel.guild);
+    if (message.guild) await changeBotBio(message.guild);
   },
 };
 

@@ -18,6 +18,11 @@ const command = {
   requireOwner: false,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
+
+    if (!message.guildId) {
+      await message.reply("This command can only be used in a server.");
+      return;
+    }
     /**
      * @type {import("discord.js").Collection<string, import("discord.js").GuildBasedChannel> | import("@fluxerjs/core").GuildChannel[]}
      */
@@ -45,7 +50,7 @@ const command = {
         });
       }
     } else {
-      const discordGuild = await discordClient.guilds.fetch(message.guild.id);
+      const discordGuild = await discordClient.guilds.fetch(message.guildId);
       const discordUser = await discordGuild.members.fetchMe();
       channels = discordGuild.channels.cache;
 

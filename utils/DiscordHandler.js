@@ -12,7 +12,10 @@ import {
   removeLinkEmbeds,
   traverseMessageLinks,
 } from "./EmojiStickerParser.js";
-import { parseMentions } from "./MessageContentParser.js";
+import {
+  attemptParseBridgedMessage,
+  parseMentions,
+} from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
@@ -146,6 +149,8 @@ export async function DiscordCreateMessageHandler(
     forwardedMessage = message.messageSnapshots.first();
   }
 
+  const bridgeContent = await attemptParseBridgedMessage(message);
+
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
   if (message.reference) {
@@ -154,6 +159,9 @@ export async function DiscordCreateMessageHandler(
         [Op.or]: [
           {
             discordMessageId: message.reference.messageId,
+          },
+          {
+            discordMessageId: bridgeContent.messageData.messageId,
           },
           {
             fluxerMessageId: message.reference.messageId,
@@ -189,7 +197,12 @@ export async function DiscordCreateMessageHandler(
 
     const parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
-        sanitizePings(await parseMentions(forwardedMessage ?? message)),
+        sanitizePings(
+          await parseMentions(
+            forwardedMessage ?? message,
+            bridgeContent.messageData.parsedContent,
+          ),
+        ),
         fluxerClient,
         channelMap.fluxerGuildId,
       ),
@@ -232,10 +245,11 @@ export async function DiscordCreateMessageHandler(
         : undefined,
       description: a.description,
     }));
+    const wEmbeds = (forwardedMessage ?? message).embeds;
+    if (typeof bridgeContent.excludeEmbed === "number")
+      wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const webhookEmbeds = await Promise.all(
-      (forwardedMessage ?? message).embeds.map(
-        async (x) => await discordEmbedToFluxer(x, fluxerClient),
-      ),
+      wEmbeds.map(async (x) => await discordEmbedToFluxer(x, fluxerClient)),
     );
 
     let msg = await sendFluxerWebhook(
@@ -436,9 +450,7 @@ export async function DiscordBulkDeleteMessageHandler(msgs, client) {
       content: `Bridging bulk deletes, please wait...`,
     });
 
-    await channel.bulkDeleteMessages(
-      messagesExisting.map((x) => x.fluxerMessageId),
-    );
+    await channel.bulkDelete(messagesExisting.map((x) => x.fluxerMessageId));
 
     await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
 

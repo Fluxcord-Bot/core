@@ -49,10 +49,9 @@ const fluxerClient = new FluxerClient({
   rest: {
     api: Config.FluxerAPIBaseURL,
   },
-  intents: 0,
   presence: {
     status: "online",
-    custom_status: {
+    customStatus: {
       text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
     },
   },
@@ -198,11 +197,11 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
 });
 
 fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
-  if (type.user_id === fluxerClient.user?.id) return;
+  if (type.userId === fluxerClient.user?.id) return;
 
   const channelMap = await ChannelMap.findOne({
     where: {
-      fluxerChannelId: type.channel_id,
+      fluxerChannelId: type.channelId,
     },
   });
 
@@ -349,13 +348,10 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
     `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
   );
 
-  fluxerClient.sendToGateway(0, {
-    op: 3,
-    d: {
-      custom_status: {
-        text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
-      },
-      status: "online",
+  fluxerClient.user?.setPresence({
+    status: "online",
+    customStatus: {
+      text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
     },
   });
 
@@ -481,14 +477,16 @@ function updateBotStatus(status) {
       };
     }
 
-  fluxerClient.sendToGateway(0, {
-    op: 3,
-    d: {
-      custom_status: {
-        text: `${Config.BotPrefix}help | ${status.text}`,
-        ...(emoji ? emoji.fluxer : {}),
-      },
-      status: "online",
+  fluxerClient.user?.setPresence({
+    status: "online",
+    customStatus: {
+      text: `${Config.BotPrefix}help | ${status.text}`,
+      ...(emoji
+        ? {
+            emojiName: emoji.fluxer.emoji_name,
+            emojiId: emoji.fluxer.emoji_id,
+          }
+        : {}),
     },
   });
 

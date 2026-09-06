@@ -102,14 +102,14 @@ export async function fluxerEmbedToDiscord(message, discordClient) {
       if (embed.author)
         outEmbed = outEmbed.setAuthor({
           name: embed.author.name ?? "",
-          iconURL: embed.author.icon_url,
+          iconURL: embed.author.iconUrl,
           url: embed.author.url,
         });
 
       if (embed.footer)
         outEmbed = outEmbed.setFooter({
           text: embed.footer.text,
-          iconURL: embed.footer.icon_url,
+          iconURL: embed.footer.iconUrl,
         });
 
       if (embed.image) outEmbed = outEmbed.setImage(embed.image.url);

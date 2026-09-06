@@ -138,7 +138,9 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
                           `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"} - ` +
                           Config.EmbedFooterContent,
                       }
-                    : `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
+                    : {
+                        text: `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
+                      },
                 ),
             ],
           }),

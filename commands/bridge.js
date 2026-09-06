@@ -37,9 +37,14 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
 
     const type = typeDef.toUpperCase();
 
-    const channel = await (
-      isFluxer ? discordClient : fluxerClient
-    ).channels.fetch(channelId);
+    let channel;
+    try {
+      channel = await (isFluxer ? discordClient : fluxerClient).channels.fetch(
+        channelId,
+      );
+    } catch {
+      channel = null;
+    }
 
     if (!channel) {
       await message.reply("Channel not found. Maybe invite the bot?");
@@ -60,9 +65,17 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
     }
 
     if (isFluxer) {
-      const currentChannel = await fluxerClient.channels.fetch(
-        message.channelId,
-      );
+      let currentChannel;
+      try {
+        currentChannel = await fluxerClient.channels.fetch(message.channelId);
+      } catch {
+        currentChannel = null;
+      }
+
+      if (!currentChannel) {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        return;
+      }
 
       if (
         (currentChannel.nsfw && !channel.nsfw) ||
@@ -74,9 +87,17 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
         return;
       }
     } else {
-      const currentChannel = await discordClient.channels.fetch(
-        message.channelId,
-      );
+      let currentChannel;
+      try {
+        currentChannel = await discordClient.channels.fetch(message.channelId);
+      } catch {
+        currentChannel = null;
+      }
+
+      if (!currentChannel) {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        return;
+      }
 
       if (
         (channel.nsfw && !currentChannel.nsfw) ||

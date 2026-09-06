@@ -8,15 +8,25 @@ import DefaultConfig from "./ConfigHandler.js";
  * @param {import('@fluxerjs/core').Client | import('discord.js').Client} client
  */
 export async function checkManageServerPerms(guildId, userId, client) {
-  const guild = await client.guilds.fetch(guildId);
+  let guild;
+  try {
+    guild = await client.guilds.fetch(guildId);
+  } catch {
+    return false;
+  }
   if (!guild) return false;
 
   if (DefaultConfig.AdminAccountIds.includes(userId)) return true;
 
-  const member =
-    client instanceof Client
-      ? await guild.fetchMember(userId)
-      : await guild.members.fetch(userId);
+  let member;
+  try {
+    member =
+      client instanceof Client
+        ? await guild.fetchMember(userId)
+        : await guild.members.fetch(userId);
+  } catch {
+    return false;
+  }
 
   if (!member) return false;
 

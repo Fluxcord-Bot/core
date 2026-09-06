@@ -106,10 +106,10 @@ export async function FluxerCreateMessageHandler(
       where: {
         [Op.or]: [
           {
-            fluxerMessageId: message.messageReference.message_id,
+            fluxerMessageId: message.messageReference.messageId,
           },
           {
-            discordMessageId: message.messageReference.message_id,
+            discordMessageId: message.messageReference.messageId,
           },
         ],
       },
@@ -186,7 +186,7 @@ export async function FluxerCreateMessageHandler(
       (forwardedMessage ?? message).attachments
         ?.filter((x) => x.size < 9999000)
         .map((a) => ({
-          attachment: a.proxy_url ?? a.url ?? "",
+          attachment: a.proxyUrl ?? a.url ?? "",
           name: toDiscordSpoilerFilename(
             a.filename,
             isFluxerSpoilerAttachment(a),
@@ -210,7 +210,7 @@ export async function FluxerCreateMessageHandler(
       messageSource: "fluxer",
       discordMessageId: msg.id,
       fluxerMessageId: message.id,
-      fluxerReplyId: message.messageReference?.message_id ?? null,
+      fluxerReplyId: message.messageReference?.messageId ?? null,
       discordReplyId: messageReference?.discordMessageId ?? null,
       channelMapId: channelMap.id,
       authorId: message.author.id,
@@ -241,7 +241,7 @@ export async function FluxerCreateMessageHandler(
 
 /**
  * @param {FluxerMessage | null} oldMessage
- * @param {import("@fluxerjs/core").Message} newMessage
+ * @param {import("@fluxerjs/core").Message | import("@fluxerjs/core").PartialMessage} newMessage
  * @param {import("discord.js").Client} client
  */
 export async function FluxerUpdateMessageHandler(
@@ -249,6 +249,8 @@ export async function FluxerUpdateMessageHandler(
   newMessage,
   client,
 ) {
+  if (newMessage.partial) return;
+
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -281,10 +283,10 @@ export async function FluxerUpdateMessageHandler(
         where: {
           [Op.or]: [
             {
-              fluxerMessageId: newMessage.messageReference.message_id,
+              fluxerMessageId: newMessage.messageReference.messageId,
             },
             {
-              discordMessageId: newMessage.messageReference.message_id,
+              discordMessageId: newMessage.messageReference.messageId,
             },
           ],
         },
@@ -386,11 +388,21 @@ export async function FluxerDeleteMessageHandler(
       );
       let replyContent = "";
       if (reply.messageSource === "fluxer") {
-        const channel = await fluxerClient.channels.fetch(
-          channelMap.fluxerChannelId,
-        );
+        let channel;
+        try {
+          channel = await fluxerClient.channels.fetch(
+            channelMap.fluxerChannelId,
+          );
+        } catch {
+          continue;
+        }
         if (!channel || !channel.isTextBased()) continue;
-        const message = await channel.messages.fetch(reply.fluxerMessageId);
+        let message;
+        try {
+          message = await channel.messages.fetch(reply.fluxerMessageId);
+        } catch {
+          continue;
+        }
         if (!message) continue;
         replyContent = message.content;
       } else {
@@ -410,7 +422,7 @@ ${replyContent}`,
 }
 
 /**
- * @param {{ channel_id: string; guild_id?: string; ids: string[] }} msgs
+ * @param {{ channelId: string; guildId?: string | null; ids: string[] }} msgs
  * @param {DiscordClient} client
  */
 export async function FluxerBulkDeleteMessageHandler(msgs, client) {
@@ -449,20 +461,20 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
 }
 
 /**
- * @param {{ channel_id: string }} chnl
+ * @param {{ channelId: string }} chnl
  * @param {DiscordClient} client
  * @param {FluxerClient} fluxerClient
  */
 export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
   const channelMap = await ChannelMap.findOne({
     where: {
-      fluxerChannelId: chnl.channel_id,
+      fluxerChannelId: chnl.channelId,
     },
   });
 
   if (channelMap) {
     const channel = /** @type {FluxerTextChannel} */ (
-      await fluxerClient.channels.fetch(chnl.channel_id)
+      await fluxerClient.channels.fetch(chnl.channelId)
     );
 
     if (channel) {
