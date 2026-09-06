@@ -11,7 +11,7 @@ import Config from "../utils/ConfigHandler.js";
 const command = {
   name: "ping",
   description: "...pong? (bot latency and stats)",
-  aliases: ["stats"],
+  aliases: ["stats", "uptime"],
   requireElevated: false,
   async run(params, message, discordClient, fluxerClient) {
     const isFluxer = message instanceof Message;
@@ -88,6 +88,21 @@ const command = {
             {
               name: "Memory",
               value: `${heapMb} MB`,
+              inline: true,
+            },
+            {
+              name: "Fluxer uptime",
+              value: getDuration(fluxerClient.readyAt ?? now, now),
+              inline: true,
+            },
+            {
+              name: "Discord uptime",
+              value: getDuration(discordClient.readyAt ?? now, now),
+              inline: true,
+            },
+            {
+              name: "\u200b",
+              value: "\u200b",
               inline: true,
             },
             {
