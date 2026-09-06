@@ -22,6 +22,31 @@ import {
 
 let fluxcordBotEmojiCfg = undefined;
 
+function isSocketError(error) {
+  return (
+    error?.code === "UND_ERR_SOCKET" ||
+    error?.code === "ECONNRESET" ||
+    error?.code === "EPIPE" ||
+    error?.code === "ETIMEDOUT"
+  );
+}
+
+async function downloadFluxerAttachment(url) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return Buffer.from(await res.arrayBuffer());
+    } catch (e) {
+      if (attempt === 1) {
+        log("FLUXER", `Failed to download Fluxer attachment ${url}`, e);
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 async function getFluxerAvatarURL(user, member) {
   if (!user?.avatarURL) return undefined;
   const avatar = member?.avatar ?? user.avatar;
@@ -167,7 +192,31 @@ export async function FluxerCreateMessageHandler(
     ),
   );
 
-  const msg = await webhook.send({
+  const attachmentDescs =
+    (forwardedMessage ?? message).attachments
+      ?.filter((x) => x.size < 9999000)
+      .map((a) => ({
+        url: a.proxyUrl ?? a.url ?? "",
+        name: toDiscordSpoilerFilename(
+          a.filename,
+          isFluxerSpoilerAttachment(a),
+        ),
+        description: a.description,
+      })) ?? [];
+
+  const files = [];
+  for (const desc of attachmentDescs) {
+    if (!desc.url) continue;
+    const data = await downloadFluxerAttachment(desc.url);
+    if (!data) continue;
+    files.push({
+      attachment: data,
+      name: desc.name,
+      description: desc.description,
+    });
+  }
+
+  const webhookPayload = {
     content:
       // @ts-expect-error
       (forwardedMessage
@@ -182,17 +231,7 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
-    files:
-      (forwardedMessage ?? message).attachments
-        ?.filter((x) => x.size < 9999000)
-        .map((a) => ({
-          attachment: a.proxyUrl ?? a.url ?? "",
-          name: toDiscordSpoilerFilename(
-            a.filename,
-            isFluxerSpoilerAttachment(a),
-          ),
-          description: a.description,
-        })) ?? [],
+    files,
     username:
       guildUser?.displayName ??
       message.author.globalName ??
@@ -202,7 +241,19 @@ export async function FluxerCreateMessageHandler(
       discordClient,
     ),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
-  });
+  };
+
+  let msg;
+  try {
+    msg = await webhook.send(webhookPayload);
+  } catch (e) {
+    if (!isSocketError(e)) throw e;
+    log(
+      "DISCORD",
+      `Retrying Discord webhook send after socket error for Fluxer message ${message.id}`,
+    );
+    msg = await webhook.send(webhookPayload);
+  }
 
   let bridgedMessageMap;
   try {
