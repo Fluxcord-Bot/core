@@ -55,6 +55,9 @@ const fluxerClient = new FluxerClient({
       text: `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
     },
   },
+  cache: {
+    guilds: Infinity,
+  },
 });
 
 fluxerClient.on(FluxerEvents.Error, (error) => {
