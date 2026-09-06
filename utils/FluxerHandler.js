@@ -252,7 +252,24 @@ export async function FluxerCreateMessageHandler(
       "DISCORD",
       `Retrying Discord webhook send after socket error for Fluxer message ${message.id}`,
     );
-    msg = await webhook.send(webhookPayload);
+    try {
+      msg = await webhook.send(webhookPayload);
+    } catch (e2) {
+      const att = attachmentDescs.filter((d) => d.url);
+      if (!isSocketError(e2) || att.length === 0) throw e2;
+      log(
+        "DISCORD",
+        `Bridging Fluxer message ${message.id} with attachment links after upload failure`,
+      );
+      msg = await webhook.send({
+        ...webhookPayload,
+        content:
+          webhookPayload.content +
+          "\n-# can't upload: " +
+          att.map((d) => `[${d.name}](${d.url})`).join(" "),
+        files: [],
+      });
+    }
   }
 
   let bridgedMessageMap;
@@ -356,14 +373,35 @@ export async function FluxerUpdateMessageHandler(
           channelMap.discordGuildId,
         ),
       ));
-    const editFiles = newMessage.attachments.map((a) => a.url ?? "");
+    const editFiles = [];
+    for (const a of newMessage.attachments.map((x) => ({
+      url: x.url ?? "",
+      name: x.filename,
+    }))) {
+      if (!a.url) continue;
+      const data = await downloadFluxerAttachment(a.url);
+      if (!data) continue;
+      editFiles.push({ attachment: data, name: a.name });
+    }
 
     if (!editContent && editFiles.length === 0) return;
 
-    await webhook.editMessage(messageExisting.discordMessageId, {
-      content: editContent,
-      files: editFiles,
-    });
+    try {
+      await webhook.editMessage(messageExisting.discordMessageId, {
+        content: editContent,
+        files: editFiles,
+      });
+    } catch (e) {
+      if (!isSocketError(e)) throw e;
+      log(
+        "DISCORD",
+        `Retrying Discord webhook edit after socket error for Fluxer message ${newMessage.id}`,
+      );
+      await webhook.editMessage(messageExisting.discordMessageId, {
+        content: editContent,
+        files: editFiles,
+      });
+    }
   }
 }
 
