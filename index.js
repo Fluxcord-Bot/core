@@ -169,7 +169,11 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
   try {
     await FluxerUpdateMessageHandler(oldMsg, newMsg, discordClient);
   } catch (e) {
-    await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
+    if (newMsg.partial) {
+      log("FLUXER", "An error occurred", e);
+    } else {
+      await sendErrorMessage(newMsg, discordClient, fluxerClient, e);
+    }
   }
 });
 fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
