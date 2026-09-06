@@ -153,7 +153,7 @@ export async function DiscordCreateMessageHandler(
 
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
-  if (message.reference) {
+  if (message.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
     messageReference = await MessageMap.findOne({
       where: {
         [Op.or]: [
