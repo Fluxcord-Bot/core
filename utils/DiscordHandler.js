@@ -356,9 +356,18 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
 
+    const bridgeContent = await attemptParseBridgedMessage(newMsg);
+
+    const wEmbeds = newMsg.embeds;
+    if (typeof bridgeContent.excludeEmbed === "number")
+      wEmbeds.splice(bridgeContent.excludeEmbed, 1);
+
     const newContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
-        sanitizePings(await parseMentions(newMsg)),
+        sanitizePings(
+          await parseMentions(newMsg),
+          bridgeContent.messageData.parsedContent,
+        ),
         client,
         channelMap.fluxerGuildId,
       ),
@@ -370,9 +379,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         body: {
           content: newContent,
           embeds: await Promise.all(
-            newMsg.embeds.map(
-              async (x) => await discordEmbedToFluxer(x, client),
-            ),
+            wEmbeds.map(async (x) => await discordEmbedToFluxer(x, client)),
           ),
         },
         auth: false,
