@@ -88,19 +88,21 @@ discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
 discordClient.on(DiscordEvents.TypingStart, async (type) => {
   if (type.user.id === discordClient.user?.id) return;
 
-  const channelMap = await ChannelMap.findOne({
-    where: {
-      discordChannelId: type.channel.id,
-    },
-  });
+  try {
+    const channelMap = await ChannelMap.findOne({
+      where: {
+        discordChannelId: type.channel.id,
+      },
+    });
 
-  if (channelMap) {
-    const channel = await fluxerClient.channels.fetch(
-      //@ts-expect-error
-      channelMap.fluxerChannelId,
-    );
-    channel.sendTyping();
-  }
+    if (channelMap) {
+      const channel = await fluxerClient.channels.fetch(
+        //@ts-expect-error
+        channelMap.fluxerChannelId,
+      );
+      channel.sendTyping();
+    }
+  } catch {}
 });
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {

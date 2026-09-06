@@ -264,8 +264,10 @@ export async function FluxerCreateMessageHandler(
       msg = await webhook.send({
         ...webhookPayload,
         content:
-          webhookPayload.content +
-          "\n-# can't upload: " +
+          (webhookPayload.content
+            ? webhookPayload.content + "\n"
+            : "") +
+          "-# can't upload: " +
           att.map((d) => `[${d.name}](${d.url})`).join(" "),
         files: [],
       });
@@ -373,12 +375,11 @@ export async function FluxerUpdateMessageHandler(
           channelMap.discordGuildId,
         ),
       ));
+    const editDescs = newMessage.attachments
+      .map((x) => ({ url: x.url ?? "", name: x.filename }))
+      .filter((x) => x.url);
     const editFiles = [];
-    for (const a of newMessage.attachments.map((x) => ({
-      url: x.url ?? "",
-      name: x.filename,
-    }))) {
-      if (!a.url) continue;
+    for (const a of editDescs) {
       const data = await downloadFluxerAttachment(a.url);
       if (!data) continue;
       editFiles.push({ attachment: data, name: a.name });
@@ -397,10 +398,25 @@ export async function FluxerUpdateMessageHandler(
         "DISCORD",
         `Retrying Discord webhook edit after socket error for Fluxer message ${newMessage.id}`,
       );
-      await webhook.editMessage(messageExisting.discordMessageId, {
-        content: editContent,
-        files: editFiles,
-      });
+      try {
+        await webhook.editMessage(messageExisting.discordMessageId, {
+          content: editContent,
+          files: editFiles,
+        });
+      } catch (e2) {
+        if (!isSocketError(e2) || editDescs.length === 0) throw e2;
+        log(
+          "DISCORD",
+          `Bridging Fluxer message ${newMessage.id} with attachment links after edit upload failure`,
+        );
+        await webhook.editMessage(messageExisting.discordMessageId, {
+          content:
+            (editContent ? editContent + "\n" : "") +
+            "-# can't upload: " +
+            editDescs.map((d) => `[${d.name}](${d.url})`).join(" "),
+          files: [],
+        });
+      }
     }
   }
 }
