@@ -158,13 +158,13 @@ export async function DiscordCreateMessageHandler(
       where: {
         [Op.or]: [
           {
-            discordMessageId: message.reference.messageId,
+            discordMessageId: message.reference?.messageId ?? "",
           },
           {
             discordMessageId: bridgeContent.messageData.messageId ?? "",
           },
           {
-            fluxerMessageId: message.reference.messageId,
+            fluxerMessageId: message.reference?.messageId ?? "",
           },
         ],
       },
