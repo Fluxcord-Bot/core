@@ -14,6 +14,7 @@ import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { log } from "./Logger.js";
+import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
 import {
@@ -91,7 +92,10 @@ export async function FluxerCreateMessageHandler(
     );
 
   if (!message.guildId || message.type === 6) return;
-  if (message.content.startsWith(Config.BotPrefix)) {
+  // Only the guild's effective prefix triggers commands. Once a custom
+  // prefix is set for a guild, the global prefix no longer works there.
+  const guildPrefix = await getGuildPrefix(message.guildId);
+  if (message.content.startsWith(guildPrefix)) {
     CommandHandler(message, discordClient, client);
     return;
   }

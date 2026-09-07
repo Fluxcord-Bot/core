@@ -3,6 +3,7 @@ import Config from "../utils/ConfigHandler.js";
 import fs from "node:fs";
 import ExpiryMap from "expiry-map";
 import { checkManageServerPerms } from "./CheckManageServerPerms.js";
+import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { log } from "./Logger.js";
 import { sanitizePings } from "./SanitizePings.js";
 
@@ -41,7 +42,10 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
   if (message.author.bot || message.webhookId) return;
 
   const cmdList = message.content.split(" ");
-  const command = cmdList[0]?.replace(Config.BotPrefix, "");
+  const guildPrefix = await getGuildPrefix(message.guildId ?? "");
+  const command = cmdList[0]?.startsWith(guildPrefix)
+    ? cmdList[0].slice(guildPrefix.length)
+    : cmdList[0]?.replace(Config.BotPrefix, "");
   const commands = await getCommands();
   let commandToRun = commands.find(
     (x) => x.name === command || x.aliases?.find((y) => y === command),
@@ -65,7 +69,7 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
       await message.reply({
         embeds: [
           {
-            description: `Command \`${Config.BotPrefix + command}\` does not exist!`,
+            description: `Command \`${guildPrefix + command}\` does not exist!`,
             color: 0xef0000,
           },
         ],

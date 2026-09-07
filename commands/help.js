@@ -1,6 +1,7 @@
 import { EmbedBuilder } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
 import { getCommands } from "../utils/CommandHandler.js";
+import { getGuildPrefix } from "../utils/GetGuildPrefix.js";
 import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
 
 /**
@@ -8,18 +9,19 @@ import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
  * @param {string} cmd
  * @param {string[]?} aliases
  * @param {string[]?} grp
+ * @param {string} prefix
  */
-function genAliases(cmd, aliases, grp) {
+function genAliases(cmd, aliases, grp, prefix) {
   const cmds = [];
   if (grp && grp.length > 0) {
     grp.forEach((x) => {
-      cmds.push(`\`${Config.BotPrefix}${x} ${cmd}\``);
+      cmds.push(`\`${prefix}${x} ${cmd}\``);
       if (aliases && aliases.length > 0) {
-        aliases.forEach((y) => cmds.push(`\`${Config.BotPrefix}${x} ${y}\``));
+        aliases.forEach((y) => cmds.push(`\`${prefix}${x} ${y}\``));
       }
     });
   } else if (aliases && aliases.length > 0) {
-    aliases.forEach((x) => cmds.push(`\`${Config.BotPrefix}${x}\``));
+    aliases.forEach((x) => cmds.push(`\`${prefix}${x}\``));
   }
   return cmds.join(", ");
 }
@@ -34,6 +36,7 @@ const command = {
   requireElevated: false,
   params: "[...command]",
   async run(params, message, _, _2) {
+    const prefix = await getGuildPrefix(message.guildId ?? "");
     if (params[0]) {
       const command = (await getCommands()).find(
         (x) =>
@@ -47,13 +50,14 @@ const command = {
           command.name,
           command.aliases,
           command.groupNames,
+          prefix,
         );
         await message.reply({
           //@ts-expect-error
           embeds: [
             new EmbedBuilder()
               .setTitle(
-                `${Config.BotPrefix}${command.groupNames ? command.groupNames[0] + " " : ""}${command.name}${command.params ? " " + command.params : ""}`,
+                `${prefix}${command.groupNames ? command.groupNames[0] + " " : ""}${command.name}${command.params ? " " + command.params : ""}`,
               )
               .setDescription(
                 (aliases ? `Aliases: ${aliases}\n` : "") +
@@ -102,11 +106,11 @@ const command = {
           new EmbedBuilder()
             .setTitle("Fluxcord")
             .setDescription(
-              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${Config.BotPrefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
+              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
             )
             .addFields(
               ...cmds.map((x) => ({
-                name: `${Config.BotPrefix}${x.groupNames ? x.groupNames[0] + " " : ""}${x.name}${x.params ? " " + x.params : ""}`,
+                name: `${prefix}${x.groupNames ? x.groupNames[0] + " " : ""}${x.name}${x.params ? " " + x.params : ""}`,
                 value: x.description,
                 inline: true,
               })),

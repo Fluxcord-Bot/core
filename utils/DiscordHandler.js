@@ -19,6 +19,7 @@ import {
 import { sanitizePings } from "./SanitizePings.js";
 import { sendErrorMessage } from "./SendErrorMessage.js";
 import { log } from "./Logger.js";
+import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 import {
   isDiscordSpoilerAttachment,
@@ -77,7 +78,10 @@ export async function DiscordCreateMessageHandler(
 
   if (!message.guildId || message.type === MessageType.ChannelPinnedMessage)
     return;
-  if (message.content.startsWith(Config.BotPrefix)) {
+  // Only the guild's effective prefix triggers commands. Once a custom
+  // prefix is set for a guild, the global prefix no longer works there.
+  const guildPrefix = await getGuildPrefix(message.guildId);
+  if (message.content.startsWith(guildPrefix)) {
     CommandHandler(message, client, fluxerClient);
     return;
   }
