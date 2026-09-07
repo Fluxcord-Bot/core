@@ -1,6 +1,7 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
+import { getFluxerInviteBaseUrl } from "../utils/GetFluxerUrls.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -60,7 +61,8 @@ const command = {
       }
 
       if (guild) {
-        let guildInvite = "https://fluxer.gg/";
+        const inviteBase = await getFluxerInviteBaseUrl();
+        let guildInvite = inviteBase + "/";
         if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
         else {
           /** @type {import("@fluxerjs/core").GuildChannel} */

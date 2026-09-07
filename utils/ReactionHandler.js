@@ -262,13 +262,13 @@ export function setupReactionHandling(discordClient, fluxerClient) {
     ) {
       try {
         await reaction.remove();
+        await sendBridgeInfo(
+          await reaction.message.fetch(),
+          user,
+          discordClient,
+          fluxerClient,
+        );
       } catch {}
-      await sendBridgeInfo(
-        await reaction.message.fetch(),
-        user,
-        discordClient,
-        fluxerClient,
-      );
       return;
     }
 
@@ -292,9 +292,9 @@ export function setupReactionHandling(discordClient, fluxerClient) {
       const message = await reaction.fetchMessage();
       try {
         message.removeReactionEmoji(":information_source:");
+        await sendBridgeInfo(message, user, discordClient, fluxerClient);
       } catch {}
 
-      await sendBridgeInfo(message, user, discordClient, fluxerClient);
       return;
     }
 
