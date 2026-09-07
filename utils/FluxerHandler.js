@@ -1,6 +1,7 @@
 import { ChannelMap, MessageMap } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
+import { cloudUploadAttachments } from "./CloudUpload.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
@@ -21,15 +22,6 @@ import {
 } from "./SpoilerAttachments.js";
 
 let fluxcordBotEmojiCfg = undefined;
-
-function isSocketError(error) {
-  return (
-    error?.code === "UND_ERR_SOCKET" ||
-    error?.code === "ECONNRESET" ||
-    error?.code === "EPIPE" ||
-    error?.code === "ETIMEDOUT"
-  );
-}
 
 async function downloadFluxerAttachment(url) {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -216,6 +208,15 @@ export async function FluxerCreateMessageHandler(
     });
   }
 
+  const attachments =
+    files.length > 0
+      ? await cloudUploadAttachments(
+          discordClient,
+          channelMap.discordChannelId,
+          files,
+        )
+      : undefined;
+
   const webhookPayload = {
     content:
       // @ts-expect-error
@@ -231,7 +232,8 @@ export async function FluxerCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 10mb: " + overAttachmentsStr
         : ""),
-    files,
+    // @ts-expect-error
+    attachments,
     username:
       guildUser?.displayName ??
       message.author.globalName ??
@@ -243,36 +245,7 @@ export async function FluxerCreateMessageHandler(
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
   };
 
-  let msg;
-  try {
-    msg = await webhook.send(webhookPayload);
-  } catch (e) {
-    if (!isSocketError(e)) throw e;
-    log(
-      "DISCORD",
-      `Retrying Discord webhook send after socket error for Fluxer message ${message.id}`,
-    );
-    try {
-      msg = await webhook.send(webhookPayload);
-    } catch (e2) {
-      const att = attachmentDescs.filter((d) => d.url);
-      if (!isSocketError(e2) || att.length === 0) throw e2;
-      log(
-        "DISCORD",
-        `Bridging Fluxer message ${message.id} with attachment links after upload failure`,
-      );
-      msg = await webhook.send({
-        ...webhookPayload,
-        content:
-          (webhookPayload.content
-            ? webhookPayload.content + "\n"
-            : "") +
-          "-# can't upload: " +
-          att.map((d) => `[${d.name}](${d.url})`).join(" "),
-        files: [],
-      });
-    }
-  }
+  const msg = await webhook.send(webhookPayload);
 
   let bridgedMessageMap;
   try {
@@ -385,39 +358,21 @@ export async function FluxerUpdateMessageHandler(
       editFiles.push({ attachment: data, name: a.name });
     }
 
-    if (!editContent && editFiles.length === 0) return;
+    const attachments =
+      editFiles.length > 0
+        ? await cloudUploadAttachments(
+            client,
+            channelMap.discordChannelId,
+            editFiles,
+          )
+        : undefined;
 
-    try {
-      await webhook.editMessage(messageExisting.discordMessageId, {
-        content: editContent,
-        files: editFiles,
-      });
-    } catch (e) {
-      if (!isSocketError(e)) throw e;
-      log(
-        "DISCORD",
-        `Retrying Discord webhook edit after socket error for Fluxer message ${newMessage.id}`,
-      );
-      try {
-        await webhook.editMessage(messageExisting.discordMessageId, {
-          content: editContent,
-          files: editFiles,
-        });
-      } catch (e2) {
-        if (!isSocketError(e2) || editDescs.length === 0) throw e2;
-        log(
-          "DISCORD",
-          `Bridging Fluxer message ${newMessage.id} with attachment links after edit upload failure`,
-        );
-        await webhook.editMessage(messageExisting.discordMessageId, {
-          content:
-            (editContent ? editContent + "\n" : "") +
-            "-# can't upload: " +
-            editDescs.map((d) => `[${d.name}](${d.url})`).join(" "),
-          files: [],
-        });
-      }
-    }
+    if (!editContent && !attachments?.length) return;
+
+    await webhook.editMessage(messageExisting.discordMessageId, {
+      content: editContent,
+      attachments,
+    });
   }
 }
 
