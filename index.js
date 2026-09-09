@@ -270,6 +270,9 @@ function isRecoverableRuntimeError(error) {
     "UND_ERR_CONNECT_TIMEOUT",
     "Connect Timeout Error",
     "Rate limited",
+    "Missing Permissions",
+    "Missing Access",
+    "You don't have the permissions",
   ].some((needle) => message.includes(needle));
 }
 
