@@ -414,12 +414,28 @@ function bumpDiscordVoiceServerGeneration(voiceClient, guildId) {
 }
 
 /**
+ * @param {string} fluxerGuildId
+ * @param {string} [exceptChannelId]
+ * @returns {boolean}
+ */
+function isFluxerGuildInUse(fluxerGuildId, exceptChannelId) {
+  for (const [id, session] of sessions) {
+    if (id !== exceptChannelId && session.fluxerGuildId === fluxerGuildId) return true;
+  }
+  for (const [id, creds] of pending) {
+    if (id !== exceptChannelId && creds.fluxerGuildId === fluxerGuildId) return true;
+  }
+  return false;
+}
+
+/**
  * @param {import("discord.js").Client} voiceClient
  * @param {string} guildId
  * @param {string} fluxerGuildId
  * @param {boolean} leaveDiscord
+ * @param {string} [exceptChannelId]
  */
-function sendLeaveOps(voiceClient, guildId, fluxerGuildId, leaveDiscord = true) {
+function sendLeaveOps(voiceClient, guildId, fluxerGuildId, leaveDiscord = true, exceptChannelId) {
   const guild =
     voiceClient?.guilds.cache.get(guildId) ??
     _discordClient?.guilds.cache.get(guildId);
@@ -434,6 +450,10 @@ function sendLeaveOps(voiceClient, guildId, fluxerGuildId, leaveDiscord = true) 
         self_deaf: false,
       },
     });
+  }
+  if (isFluxerGuildInUse(fluxerGuildId, exceptChannelId)) {
+    log("VOICE", `Keeping Fluxer voice for guild=${fluxerGuildId}; another bridge still uses it`);
+    return;
   }
   _fluxerClient?.sendToGateway(0, {
     op: 4,
@@ -668,6 +688,7 @@ export async function setupVoiceHandling(discordClient, fluxerClient, extraVoice
     } = data;
     if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
+    log("VOICE", `Fluxer voice server keys for guild=${fluxerGuildId}: ${Object.keys(data).join(",")}`);
     latestFluxerVoiceServer.set(fluxerGuildId, { livekitUrl, livekitToken });
     for (const [channelId, creds] of pending) {
       if (creds.fluxerGuildId !== fluxerGuildId) continue;
@@ -851,7 +872,7 @@ async function sendJoinOp(
         `Timed out waiting for fresh Discord voice state for ${channelId}`,
       );
       clearPendingChannel(channelId);
-      sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true);
+      sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true, channelId);
       scheduleSessionRejoin(channelId, guildId, {
         allowWithoutDiscord:
           getFluxerHumanCount(
@@ -959,24 +980,24 @@ async function maybeLaunch(channelId) {
         const requireFreshDiscord = code === 2 || code === 4;
         sessions.delete(channelId);
         if (restartRequested) {
-          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false, channelId);
           void rejoinMappedChannel(guildId, channelId);
         } else if (typeof code === "number" && code !== 0) {
-          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, requireFreshDiscord);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, requireFreshDiscord, channelId);
           scheduleSessionRejoin(channelId, guildId, {
             allowWithoutDiscord: fluxerCount > 0,
             requireFreshDiscord,
             reason: `bridge failure code ${code}`,
           });
         } else if (code === null) {
-          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false, channelId);
           pendingRunnerRestarts.set(channelId, { guildId });
           log(
             "VOICE",
             `Queued rejoin for channel ${channelId} until a runner reconnects`,
           );
         } else {
-          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true, channelId);
         }
       },
       onError(message) {
