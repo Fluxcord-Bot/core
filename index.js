@@ -78,7 +78,7 @@ async function destroyChannelMaps(where) {
   if (channelMaps.length > 0) {
     await MessageMap.destroy({
       where: {
-        channelMapId: channelMaps.map((c) => c.id),
+        channelMapId: channelMaps.map((c) => c.get("id")),
       },
     });
   }

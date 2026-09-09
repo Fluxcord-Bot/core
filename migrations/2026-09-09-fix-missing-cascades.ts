@@ -1,6 +1,12 @@
 import { QueryInterface } from "sequelize";
 import Config from "../utils/ConfigHandler.js";
-import sqlite3 from "@journeyapps/sqlcipher";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const sqlite3: typeof import("@journeyapps/sqlcipher") =
+  require("@journeyapps/sqlcipher");
+
+type SqliteDatabase = import("@journeyapps/sqlcipher").Database;
 
 const TARGETS = [
   { table: "ChannelMaps", column: "DiscordGuildMapId", refTable: "GuildMaps" },
@@ -10,26 +16,22 @@ const TARGETS = [
 
 const CASCADE_SUFFIX = " ON DELETE CASCADE ON UPDATE CASCADE";
 
-/** @param {any} db @param {string} sql */
-export function run(db, sql) {
-  return new Promise((resolve, reject) =>
+export function run(db: SqliteDatabase, sql: string): Promise<void> {
+  return new Promise<void>((resolve, reject) =>
     db.run(sql, (err) => (err ? reject(err) : resolve())),
   );
 }
 
-/**
- * @param {any} db
- * @param {string} sql
- * @returns {Promise<any[]>}
- */
-export function get(db, sql) {
-  return new Promise((resolve, reject) =>
+export function get(db: SqliteDatabase, sql: string): Promise<any[]> {
+  return new Promise<any[]>((resolve, reject) =>
     db.all(sql, (err, rows) => (err ? reject(err) : resolve(rows))),
   );
 }
 
-/** @param {boolean} enableCascade */
-async function fixPostgres(queryInterface, enableCascade) {
+async function fixPostgres(
+  queryInterface: QueryInterface,
+  enableCascade: boolean,
+): Promise<void> {
   const s = queryInterface.sequelize;
   const qi = queryInterface;
   for (const { table, column, refTable } of TARGETS) {
@@ -46,7 +48,9 @@ async function fixPostgres(queryInterface, enableCascade) {
            WHERE a.attrelid = rel.oid AND a.attname = ${s.escape(column)}
          )`,
     );
-    const constraints = Array.isArray(rows) ? rows : rows ? [rows] : [];
+    const constraints: { conname: string; confdeltype: string }[] = (
+      Array.isArray(rows) ? rows : rows ? [rows] : []
+    ) as { conname: string; confdeltype: string }[];
     const cascade = constraints.filter((c) => c.confdeltype === "c");
     const others = constraints.filter((c) => c.confdeltype !== "c");
     const needsFix = enableCascade
@@ -54,7 +58,8 @@ async function fixPostgres(queryInterface, enableCascade) {
       : cascade.length > 0;
     if (!needsFix) continue;
     for (const c of constraints) {
-      if (enableCascade && c.confdeltype === "c" && cascade.length === 1) continue;
+      if (enableCascade && c.confdeltype === "c" && cascade.length === 1)
+        continue;
       await s.query(
         `ALTER TABLE ${qi.quoteIdentifier(table)} DROP CONSTRAINT ${qi.quoteIdentifier(c.conname)};`,
       );
@@ -68,7 +73,7 @@ async function fixPostgres(queryInterface, enableCascade) {
            WHERE a.attrelid = rel.oid AND a.attname = ${s.escape(column)}
          )`,
     );
-    const stillThere = rows2?.[0]?.n;
+    const stillThere = (rows2?.[0] as { n?: number } | undefined)?.n;
     if (enableCascade && !stillThere) {
       await s.query(
         `ALTER TABLE ${qi.quoteIdentifier(table)}
@@ -88,14 +93,12 @@ async function fixPostgres(queryInterface, enableCascade) {
   }
 }
 
-/** @returns {Promise<import("@journeyapps/sqlcipher").Database>} */
-async function openSourceDb() {
+async function openSourceDb(): Promise<SqliteDatabase> {
   const dbPath = Config.DataFolderPath + "/fluxcord.db";
-  /** @type {import("@journeyapps/sqlcipher").Database | null} */
-  let keyed = null;
+  let keyed: SqliteDatabase | null = null;
   if (Config.DatabaseEncryptionToken) {
     try {
-      keyed = await new Promise((resolve, reject) => {
+      keyed = await new Promise<SqliteDatabase>((resolve, reject) => {
         const db = new sqlite3.Database(dbPath, (err) =>
           err ? reject(err) : resolve(db),
         );
@@ -109,57 +112,76 @@ async function openSourceDb() {
       return keyed;
     } catch {
       try {
-        if (keyed) await new Promise((res) => keyed.close(res));
+        const k = keyed;
+        if (k)
+          await new Promise<void>((res) => {
+            k.close(() => res());
+          });
       } catch {}
       keyed = null;
     }
   }
-  return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(dbPath, (err) =>
-      err ? reject(err) : resolve(db),
-    );
+  return await new Promise<SqliteDatabase>((resolve, reject) => {
+    const db = new sqlite3.Database(dbPath, (err) => (err ? reject(err) : resolve(db)));
   });
 }
 
-/**
- * @param {import("@journeyapps/sqlcipher").Database} db
- * @param {string} table
- * @param {string} refTable
- * @param {boolean} enableCascade
- * @returns {Promise<boolean>}
- */
-export async function rebuildTable(db, table, refTable, enableCascade) {
-  const rows = await get(db, `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${table}';`);
+export async function rebuildTable(
+  db: SqliteDatabase,
+  table: string,
+  refTable: string,
+  enableCascade: boolean,
+): Promise<boolean> {
+  const rows = await get(
+    db,
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '${table}';`,
+  );
   const ddl = rows[0]?.sql;
   if (!ddl) return false;
   const bare = `REFERENCES \`${refTable}\` (\`id\`)`;
   const full = bare + CASCADE_SUFFIX;
   const patched = enableCascade
-    ? ddl.replace(new RegExp(`${bare.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&")}(?! ON DELETE)`, "g"), full)
+    ? ddl.replace(
+        new RegExp(`${bare.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&")}(?! ON DELETE)`, "g"),
+        full,
+      )
     : ddl.replace(new RegExp(`${full.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&")}`, "g"), bare);
   if (patched === ddl) return false;
 
   const tempName = `${table}__rebuild`;
+  const quotedTable = table.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
   const newDdl = patched.replace(
-    `CREATE TABLE \`${table}\``,
+    new RegExp(`CREATE TABLE (?:\`${quotedTable}\`|"${quotedTable}"|\\[${quotedTable}\\])`),
     `CREATE TABLE \`${tempName}\``,
   );
+  if (newDdl === patched) {
+    throw new Error(`Could not locate CREATE TABLE statement for ${table}`);
+  }
 
   await run(db, "PRAGMA foreign_keys = OFF;");
   await run(db, "BEGIN;");
   try {
     await run(db, newDdl + ";");
     await run(db, `INSERT INTO \`${tempName}\` SELECT * FROM \`${table}\`;`);
-    const oldCount = (await get(db, `SELECT COUNT(*) AS n FROM \`${table}\`;`))[0]?.n;
-    const newCount = (await get(db, `SELECT COUNT(*) AS n FROM \`${tempName}\`;`))[0]?.n;
+    const oldCount = (
+      await get(db, `SELECT COUNT(*) AS n FROM \`${table}\`;`)
+    )[0]?.n;
+    const newCount = (
+      await get(db, `SELECT COUNT(*) AS n FROM \`${tempName}\`;`)
+    )[0]?.n;
     if (oldCount !== newCount) {
-      throw new Error(`Row count mismatch while rebuilding ${table} (${oldCount} -> ${newCount})`);
+      throw new Error(
+        `Row count mismatch while rebuilding ${table} (${oldCount} -> ${newCount})`,
+      );
     }
     const indexes = await get(db, `PRAGMA index_list(\`${table}\`);`);
-    const indexSqls = [];
+    const indexSqls: string[] = [];
     for (const idx of indexes) {
       if (idx.origin !== "c") continue;
-      const [ix] = await get(db, `SELECT sql FROM sqlite_master WHERE type = 'index' AND name = '${idx.name}' AND tbl_name = '${table}';`);
+      const [ix] = await get(
+        db,
+        `SELECT sql FROM sqlite_master WHERE type = 'index' AND name = '${idx.name}' AND tbl_name = '${table}';`,
+      );
       if (ix?.sql) indexSqls.push(ix.sql);
     }
     await run(db, `DROP TABLE \`${table}\`;`);
@@ -179,8 +201,7 @@ export async function rebuildTable(db, table, refTable, enableCascade) {
   return true;
 }
 
-/** @param {boolean} enableCascade */
-async function fixSqlite(enableCascade) {
+async function fixSqlite(enableCascade: boolean): Promise<void> {
   const db = await openSourceDb();
   try {
     const tables = [...new Set(TARGETS.map((t) => t.table))];
@@ -189,7 +210,9 @@ async function fixSqlite(enableCascade) {
       await rebuildTable(db, table, refTable, enableCascade);
     }
   } finally {
-    await new Promise((res) => db.close(res));
+    await new Promise<void>((res) => {
+      db.close(() => res());
+    });
   }
 }
 
@@ -197,7 +220,7 @@ export async function up({
   context: queryInterface,
 }: {
   context: QueryInterface;
-}) {
+}): Promise<void> {
   if (queryInterface.sequelize.getDialect() === "postgres") {
     await fixPostgres(queryInterface, true);
     return;
@@ -209,7 +232,7 @@ export async function down({
   context: queryInterface,
 }: {
   context: QueryInterface;
-}) {
+}): Promise<void> {
   if (queryInterface.sequelize.getDialect() === "postgres") {
     await fixPostgres(queryInterface, false);
     return;

@@ -9,6 +9,7 @@ export const isPostgres =
   !!Config.PostgresConnectionString &&
   Config.PostgresConnectionString.length > 0;
 
+/** @type {import("sequelize").Sequelize} */
 let sequelize;
 
 if (isPostgres) {
