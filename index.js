@@ -406,6 +406,10 @@ async function onBothReady() {
   startVoiceRecovery?.();
 }
 
+fluxerClient.on(FluxerEvents.Error, async (e) => {
+  log("FLUXER", `Fluxer Error: ${e}`);
+});
+
 fluxerClient.on(FluxerEvents.Ready, async () => {
   log(
     "FLUXER",
@@ -460,7 +464,7 @@ process.on("uncaughtException", (error) => {
 process.on(
   "unhandledRejection",
   /** @param {unknown} reason */
- (reason, promise) => {
+  (reason, promise) => {
     log("META", "A unhandled rejection occurred.", reason);
 
     if (isRecoverableRuntimeError(reason)) {
@@ -495,7 +499,10 @@ for (const [i, token] of discordVoiceTokens.entries()) {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
   });
   voiceClient.on(DiscordEvents.ClientReady, () => {
-    log("DISCORD", `Voice client ${i + 1}/${discordVoiceTokens.length} ready as ${voiceClient.user?.tag}`);
+    log(
+      "DISCORD",
+      `Voice client ${i + 1}/${discordVoiceTokens.length} ready as ${voiceClient.user?.tag}`,
+    );
   });
   voiceClient.login(token).catch((e) => {
     log("DISCORD", `Voice client ${i + 1} failed to login`, e);
