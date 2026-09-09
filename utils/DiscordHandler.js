@@ -25,6 +25,7 @@ import {
   isDiscordSpoilerAttachment,
   SPOILER_ATTACHMENT_FLAG,
 } from "./SpoilerAttachments.js";
+import { checkPingPerms } from "./CheckManageServerPerms.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -198,14 +199,23 @@ export async function DiscordCreateMessageHandler(
     try {
       guildUser = await message.guild.members.fetch(message.author.id);
     } catch {}
-
+    const otherSideGuild = await fluxerClient.guilds.fetch(
+      channelMap.fluxerGuildId,
+    );
+    const canUserPing = await checkPingPerms(
+      message.guildId,
+      message.author.id,
+      client,
+    );
     const parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         sanitizePings(
           await parseMentions(
             forwardedMessage ?? message,
             bridgeContent.messageData.parsedContent,
+            otherSideGuild,
           ),
+          canUserPing,
         ),
         fluxerClient,
         channelMap.fluxerGuildId,
@@ -269,6 +279,10 @@ export async function DiscordCreateMessageHandler(
         embeds: webhookEmbeds,
         files: webhookFiles,
         message_reference: messageReferenceOption,
+        allowed_mentions: {
+          parse: ["users", "roles", ...(canUserPing ? ["everyone"] : [])],
+          replied_user: true,
+        },
       },
     );
 
@@ -324,8 +338,8 @@ export async function DiscordCreateMessageHandler(
 }
 
 /**
- * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean> | import("discord.js").PartialMessage<boolean>>} oldMsg
- * @param {import("discord.js").OmitPartialGroupDMChannel<DiscordMessage<boolean>>} newMsg
+ * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean> | import("discord.js").PartialMessage<boolean>>} oldMsg
+ * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>>} newMsg
  * @param {FluxerClient} client
  */
 export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
@@ -364,17 +378,25 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
+    const canUserPing = await checkPingPerms(
+      newMsg.guildId,
+      newMsg.author.id,
+      client,
+    );
+
     const wEmbeds = newMsg.embeds;
     if (typeof bridgeContent.excludeEmbed === "number")
       wEmbeds.splice(bridgeContent.excludeEmbed, 1);
-
+    const otherSideGuild = await client.guilds.fetch(channelMap.fluxerGuildId);
     const newContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         sanitizePings(
           await parseMentions(
             newMsg,
             bridgeContent.messageData.parsedContent,
+            otherSideGuild,
           ),
+          canUserPing,
         ),
         client,
         channelMap.fluxerGuildId,

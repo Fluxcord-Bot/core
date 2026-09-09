@@ -11,8 +11,9 @@ import { Op } from "sequelize";
 /**
  * @param {import("discord.js").Message | import("@fluxerjs/core").Message} message
  * @param {string?} content
+ * @param {(import("discord.js").Guild | import("@fluxerjs/core").Guild)?} otherSideGuild
  */
-export async function parseMentions(message, content) {
+export async function parseMentions(message, content, otherSideGuild) {
   let res = content || message.content;
 
   if (!res) return "";
@@ -43,14 +44,32 @@ export async function parseMentions(message, content) {
       res = res.replaceAll(`<@${v.id}>`, `@${v.tag}`);
     });
 
+    const whitelist = [];
+
+    /** @type {import("@fluxerjs/core").Role[]} */
+    const roles = await otherSideGuild.fetchRoles();
     message.mentions.roles.forEach((v) => {
-      res = res.replaceAll(`<@&${v.id}>`, `@${v.name}`);
+      res = res.replaceAll(
+        `<@&${v.id}>`,
+        (() => {
+          if (!roles) return `@${v.name}`;
+          const extRole = roles.find((x) => x.name === v.name);
+          if (!extRole || !extRole.mentionable) return `@${v.name}`;
+          whitelist.push(extRole.id);
+          return `<@&${extRole.id}>`;
+        })(),
+      );
+    });
+
+    res = res.replace(/<@&(\d+)>/g, (match, id) => {
+      return whitelist.includes(id) ? match : "@unknown-role";
     });
   } else if (message.client instanceof FluxerClient) {
     res = await parseRolesAndChannels(
       res,
       message.guildId ?? "",
       message.client,
+      otherSideGuild,
     );
 
     message.mentions.forEach((v) => {
@@ -65,8 +84,14 @@ export async function parseMentions(message, content) {
  * @param {string} content
  * @param {string} guildId
  * @param {FluxerClient} fluxerClient
+ * @param {import("discord.js").Guild?} otherSideGuild
  */
-async function parseRolesAndChannels(content, guildId, fluxerClient) {
+async function parseRolesAndChannels(
+  content,
+  guildId,
+  fluxerClient,
+  otherSideGuild,
+) {
   let guild;
   try {
     guild = await fluxerClient.guilds.fetch(guildId);
@@ -79,9 +104,24 @@ async function parseRolesAndChannels(content, guildId, fluxerClient) {
   if (guild) {
     const roles = await guild.fetchRoles();
     const channels = await guild.fetchChannels();
+    const otherRoles = await otherSideGuild.roles.fetch();
+    const whitelist = [];
 
     roles.forEach((v) => {
-      res = res.replaceAll(`<@&${v.id}>`, `@${v.name}`);
+      res = res.replaceAll(
+        `<@&${v.id}>`,
+        (() => {
+          if (!otherRoles) return `@${v.name}`;
+          const extRole = otherRoles.find((x) => x.name === v.name);
+          if (!extRole || !extRole.mentionable) return `@${v.name}`;
+          whitelist.push(extRole.id);
+          return `<@&${extRole.id}>`;
+        })(),
+      );
+    });
+
+    res = res.replace(/<@&(\d+)>/g, (match, id) => {
+      return whitelist.includes(id) ? match : "@unknown-role";
     });
 
     const bridgedChannels = await ChannelMap.findAll({

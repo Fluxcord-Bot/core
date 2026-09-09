@@ -36,3 +36,38 @@ export async function checkManageServerPerms(guildId, userId, client) {
       : PermissionFlagsBits.ManageGuild,
   );
 }
+
+/**
+ * @param {string} guildId
+ * @param {string} userId
+ * @param {import('@fluxerjs/core').Client | import('discord.js').Client} client
+ */
+export async function checkPingPerms(guildId, userId, client) {
+  if (!userId) return;
+
+  let guild;
+  try {
+    guild = await client.guilds.fetch(guildId);
+  } catch {
+    return false;
+  }
+  if (!guild) return false;
+
+  let member;
+  try {
+    member =
+      client instanceof Client
+        ? await guild.fetchMember(userId)
+        : await guild.members.fetch(userId);
+  } catch {
+    return false;
+  }
+
+  if (!member) return false;
+
+  return member.permissions.has(
+    client instanceof Client
+      ? PermissionFlags.MentionEveryone
+      : PermissionFlagsBits.MentionEveryone,
+  );
+}
