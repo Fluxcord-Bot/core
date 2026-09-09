@@ -23,7 +23,7 @@ import {
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
-import { ChannelMap, GuildMap } from "./db/index.js";
+import { ChannelMap, GuildMap, MessageMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
@@ -67,22 +67,45 @@ fluxerClient.on(FluxerEvents.Error, (error) => {
   log("FLUXER", error);
 });
 
+/**
+ * @param {{ discordChannelId?: string, fluxerChannelId?: string, discordGuildId?: string }} where
+ */
+async function destroyChannelMaps(where) {
+  const channelMaps = await ChannelMap.findAll({
+    where,
+    attributes: ["id"],
+  });
+  if (channelMaps.length > 0) {
+    await MessageMap.destroy({
+      where: {
+        channelMapId: channelMaps.map((c) => c.id),
+      },
+    });
+  }
+  await ChannelMap.destroy({ where });
+}
+
 discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   if (!guild.available) return;
 
-  await GuildMap.destroy({
-    where: {
-      guildId: guild.id,
-    },
-  });
+  try {
+    await destroyChannelMaps({ discordGuildId: guild.id });
+    await GuildMap.destroy({
+      where: {
+        guildId: guild.id,
+      },
+    });
+  } catch (e) {
+    log("DB", `GuildDelete cleanup failed for guild ${guild.id}`, e);
+  }
 });
 
 discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
-  await ChannelMap.destroy({
-    where: {
-      discordChannelId: chnl.id,
-    },
-  });
+  try {
+    await destroyChannelMaps({ discordChannelId: chnl.id });
+  } catch (e) {
+    log("DB", `ChannelDelete cleanup failed for discord channel ${chnl.id}`, e);
+  }
 });
 
 discordClient.on(DiscordEvents.TypingStart, async (type) => {
@@ -100,7 +123,7 @@ discordClient.on(DiscordEvents.TypingStart, async (type) => {
         //@ts-expect-error
         channelMap.fluxerChannelId,
       );
-      channel.sendTyping();
+      await channel.sendTyping();
     }
   } catch {}
 });
@@ -158,11 +181,11 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
 // })
 
 fluxerClient.on(FluxerEvents.ChannelDelete, async (chnl) => {
-  await ChannelMap.destroy({
-    where: {
-      fluxerChannelId: chnl.id,
-    },
-  });
+  try {
+    await destroyChannelMaps({ fluxerChannelId: chnl.id });
+  } catch (e) {
+    log("DB", `ChannelDelete cleanup failed for fluxer channel ${chnl.id}`, e);
+  }
 });
 
 fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
@@ -223,7 +246,7 @@ fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
         //@ts-expect-error
         channelMap.discordChannelId,
       );
-      if (channel && channel.isSendable()) channel.sendTyping();
+      if (channel && channel.isSendable()) await channel.sendTyping();
     } catch {}
   }
 });

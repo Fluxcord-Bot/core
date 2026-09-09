@@ -110,21 +110,24 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
   try {
     await commandToRun?.run(params, message, discordClient, fluxerClient);
   } catch (e) {
-    await message.reply({
-      // @ts-expect-error
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("A error has occurred while executing this command!")
-          .setDescription(
-            "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
-          )
-          .addFields({
-            name: "Stack trace",
-            value: `${e}`,
-          }),
-      ],
-    });
-
     log("DEBUG", e);
+    try {
+      await message.reply({
+        // @ts-expect-error
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("A error has occurred while executing this command!")
+            .setDescription(
+              "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
+            )
+            .addFields({
+              name: "Stack trace",
+              value: `${e}`,
+            }),
+        ],
+      });
+    } catch (replyError) {
+      log("META", "Failed to reply with the command error:", replyError);
+    }
   }
 }

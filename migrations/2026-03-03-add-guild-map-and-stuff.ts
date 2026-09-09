@@ -27,13 +27,29 @@ export async function up({
     createdAt: { type: DataTypes.DATE, allowNull: false },
     updatedAt: { type: DataTypes.DATE, allowNull: false },
   });
+  const isPostgres = queryInterface.sequelize.getDialect() === "postgres";
+  const discordGuildType = isPostgres
+    ? `'discord'::"enum_GuildMaps_guildType"`
+    : `'discord'`;
+  const fluxerGuildType = isPostgres
+    ? `'fluxer'::"enum_GuildMaps_guildType"`
+    : `'fluxer'`;
+  const errorLoggingPlatform = isPostgres
+    ? `"errorLoggingPlatform"::text::"enum_GuildMaps_errorLoggingPlatform"`
+    : `"errorLoggingPlatform"`;
+  const discordComparison = isPostgres
+    ? `"guildType" = 'discord'::"enum_GuildMaps_guildType"`
+    : `"guildType" = 'discord'`;
+  const fluxerComparison = isPostgres
+    ? `"guildType" = 'fluxer'::"enum_GuildMaps_guildType"`
+    : `"guildType" = 'fluxer'`;
   await queryInterface.sequelize.query(`
     INSERT INTO "GuildMaps" ("guildId", "guildType", "errorLoggingChannelId", "errorLoggingPlatform", "createdAt", "updatedAt")
     SELECT DISTINCT
       "discordGuildId",
-      'discord',
+      ${discordGuildType},
       "errorLoggingChannelId",
-      "errorLoggingPlatform",
+      ${errorLoggingPlatform},
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
     FROM "ChannelMaps"
@@ -42,9 +58,9 @@ export async function up({
     INSERT INTO "GuildMaps" ("guildId", "guildType", "errorLoggingChannelId", "errorLoggingPlatform", "createdAt", "updatedAt")
     SELECT DISTINCT
       "fluxerGuildId",
-      'fluxer',
+      ${fluxerGuildType},
       "errorLoggingChannelId",
-      "errorLoggingPlatform",
+      ${errorLoggingPlatform},
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
     FROM "ChannelMaps"
@@ -64,7 +80,7 @@ export async function up({
     SET "DiscordGuildMapId" = (
       SELECT "id" FROM "GuildMaps"
       WHERE "guildId" = "ChannelMaps"."discordGuildId"
-        AND "guildType" = 'discord'
+        AND ${discordComparison}
       LIMIT 1
     )
   `);
@@ -73,7 +89,7 @@ export async function up({
     SET "FluxerGuildMapId" = (
       SELECT "id" FROM "GuildMaps"
       WHERE "guildId" = "ChannelMaps"."fluxerGuildId"
-        AND "guildType" = 'fluxer'
+        AND ${fluxerComparison}
       LIMIT 1
     )
   `);
@@ -94,11 +110,15 @@ export async function down({
     type: DataTypes.ENUM("fluxer", "discord"),
     allowNull: true,
   });
+  const isPostgres = queryInterface.sequelize.getDialect() === "postgres";
+  const errorLoggingPlatform = isPostgres
+    ? `gm."errorLoggingPlatform"::text::"enum_ChannelMaps_errorLoggingPlatform"`
+    : `gm."errorLoggingPlatform"`;
   await queryInterface.sequelize.query(`
     UPDATE "ChannelMaps"
     SET
       "errorLoggingChannelId" = gm."errorLoggingChannelId",
-      "errorLoggingPlatform"  = gm."errorLoggingPlatform"
+      "errorLoggingPlatform"  = ${errorLoggingPlatform}
     FROM "GuildMaps" gm
     WHERE gm."id" = "ChannelMaps"."DiscordGuildMapId"
   `);

@@ -12,7 +12,16 @@ const Config = {
 
   // The database encryption token. If you're just running a instance for yourself
   // you don't really need to set this.
+  // NOTE: Only applies to SQLite. Ignored when PostgresConnectionString is set.
   DatabaseEncryptionToken: "",
+
+  // Optional. When set, PostgreSQL is used instead of SQLite.
+  // When empty/unset, SQLite (DataFolderPath + "/fluxcord.db") is used.
+  // The DatabaseEncryptionToken is ignored in Postgres mode, and
+  // `pnpm run migrate:to-postgres` can copy your existing SQLite data
+  // (decrypting it first if needed) into Postgres.
+  // Example: "postgres://user:password@localhost:5432/fluxcord"
+  // PostgresConnectionString: "",
 
   // The Discord bot token
   DiscordBotToken: "DISCORD_BOT_TOKEN",

@@ -5,25 +5,44 @@ import { DataTypes, Model } from "sequelize";
 import DefaultConfig from "../utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
-const sequelize = new Sequelize({
-  dialect: "sqlite",
-  dialectModule: sqlite3,
-  storage: Config.DataFolderPath + "/fluxcord.db",
-  logging: (msg) => log("DB", msg),
-  password: !!DefaultConfig.DatabaseEncryptionToken
-    ? DefaultConfig.DatabaseEncryptionToken
-    : undefined,
-});
+export const isPostgres =
+  !!Config.PostgresConnectionString &&
+  Config.PostgresConnectionString.length > 0;
 
-if (DefaultConfig.DatabaseEncryptionToken) {
-  await sequelize.query("PRAGMA cipher_compatibility = 4;");
-  await sequelize.query(
-    `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
-  );
+let sequelize;
+
+if (isPostgres) {
+  if (DefaultConfig.DatabaseEncryptionToken) {
+    console.warn(
+      "[DB] DatabaseEncryptionToken is set but PostgresConnectionString is also set. The encryption token is ignored in Postgres mode.",
+    );
+  }
+  sequelize = new Sequelize(Config.PostgresConnectionString, {
+    dialect: "postgres",
+    logging: (msg) => log("DB", msg),
+  });
+  await sequelize.query("SELECT 1;");
+} else {
+  sequelize = new Sequelize({
+    dialect: "sqlite",
+    dialectModule: sqlite3,
+    storage: Config.DataFolderPath + "/fluxcord.db",
+    logging: (msg) => log("DB", msg),
+    password: !!DefaultConfig.DatabaseEncryptionToken
+      ? DefaultConfig.DatabaseEncryptionToken
+      : undefined,
+  });
+
+  if (DefaultConfig.DatabaseEncryptionToken) {
+    await sequelize.query("PRAGMA cipher_compatibility = 4;");
+    await sequelize.query(
+      `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
+    );
+  }
+
+  await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
+  await sequelize.query("VACUUM;");
 }
-
-await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
-await sequelize.query("VACUUM;");
 
 class ChannelMap extends Model {}
 class MessageMap extends Model {}

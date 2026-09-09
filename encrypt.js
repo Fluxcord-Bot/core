@@ -3,6 +3,13 @@ import { Sequelize } from "sequelize-typescript";
 import Config from "./utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
+if (Config.PostgresConnectionString) {
+  console.log(
+    "PostgresConnectionString is set. SQLite encryption does not apply in Postgres mode.",
+  );
+  process.exit(1);
+}
+
 if (!Config.DatabaseEncryptionToken) {
   console.log(
     "DatabaseEncryptionToken is not set. Set it in config.js before running this script.",
