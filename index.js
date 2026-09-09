@@ -273,6 +273,7 @@ function isRecoverableRuntimeError(error) {
     "Missing Permissions",
     "Missing Access",
     "You don't have the permissions",
+    "_RateLimitError",
   ].some((needle) => message.includes(needle));
 }
 
