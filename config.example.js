@@ -26,6 +26,12 @@ const Config = {
   // The Discord bot token
   DiscordBotToken: "DISCORD_BOT_TOKEN",
 
+  // Additional bot tokens for voice bridging multiple voice channels at the same time. Optional.
+  DiscordVoiceTokens: [
+    // "VOICE_TOKEN_1",
+    // "VOICE_TOKEN_2",
+  ],
+
   // The Discord client ID
   DiscordClientId: "0000000000000000000",
 

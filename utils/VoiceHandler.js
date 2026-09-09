@@ -12,8 +12,6 @@ import {
 import { VoiceChannelMap } from "../db/index.js";
 
 /**
- * Sequelize model instance shape for a voice bridge row.
- * This is type-only — pls do not mirror these as runtime class fields.
  * @typedef {import("sequelize").Model & {
  *   discordGuildId: string,
  *   discordChannelId: string,
@@ -23,9 +21,9 @@ import { VoiceChannelMap } from "../db/index.js";
  */
 
 /**
- * Active voice sessions keyed by discord channel ID.
  * @type {Map<string, {
  *   guildId: string,
+ *   voiceClient: import("discord.js").Client,
  *   fluxerGuildId: string,
  *   fluxerChannelId: string,
  *   fluxerEmpty: boolean,
@@ -36,12 +34,10 @@ import { VoiceChannelMap } from "../db/index.js";
 const sessions = new Map();
 
 /**
- * Credentials gathered before spawning the bridge.
- * Keyed by Discord voice channel ID so separate channels in the same guild
- * cannot overwrite each other's pending launch state.
  * @type {Map<string, {
  *   guildId: string,
  *   channelId: string,
+ *   voiceClient: import("discord.js").Client,
  *   fluxerGuildId: string,
  *   fluxerChannelId: string,
  *   discordVoiceServerGeneration: number,
@@ -55,26 +51,21 @@ const sessions = new Map();
 const pending = new Map();
 
 /**
- * Latest Discord gateway voice state for the bot, keyed by guild ID.
  * @type {Map<string, { channelId?: string, sessionId?: string }>}
  */
 const latestDiscordVoiceState = new Map();
 
 /**
- * Latest Discord gateway voice server payload for the bot, keyed by guild ID.
  * @type {Map<string, { endpoint?: string, token?: string, generation?: number }>}
  */
 const latestDiscordVoiceServer = new Map();
 
 /**
- * Latest Fluxer voice server payload for the bot, keyed by Fluxer guild ID.
  * @type {Map<string, { livekitUrl?: string, livekitToken?: string }>}
  */
 const latestFluxerVoiceServer = new Map();
 
 /**
- * Session restarts waiting for a runner to become available again.
- * Keyed by discord channel ID.
  * @type {Map<string, { guildId: string }>}
  */
 const pendingRunnerRestarts = new Map();
@@ -84,21 +75,19 @@ const restartBackoff = new Map();
 const pendingJoinWatchdogs = new Map();
 
 /**
- * Latest known Fluxer voice channel per user.
- * Keyed by `${guildId}:${userId}`.
  * @type {Map<string, string>}
  */
 const fluxerVoiceStates = new Map();
 
 /**
- * Latest known human occupancy per Fluxer voice channel.
- * Keyed by `${guildId}:${channelId}`.
  * @type {Map<string, number>}
  */
 const fluxerChannelOccupancy = new Map();
 
 /** @type {import("discord.js").Client | null} */
 let _discordClient = null;
+/** @type {import("discord.js").Client[]} */
+let _voicePool = [];
 /** @type {import("@fluxerjs/core").Client | null} */
 let _fluxerClient = null;
 let _startupRecoveryScheduled = false;
@@ -130,8 +119,7 @@ function getFluxerUserStateKey(guildId, userId) {
  */
 async function findVoiceMap(guildId, channelId) {
   if (!guildId || !channelId) return null;
-  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (
-    VoiceChannelMap.findOne({
+  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (VoiceChannelMap.findOne({
       where: { discordGuildId: guildId, discordChannelId: channelId },
     })
   );
@@ -144,15 +132,13 @@ async function findVoiceMap(guildId, channelId) {
  */
 async function findVoiceMapByFluxer(fluxerGuildId, fluxerChannelId) {
   if (!fluxerGuildId || !fluxerChannelId) return null;
-  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (
-    VoiceChannelMap.findOne({
+  return /** @type {Promise<VoiceChannelMapRecord | null>} */ (VoiceChannelMap.findOne({
       where: { fluxerGuildId, fluxerChannelId },
     })
   );
 }
 
 /**
- * Stop the session only if both discord and fluxer VCs are empty
  * @param {string} channelId Discord channel ID
  */
 function checkAndMaybeStop(channelId) {
@@ -161,8 +147,7 @@ function checkAndMaybeStop(channelId) {
 
   const guild = _discordClient?.guilds.cache.get(session.guildId);
   const discordChannel =
-    /** @type {import("discord.js").VoiceChannel | undefined} */ (
-      guild?.channels.cache.get(channelId)
+    /** @type {import("discord.js").VoiceChannel | undefined} */ (guild?.channels.cache.get(channelId)
     );
   const discordCount =
     discordChannel?.members?.filter((m) => !m.user.bot).size ?? 0;
@@ -174,11 +159,68 @@ function checkAndMaybeStop(channelId) {
 
 /**
  * @param {string} guildId
+ * @returns {string[]}
+ */
+function findSessionChannelsByGuild(guildId) {
+  const out = [];
+  for (const [channelId, session] of sessions) {
+    if (session.guildId === guildId) out.push(channelId);
+  }
+  return out;
+}
+
+/**
+ * @returns {import("discord.js").Client[]}
+ */
+function allVoiceClients() {
+  const out = [];
+  if (_discordClient) out.push(_discordClient);
+  for (const c of _voicePool) {
+    if (c && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+/**
+ * @param {import("discord.js").Client} client
  * @returns {string | null}
  */
-function findSessionChannelByGuild(guildId) {
-  for (const [channelId, session] of sessions) {
-    if (session.guildId === guildId) return channelId;
+function getClientUserId(client) {
+  return client.user?.id ?? null;
+}
+
+/**
+ * @param {string | null | undefined} userId
+ * @param {string} guildId
+ * @returns {string}
+ */
+function getDiscordStateKey(userId, guildId) {
+  return `${userId ?? "?"}:${guildId}`;
+}
+
+/**
+ * @param {string} guildId
+ * @param {string} channelId
+ * @returns {import("discord.js").Client | null}
+ */
+function pickVoiceClient(guildId, channelId) {
+  for (const client of allVoiceClients()) {
+    if (!getClientUserId(client)) continue;
+    let busy = false;
+    for (const [otherChannelId, session] of sessions) {
+      if (otherChannelId !== channelId && session.guildId === guildId && session.voiceClient === client) {
+        busy = true;
+        break;
+      }
+    }
+    if (busy) continue;
+    for (const [otherChannelId, creds] of pending) {
+      if (otherChannelId !== channelId && creds.guildId === guildId && creds.voiceClient === client) {
+        busy = true;
+        break;
+      }
+    }
+    if (!busy) return client;
   }
   return null;
 }
@@ -191,8 +233,7 @@ function findSessionChannelByGuild(guildId) {
 function getDiscordHumanCount(guildId, channelId) {
   const guild = _discordClient?.guilds.cache.get(guildId);
   const discordChannel =
-    /** @type {import("discord.js").VoiceChannel | undefined} */ (
-      guild?.channels.cache.get(channelId)
+    /** @type {import("discord.js").VoiceChannel | undefined} */ (guild?.channels.cache.get(channelId)
     );
   return discordChannel?.members?.filter((m) => !m.user.bot).size ?? 0;
 }
@@ -262,11 +303,7 @@ function clearPendingJoinWatchdog(channelId) {
 /**
  * @param {string} channelId
  * @param {string} guildId
- * @param {{
- *   allowWithoutDiscord: boolean,
- *   requireFreshDiscord?: boolean,
- *   reason: string,
- * }} options
+ * @param {{ allowWithoutDiscord: boolean, requireFreshDiscord?: boolean, reason: string }} options
  */
 function scheduleSessionRejoin(channelId, guildId, options) {
   const existing = restartBackoff.get(channelId);
@@ -315,10 +352,12 @@ function clearPendingChannel(channelId) {
 /**
  * @param {string} guildId
  * @param {string} [keepChannelId]
+ * @param {import("discord.js").Client} [onlyClient]
  */
-function clearPendingForDiscordGuild(guildId, keepChannelId) {
+function clearPendingForDiscordGuild(guildId, keepChannelId, onlyClient) {
   for (const [channelId, creds] of pending) {
     if (creds.guildId !== guildId || channelId === keepChannelId) continue;
+    if (onlyClient && creds.voiceClient !== onlyClient) continue;
     clearPendingJoinWatchdog(channelId);
     pending.delete(channelId);
   }
@@ -340,18 +379,7 @@ function clearPendingForFluxerGuild(fluxerGuildId, keepChannelId) {
 /**
  * @param {string} guildId
  * @param {string} channelId
- * @returns {{
- *   guildId: string,
- *   channelId: string,
- *   fluxerGuildId: string,
- *   fluxerChannelId: string,
- *   discordVoiceServerGeneration: number,
- *   sessionId?: string,
- *   endpoint?: string,
- *   token?: string,
- *   livekitUrl?: string,
- *   livekitToken?: string,
- * } | null}
+ * @returns {{ guildId: string, channelId: string, voiceClient: import("discord.js").Client, fluxerGuildId: string, fluxerChannelId: string, discordVoiceServerGeneration: number, sessionId?: string, endpoint?: string, token?: string, livekitUrl?: string, livekitToken?: string } | null}
  */
 function getPendingChannelForGuild(guildId, channelId) {
   const creds = pending.get(channelId);
@@ -368,14 +396,16 @@ function hasPendingChannelForGuild(guildId) {
 }
 
 /**
- * Make the next join wait for a fresh Discord VoiceServerUpdate.
+ * @param {import("discord.js").Client} voiceClient
  * @param {string} guildId
  * @returns {number}
  */
-function bumpDiscordVoiceServerGeneration(guildId) {
-  const current = latestDiscordVoiceServer.get(guildId);
+function bumpDiscordVoiceServerGeneration(voiceClient, guildId) {
+  const userId = getClientUserId(voiceClient);
+  const key = getDiscordStateKey(userId, guildId);
+  const current = latestDiscordVoiceServer.get(key);
   const generation = (current?.generation ?? 0) + 1;
-  latestDiscordVoiceServer.set(guildId, {
+  latestDiscordVoiceServer.set(key, {
     endpoint: current?.endpoint,
     token: current?.token,
     generation,
@@ -384,12 +414,15 @@ function bumpDiscordVoiceServerGeneration(guildId) {
 }
 
 /**
+ * @param {import("discord.js").Client} voiceClient
  * @param {string} guildId
  * @param {string} fluxerGuildId
  * @param {boolean} leaveDiscord
  */
-function sendLeaveOps(guildId, fluxerGuildId, leaveDiscord = true) {
-  const guild = _discordClient?.guilds.cache.get(guildId);
+function sendLeaveOps(voiceClient, guildId, fluxerGuildId, leaveDiscord = true) {
+  const guild =
+    voiceClient?.guilds.cache.get(guildId) ??
+    _discordClient?.guilds.cache.get(guildId);
   log("VOICE", `Leaving voice for discord=${guildId} fluxer=${fluxerGuildId}`);
   if (leaveDiscord) {
     guild?.shard.send({
@@ -442,8 +475,7 @@ async function recoverActiveVoiceBridges(reason) {
   if (!_discordClient || !_fluxerClient || !_recoveryArmed || !hasRunner())
     return;
 
-  const voiceMaps = /** @type {VoiceChannelMapRecord[]} */ (
-    await VoiceChannelMap.findAll()
+  const voiceMaps = /** @type {VoiceChannelMapRecord[]} */ (await VoiceChannelMap.findAll()
   );
   for (const voiceMap of voiceMaps) {
     const channelId = voiceMap.discordChannelId;
@@ -494,7 +526,6 @@ function scheduleStartupRecovery(reason) {
  */
 async function rejoinMappedChannel(guildId, channelId, options = {}) {
   if (!_discordClient) return;
-  const guild = _discordClient?.guilds.cache.get(guildId) ?? null;
   if (sessions.has(channelId) || pending.has(channelId)) {
     log(
       "VOICE",
@@ -513,17 +544,19 @@ async function rejoinMappedChannel(guildId, channelId, options = {}) {
     return;
   }
   log("VOICE", `Rejoining Discord VC ${channelId}`);
-  await sendJoinOp(_discordClient, guild, guildId, channelId, {
+  await sendJoinOp(guildId, channelId, {
     requireFreshDiscord: options.requireFreshDiscord,
   });
 }
 
 /**
- * @param {import("discord.js").Client} discordClient
+ * @param {import("discord.js").Client} discordClient primary client (text bridging)
  * @param {import("@fluxerjs/core").Client} fluxerClient
+ * @param {import("discord.js").Client[]} [extraVoiceClients] voice-only pool
  */
-export async function setupVoiceHandling(discordClient, fluxerClient) {
+export async function setupVoiceHandling(discordClient, fluxerClient, extraVoiceClients = []) {
   _discordClient = discordClient;
+  _voicePool = (extraVoiceClients ?? []).filter(Boolean);
   _fluxerClient = fluxerClient;
   onRunnerAvailable(() => {
     scheduleStartupRecovery("runner availability");
@@ -533,27 +566,33 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
   });
 
   const mapCount = await VoiceChannelMap.count();
-  log("VOICE", `Loaded ${mapCount} voice map(s)`);
+  log("VOICE", `Loaded ${mapCount} voice map(s) across ${allVoiceClients().length} discord client(s)`);
 
-  discordClient.ws.on(GatewayDispatchEvents.VoiceStateUpdate, async (data) => {
-    if (data.user_id !== discordClient.user?.id) return;
+  /**
+   * @param {import("discord.js").Client} voiceClient
+ */
+  function attachDiscordVoiceGateway(voiceClient) {
+  voiceClient.ws.on(GatewayDispatchEvents.VoiceStateUpdate, async (data) => {
+    const ownerId = voiceClient.user?.id;
+    if (!ownerId || data.user_id !== ownerId) return;
     const {
       guild_id: guildId,
       channel_id: channelId,
       session_id: sessionId,
     } = data;
+    const stateKey = getDiscordStateKey(ownerId, guildId);
     log(
       "VOICE",
-      `Discord gateway VoiceStateUpdate guild=${guildId} channel=${channelId ?? "null"} session=${sessionId ?? "null"}`,
+      `Discord gateway VoiceStateUpdate bot=${ownerId} guild=${guildId} channel=${channelId ?? "null"} session=${sessionId ?? "null"}`,
     );
     if (channelId) {
-      latestDiscordVoiceState.set(guildId, { channelId, sessionId });
+      latestDiscordVoiceState.set(stateKey, { channelId, sessionId });
       const creds = getPendingChannelForGuild(guildId, channelId);
-      if (creds) {
+      if (creds && creds.voiceClient === voiceClient) {
         creds.sessionId = sessionId;
         pending.set(channelId, creds);
         log("VOICE", `Got Discord session for ${channelId}`);
-        await maybeLaunch(discordClient, channelId);
+        await maybeLaunch(channelId);
       }
     } else {
       if (hasPendingChannelForGuild(guildId)) {
@@ -563,14 +602,16 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
         );
         return;
       }
-      latestDiscordVoiceState.delete(guildId);
+      latestDiscordVoiceState.delete(stateKey);
       log(
         "VOICE",
         `Clearing pending credentials for guild ${guildId} after disconnect`,
       );
-      clearPendingForDiscordGuild(guildId);
-      const activeChannelId = findSessionChannelByGuild(guildId);
-      if (activeChannelId) {
+      clearPendingForDiscordGuild(guildId, undefined, voiceClient);
+      const activeChannelIds = findSessionChannelsByGuild(guildId).filter(
+        (id) => sessions.get(id)?.voiceClient === voiceClient,
+      );
+      for (const activeChannelId of activeChannelIds) {
         requestSessionRestart(
           activeChannelId,
           "Discord bot voice state disconnected",
@@ -579,25 +620,45 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
     }
   });
 
-  discordClient.ws.on(GatewayDispatchEvents.VoiceServerUpdate, async (data) => {
+  voiceClient.ws.on(GatewayDispatchEvents.VoiceServerUpdate, async (data) => {
+    const ownerId = voiceClient.user?.id;
+    if (!ownerId) return;
     const { guild_id: guildId, endpoint, token } = data;
+    // Only handle server updates for guilds this client is joining.
+    let relevant = false;
+    for (const creds of pending.values()) {
+      if (creds.voiceClient === voiceClient && creds.guildId === guildId) {
+        relevant = true;
+        break;
+      }
+    }
+    if (!relevant) return;
+    const stateKey = getDiscordStateKey(ownerId, guildId);
     log(
       "VOICE",
-      `Discord gateway VoiceServerUpdate guild=${guildId} endpoint=${endpoint ?? "null"}`,
+      `Discord gateway VoiceServerUpdate bot=${ownerId} guild=${guildId} endpoint=${endpoint ?? "null"}`,
     );
-    const current = latestDiscordVoiceServer.get(guildId);
+    const current = latestDiscordVoiceServer.get(stateKey);
     const generation = current?.generation ?? 0;
-    latestDiscordVoiceServer.set(guildId, { endpoint, token, generation });
+    latestDiscordVoiceServer.set(stateKey, { endpoint, token, generation });
     for (const [channelId, creds] of pending) {
+      if (creds.voiceClient !== voiceClient) continue;
       if (creds.guildId !== guildId) continue;
       if (creds.discordVoiceServerGeneration !== generation) continue;
       creds.endpoint = endpoint;
       creds.token = token;
       pending.set(channelId, creds);
       log("VOICE", `Got Discord voice server for ${channelId}`);
-      await maybeLaunch(discordClient, channelId);
+      await maybeLaunch(channelId);
     }
   });
+  }
+
+  for (const voiceClient of allVoiceClients()) {
+    attachDiscordVoiceGateway(voiceClient);
+    // Clients logging in after setup (voice pool) get handlers attached now,
+    // but user IDs are unknown until ready — events simply no-op until then.
+  }
 
   fluxerClient.on(FluxerEvents.VoiceServerUpdate, async (data) => {
     const {
@@ -614,7 +675,7 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
       creds.livekitToken = livekitToken;
       pending.set(channelId, creds);
       log("VOICE", `Got Fluxer voice server for ${channelId}`);
-      await maybeLaunch(discordClient, channelId);
+      await maybeLaunch(channelId);
     }
   });
 
@@ -654,7 +715,7 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
           "VOICE",
           `Mapped Discord join detected for guild=${guildId} channel=${joinedId}`,
         );
-        await sendJoinOp(discordClient, newState.guild, guildId, joinedId);
+        await sendJoinOp(guildId, joinedId);
       }
 
       if (leftId && leftId !== joinedId && sessions.has(leftId)) {
@@ -687,15 +748,11 @@ export async function setupVoiceHandling(discordClient, fluxerClient) {
     }
     if (sessions.has(voiceMap.discordChannelId)) return;
 
-    const guild =
-      discordClient.guilds.cache.get(voiceMap.discordGuildId) ?? null;
     log(
       "VOICE",
       `Mapped Fluxer join detected; requesting Discord join for channel ${voiceMap.discordChannelId}`,
     );
     await sendJoinOp(
-      discordClient,
-      guild,
       voiceMap.discordGuildId,
       voiceMap.discordChannelId,
     );
@@ -708,15 +765,11 @@ export function startVoiceRecovery() {
 }
 
 /**
- * @param {import("discord.js").Client} discordClient
- * @param {import("discord.js").Guild | null} guild
  * @param {string} guildId
  * @param {string} channelId
  * @param {{ requireFreshDiscord?: boolean }} [options]
  */
 async function sendJoinOp(
-  discordClient,
-  guild,
   guildId,
   channelId,
   options = {},
@@ -742,13 +795,28 @@ async function sendJoinOp(
     return;
   }
 
-  log("VOICE", `Joining Discord VC ${channelId}`);
-  clearPendingForDiscordGuild(guildId, channelId);
+  const voiceClient = pickVoiceClient(guildId, channelId);
+  if (!voiceClient) {
+    log(
+      "VOICE",
+      `No free Discord client for guild=${guildId} channel=${channelId}; add another token to DiscordVoiceTokens`,
+    );
+    return;
+  }
+  const botUserId = getClientUserId(voiceClient);
+  const guild =
+    voiceClient.guilds.cache.get(guildId) ??
+    _discordClient?.guilds.cache.get(guildId) ??
+    null;
+
+  log("VOICE", `Joining Discord VC ${channelId} with bot=${botUserId}`);
+  clearPendingForDiscordGuild(guildId, channelId, voiceClient);
   clearPendingForFluxerGuild(voiceMap.fluxerGuildId, channelId);
   const discordVoiceServerGeneration =
-    bumpDiscordVoiceServerGeneration(guildId);
-  const discordState = latestDiscordVoiceState.get(guildId);
-  const discordServer = latestDiscordVoiceServer.get(guildId);
+    bumpDiscordVoiceServerGeneration(voiceClient, guildId);
+  const stateKey = getDiscordStateKey(botUserId, guildId);
+  const discordState = latestDiscordVoiceState.get(stateKey);
+  const discordServer = latestDiscordVoiceServer.get(stateKey);
   const fluxerServer = latestFluxerVoiceServer.get(voiceMap.fluxerGuildId);
   const requireFreshDiscord = options.requireFreshDiscord ?? false;
   log(
@@ -758,6 +826,7 @@ async function sendJoinOp(
   pending.set(channelId, {
     guildId,
     channelId,
+    voiceClient,
     fluxerGuildId: voiceMap.fluxerGuildId,
     fluxerChannelId: voiceMap.fluxerChannelId,
     discordVoiceServerGeneration,
@@ -782,7 +851,7 @@ async function sendJoinOp(
         `Timed out waiting for fresh Discord voice state for ${channelId}`,
       );
       clearPendingChannel(channelId);
-      sendLeaveOps(guildId, voiceMap.fluxerGuildId, true);
+      sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true);
       scheduleSessionRejoin(channelId, guildId, {
         allowWithoutDiscord:
           getFluxerHumanCount(
@@ -816,17 +885,16 @@ async function sendJoinOp(
     },
   });
 
-  await maybeLaunch(discordClient, channelId);
+  await maybeLaunch(channelId);
 }
 
 /**
- * @param {import("discord.js").Client} discordClient
  * @param {string} channelId
  */
-async function maybeLaunch(discordClient, channelId) {
+async function maybeLaunch(channelId) {
   const creds = pending.get(channelId);
   if (!creds) return;
-  const { guildId, sessionId, endpoint, token, livekitUrl, livekitToken } =
+  const { guildId, voiceClient, sessionId, endpoint, token, livekitUrl, livekitToken } =
     creds;
   if (
     !sessionId ||
@@ -860,7 +928,7 @@ async function maybeLaunch(discordClient, channelId) {
       DISCORD_ENDPOINT: endpoint,
       DISCORD_TOKEN: token,
       DISCORD_SESSION_ID: sessionId,
-      DISCORD_USER_ID: discordClient.user?.id ?? "",
+      DISCORD_USER_ID: voiceClient.user?.id ?? "",
       DISCORD_GUILD_ID: guildId,
       DISCORD_CHANNEL_ID: channelId,
       LIVEKIT_URL: livekitUrl,
@@ -891,24 +959,24 @@ async function maybeLaunch(discordClient, channelId) {
         const requireFreshDiscord = code === 2 || code === 4;
         sessions.delete(channelId);
         if (restartRequested) {
-          sendLeaveOps(guildId, voiceMap.fluxerGuildId, false);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false);
           void rejoinMappedChannel(guildId, channelId);
         } else if (typeof code === "number" && code !== 0) {
-          sendLeaveOps(guildId, voiceMap.fluxerGuildId, requireFreshDiscord);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, requireFreshDiscord);
           scheduleSessionRejoin(channelId, guildId, {
             allowWithoutDiscord: fluxerCount > 0,
             requireFreshDiscord,
             reason: `bridge failure code ${code}`,
           });
         } else if (code === null) {
-          sendLeaveOps(guildId, voiceMap.fluxerGuildId, false);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, false);
           pendingRunnerRestarts.set(channelId, { guildId });
           log(
             "VOICE",
             `Queued rejoin for channel ${channelId} until a runner reconnects`,
           );
         } else {
-          sendLeaveOps(guildId, voiceMap.fluxerGuildId, true);
+          sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true);
         }
       },
       onError(message) {
@@ -920,6 +988,7 @@ async function maybeLaunch(discordClient, channelId) {
   if (spawned) {
     sessions.set(channelId, {
       guildId,
+      voiceClient,
       fluxerGuildId: voiceMap.fluxerGuildId,
       fluxerChannelId: voiceMap.fluxerChannelId,
       fluxerEmpty: false,

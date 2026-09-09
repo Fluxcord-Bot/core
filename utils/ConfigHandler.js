@@ -4,6 +4,8 @@ const DefaultConfig = {
   FluxerAPIBaseURL: "https://api.fluxer.app",
   DataFolderPath: "/data",
   DiscordBotToken: "DISCORD_BOT_TOKEN",
+  /** @type {string[]} */
+  DiscordVoiceTokens: [],
   DiscordClientId: "0000000000000000000",
   FluxerBotToken: "FLUXER_BOT_TOKEN",
   FluxerTempEmojiGuildId: "0000000000000000000",

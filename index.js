@@ -435,7 +435,8 @@ process.on("uncaughtException", (error) => {
 // @ts-ignore
 process.on(
   "unhandledRejection",
-  /** @param {unknown} reason */ (reason, promise) => {
+  /** @param {unknown} reason */
+ (reason, promise) => {
     log("META", "A unhandled rejection occurred.", reason);
 
     if (isRecoverableRuntimeError(reason)) {
@@ -458,11 +459,31 @@ process.on(
   },
 );
 
+/** @type {string[]} */
+const discordVoiceTokens = Array.isArray(Config.DiscordVoiceTokens)
+  ? Config.DiscordVoiceTokens.filter(Boolean)
+  : [];
+/** @type {import("discord.js").Client[]} */
+export const discordVoiceClients = [];
+for (const [i, token] of discordVoiceTokens.entries()) {
+  const voiceClient = new DiscordClient({
+    rest: { timeout: 30_000 },
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  });
+  voiceClient.on(DiscordEvents.ClientReady, () => {
+    log("DISCORD", `Voice client ${i + 1}/${discordVoiceTokens.length} ready as ${voiceClient.user?.tag}`);
+  });
+  voiceClient.login(token).catch((e) => {
+    log("DISCORD", `Voice client ${i + 1} failed to login`, e);
+  });
+  discordVoiceClients.push(voiceClient);
+}
+
 if (Config.VoiceBridgingEnabled) {
   const voiceHandler = await import("./utils/VoiceHandler.js");
   const { setupVoiceHandling } = voiceHandler;
   startVoiceRecovery = voiceHandler.startVoiceRecovery;
-  await setupVoiceHandling(discordClient, fluxerClient);
+  await setupVoiceHandling(discordClient, fluxerClient, discordVoiceClients);
 }
 
 setupReactionHandling(discordClient, fluxerClient);
@@ -481,10 +502,7 @@ function checkIfFluxerConnected() {
 
 function motdLoop() {
   /**
-   * @type {{
-   *   text: string,
-   *   emoji?: string | { fluxer: { name: string, id: string }, discord: string }
-   * }[]}
+   * @type {{ text: string, emoji?: string | { fluxer: { name: string, id: string }, discord: string } }[]}
    */
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
