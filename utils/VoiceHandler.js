@@ -683,15 +683,17 @@ export async function setupVoiceHandling(discordClient, fluxerClient, extraVoice
   fluxerClient.on(FluxerEvents.VoiceServerUpdate, async (data) => {
     const {
       guild_id: fluxerGuildId,
+      channel_id: fluxerChannelId,
       endpoint: livekitUrl,
       token: livekitToken,
-    } = data;
+    } = /** @type {{ guild_id?: string, channel_id?: string, endpoint?: string, token?: string }} */ (data);
     if (!fluxerGuildId || !livekitUrl || !livekitToken) return;
 
-    log("VOICE", `Fluxer voice server keys for guild=${fluxerGuildId}: ${Object.keys(data).join(",")}`);
-    latestFluxerVoiceServer.set(fluxerGuildId, { livekitUrl, livekitToken });
+    const serverKey = fluxerChannelId ? `${fluxerGuildId}:${fluxerChannelId}` : fluxerGuildId;
+    latestFluxerVoiceServer.set(serverKey, { livekitUrl, livekitToken });
     for (const [channelId, creds] of pending) {
       if (creds.fluxerGuildId !== fluxerGuildId) continue;
+      if (fluxerChannelId && creds.fluxerChannelId !== fluxerChannelId) continue;
       creds.livekitUrl = livekitUrl;
       creds.livekitToken = livekitToken;
       pending.set(channelId, creds);
@@ -838,7 +840,9 @@ async function sendJoinOp(
   const stateKey = getDiscordStateKey(botUserId, guildId);
   const discordState = latestDiscordVoiceState.get(stateKey);
   const discordServer = latestDiscordVoiceServer.get(stateKey);
-  const fluxerServer = latestFluxerVoiceServer.get(voiceMap.fluxerGuildId);
+  const fluxerServer =
+    latestFluxerVoiceServer.get(`${voiceMap.fluxerGuildId}:${voiceMap.fluxerChannelId}`) ??
+    latestFluxerVoiceServer.get(voiceMap.fluxerGuildId);
   const requireFreshDiscord = options.requireFreshDiscord ?? false;
   log(
     "VOICE",
