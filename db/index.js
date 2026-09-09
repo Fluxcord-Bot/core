@@ -69,6 +69,11 @@ GuildMap.init(
       type: DataTypes.STRING,
       defaultValue: DefaultConfig.BotPrefix,
     },
+    typingEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   { sequelize, modelName: "GuildMap" },
 );

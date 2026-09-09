@@ -23,6 +23,7 @@ import {
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
+import { Op } from "sequelize";
 import { ChannelMap, GuildMap, MessageMap } from "./db/index.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
@@ -85,6 +86,25 @@ async function destroyChannelMaps(where) {
   await ChannelMap.destroy({ where });
 }
 
+/** @param {import("sequelize").Model} channelMap */
+async function isTypingEnabled(channelMap) {
+  const guildMaps = await GuildMap.findAll({
+    where: {
+      [Op.or]: [
+        {
+          guildId: channelMap.get("discordGuildId"),
+          guildType: "discord",
+        },
+        {
+          guildId: channelMap.get("fluxerGuildId"),
+          guildType: "fluxer",
+        },
+      ],
+    },
+  });
+  return !guildMaps.some((g) => g.get("typingEnabled") === false);
+}
+
 discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   if (!guild.available) return;
 
@@ -118,14 +138,16 @@ discordClient.on(DiscordEvents.TypingStart, async (type) => {
       },
     });
 
-    if (channelMap) {
-      const channel = await fluxerClient.channels.fetch(
-        //@ts-expect-error
-        channelMap.fluxerChannelId,
-      );
-      await channel.sendTyping();
-    }
-  } catch {}
+    if (!channelMap || !(await isTypingEnabled(channelMap))) return;
+
+    const channel = await fluxerClient.channels.fetch(
+      //@ts-expect-error
+      channelMap.fluxerChannelId,
+    );
+    await channel.sendTyping();
+  } catch (e) {
+    log("DISCORD", "Failed to relay typing indicator:", e);
+  }
 });
 
 discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
@@ -234,20 +256,22 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
 fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
   if (type.userId === fluxerClient.user?.id) return;
 
-  const channelMap = await ChannelMap.findOne({
-    where: {
-      fluxerChannelId: type.channelId,
-    },
-  });
+  try {
+    const channelMap = await ChannelMap.findOne({
+      where: {
+        fluxerChannelId: type.channelId,
+      },
+    });
 
-  if (channelMap) {
-    try {
-      const channel = await discordClient.channels.fetch(
-        //@ts-expect-error
-        channelMap.discordChannelId,
-      );
-      if (channel && channel.isSendable()) await channel.sendTyping();
-    } catch {}
+    if (!channelMap || !(await isTypingEnabled(channelMap))) return;
+
+    const channel = await discordClient.channels.fetch(
+      //@ts-expect-error
+      channelMap.discordChannelId,
+    );
+    if (channel && channel.isSendable()) await channel.sendTyping();
+  } catch (e) {
+    log("FLUXER", "Failed to relay typing indicator:", e);
   }
 });
 
