@@ -269,6 +269,7 @@ function isRecoverableRuntimeError(error) {
     "EPIPE",
     "UND_ERR_CONNECT_TIMEOUT",
     "Connect Timeout Error",
+    "Rate limited",
   ].some((needle) => message.includes(needle));
 }
 
