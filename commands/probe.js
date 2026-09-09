@@ -7,6 +7,7 @@ import {
   AttachmentBuilder,
   ChannelType,
 } from "discord.js";
+import { cloudUploadAttachments } from "../utils/CloudUpload.js";
 
 /**
  * @type {import('../utils/CommandSchema.js').CommandSchema}
@@ -78,8 +79,18 @@ const command = {
     if (message instanceof FluxerMessage) {
       await message.reply({ files: [{ name: "probed.txt", data: strBuf }] });
     } else {
+      const cloudUploaded = await cloudUploadAttachments(
+        discordClient,
+        message.channel.id,
+        [
+          {
+            attachment: strBuf,
+            name: "probed.txt",
+          },
+        ],
+      );
       await message.reply({
-        files: [new AttachmentBuilder(strBuf).setName("probed.txt")],
+        attachments: cloudUploaded,
       });
     }
   },
