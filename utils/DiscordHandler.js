@@ -301,7 +301,7 @@ export async function DiscordCreateMessageHandler(
       log("DB", "Failed to save Discord -> Fluxer message map", e);
     }
 
-    setTimeout(async () => {
+    const checkMsg = async () => {
       try {
         const channel = await message.channel.fetch();
         if (channel.isSendable()) {
@@ -333,7 +333,10 @@ export async function DiscordCreateMessageHandler(
           e,
         );
       }
-    }, 1000);
+    };
+    setTimeout(checkMsg, 1000);
+    setTimeout(checkMsg, 2500);
+    setTimeout(checkMsg, 5000);
   }
 }
 

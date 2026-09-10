@@ -280,7 +280,7 @@ export async function FluxerCreateMessageHandler(
     log("DB", "Failed to save Fluxer -> Discord message map", e);
   }
 
-  setTimeout(async () => {
+  const checkMsg = async () => {
     const channel = message.channel;
     if (channel?.isTextBased() && channel.messages) {
       try {
@@ -297,7 +297,10 @@ export async function FluxerCreateMessageHandler(
         log("FLUXER", "Source message fetch failed", e);
       }
     }
-  }, 1000);
+  };
+  setTimeout(checkMsg, 1000);
+  setTimeout(checkMsg, 2500);
+  setTimeout(checkMsg, 5000);
 }
 
 /**
