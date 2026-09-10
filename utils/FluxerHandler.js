@@ -86,17 +86,20 @@ export async function FluxerCreateMessageHandler(
   message,
   client,
   discordClient,
+  forceGuildId = null,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
       readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
     );
 
-  if (!message.guildId || message.type === 6) return;
-  // Only the guild's effective prefix triggers commands. Once a custom
-  // prefix is set for a guild, the global prefix no longer works there.
-  const guildPrefix = await getGuildPrefix(message.guildId);
+  const guildId = forceGuildId || message.guildId;
+
+  if (!guildId || message.type === 6) return;
+
+  const guildPrefix = await getGuildPrefix(guildId);
   if (message.content.startsWith(guildPrefix)) {
+    if (forceGuildId) return;
     CommandHandler(message, discordClient, client);
     return;
   }
@@ -185,11 +188,7 @@ export async function FluxerCreateMessageHandler(
     channelMap.discordGuildId,
   );
 
-  const canUserPing = await checkPingPerms(
-    message.guildId,
-    message.author.id,
-    client,
-  );
+  const canUserPing = await checkPingPerms(guildId, message.author.id, client);
 
   const parsedContent = await traverseMessageLinks(
     await parseFluxerEmojiToDiscord(

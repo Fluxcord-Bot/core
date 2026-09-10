@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@fluxerjs/collection':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@fluxerjs/core':
         specifier: ^3.0.0
         version: 3.0.0

@@ -71,6 +71,7 @@ export async function DiscordCreateMessageHandler(
   message,
   client,
   fluxerClient,
+  doNotExecuteCommand = false,
 ) {
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
@@ -79,10 +80,10 @@ export async function DiscordCreateMessageHandler(
 
   if (!message.guildId || message.type === MessageType.ChannelPinnedMessage)
     return;
-  // Only the guild's effective prefix triggers commands. Once a custom
-  // prefix is set for a guild, the global prefix no longer works there.
+
   const guildPrefix = await getGuildPrefix(message.guildId);
   if (message.content.startsWith(guildPrefix)) {
+    if (doNotExecuteCommand) return;
     CommandHandler(message, client, fluxerClient);
     return;
   }

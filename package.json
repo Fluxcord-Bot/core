@@ -12,6 +12,7 @@
     "encrypt": "node ./encrypt.js"
   },
   "dependencies": {
+    "@fluxerjs/collection": "^3.0.0",
     "@fluxerjs/core": "^3.0.0",
     "@journeyapps/sqlcipher": "^6.0.0",
     "@types/dockerode": "^4.0.1",
