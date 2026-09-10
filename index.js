@@ -406,8 +406,8 @@ async function onBothReady() {
   startVoiceRecovery?.();
 }
 
-fluxerClient.on(FluxerEvents.Error, async (e) => {
-  log("FLUXER", `Fluxer Error: ${e}`);
+fluxerClient.on(FluxerEvents.Debug, async (e) => {
+  log("DEBUG", `FLUXERDBG: ${e}`);
 });
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
