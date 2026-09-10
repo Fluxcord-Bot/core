@@ -53,6 +53,7 @@ const fluxerClient = new FluxerClient({
   rest: {
     api: Config.FluxerAPIBaseURL,
   },
+  gatewayDebug: true,
   presence: {
     status: "online",
     customStatus: {
