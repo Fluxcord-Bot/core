@@ -88,7 +88,6 @@ Number of messages is limited to 100 due to Discord and Fluxer API limitations`,
       } catch {}
       try {
         if (msg instanceof FluxerMessage) {
-          console.log(msg, "is fluxer");
           await FluxerCreateMessageHandler(
             msg,
             fluxerClient,
@@ -96,7 +95,6 @@ Number of messages is limited to 100 due to Discord and Fluxer API limitations`,
             message.guild.id,
           );
         } else {
-          console.log(msg, "is discord");
           await DiscordCreateMessageHandler(
             msg,
             discordClient,
@@ -105,9 +103,7 @@ Number of messages is limited to 100 due to Discord and Fluxer API limitations`,
           );
         }
         success++;
-      } catch (e) {
-        console.log("err occ", e);
-      }
+      } catch {}
       await sleep(500);
     }
 
