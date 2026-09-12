@@ -284,7 +284,23 @@ let startVoiceRecovery = null;
 /** @param {unknown} error */
 function isRecoverableRuntimeError(error) {
   const message = error instanceof Error ? error.message : String(error);
+
   if (!message) return false;
+
+  if (message.includes("Used disallowed intents")) {
+    renderBox([
+      "Message Content Intent not enabled!",
+      "On Discord Developer Portal, go to the Fluxcord bot you created,",
+      'then the Bot section, then enable "Message Content Intent".',
+      "",
+      "To avoid footguns because of this, Fluxcord will shut down itself.",
+      "You can start it later with `docker compose up -d`.",
+      "",
+      "Please join jb's unlabeled capacitor for support:",
+      "https://fluxer.gg/jbcrn",
+    ]);
+    process.exit(0);
+  }
 
   return [
     "WebSocket error",
@@ -306,8 +322,14 @@ async function onBothReady() {
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
     try {
-      const replyL = fs.readFileSync(Config.DataFolderPath + "/reply-l.webp");
-      const replyR = fs.readFileSync(Config.DataFolderPath + "/reply-r.webp");
+      const replyLRes = await fetch(
+        Config.InternalAssetsPrefixUrl + "/reply-l.webp",
+      );
+      const replyRRes = await fetch(
+        Config.InternalAssetsPrefixUrl + "/reply-r.webp",
+      );
+      const replyL = Buffer.from(await replyLRes.arrayBuffer());
+      const replyR = Buffer.from(await replyRRes.arrayBuffer());
 
       const fluxerGuild = await fluxerClient.guilds.fetch(
         Config.FluxerTempEmojiGuildId,
@@ -375,7 +397,47 @@ async function onBothReady() {
       );
       log("META", "First time setup done! Enjoy using the bot!");
     } catch (e) {
-      log("META", "First time setup failed:", e);
+      log("META", "For jb (or Fluxcord team), error is:", e);
+      renderBox([
+        "First time setup failed!",
+        "",
+        "To avoid footguns because of this, Fluxcord will shut down itself.",
+        "You can start it later with `docker compose up -d`.",
+        "",
+        "Please join jb's unlabeled capacitor for support:",
+        "https://fluxer.gg/jbcrn",
+      ]);
+      process.exit(0);
+    }
+  } else {
+    try {
+      const r = fs.readFileSync(
+        Config.DataFolderPath + "/fluxcord.json",
+        "utf-8",
+      );
+      const t = JSON.parse(r);
+      if (
+        !t.fluxerReplyEmoji ||
+        !t.fluxerReplyEmoji.replyL ||
+        !t.fluxerReplyEmoji.replyR ||
+        !t.discordReplyEmoji ||
+        !t.discordReplyEmoji.replyL ||
+        !t.discordReplyEmoji.replyR
+      ) {
+        throw new Error(`Corrupted field on fluxcord.json, full file: ${r}`);
+      }
+    } catch (e) {
+      log("META", "For jb (or Fluxcord team), error is:", e);
+      renderBox([
+        "Corrupted fluxcord.json found!",
+        "",
+        "To avoid footguns because of this, Fluxcord will shut down itself.",
+        "You can start it later with `docker compose up -d`.",
+        "",
+        "Please join jb's unlabeled capacitor for support:",
+        "https://fluxer.gg/jbcrn",
+      ]);
+      process.exit(0);
     }
   }
 

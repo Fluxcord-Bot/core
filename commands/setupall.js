@@ -11,6 +11,7 @@ import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
+import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 
 function normalizeChannelName(name) {
   return name
@@ -53,6 +54,24 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
     let isFluxer = message instanceof FluxerMessage;
     const directionOrCode = params[0] ?? "both";
 
+    const botPerms = checkBotPermissions(
+      message.guild.members.me,
+      message.channel,
+    );
+
+    if (!botPerms.hasAllCritical) {
+      await message.reply(
+        `Fluxcord doesn't have these critical permissions on this server or channel: ${[...botPerms.missingCritical, ...botPerms.missingGuildCritical].join(", ")}\nPlease add those permissions to the bot first before using this command.`,
+      );
+    }
+
+    const optionalWarning =
+      botPerms.missingOptional.length > 0
+        ? isFluxer
+          ? `\n\n> [!WARNING] The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+          : `\n\n> ⚠️ **Warning**\n> The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+        : "";
+
     if (directionOrCode.length !== 6) {
       const code = RandomString(6);
 
@@ -75,7 +94,7 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
               `# \`${Config.BotPrefix}setupall ${code}\`
 Execute that to the other side to continue setting up bridging for all channels! Code will expire after 5 minutes.
 
-${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`,
+${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!${optionalWarning}`,
             )
             .setFooter(
               Config.EmbedFooterContent
@@ -179,7 +198,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       }
 
       msg.edit({
-        content: `🎉 Successfully bridged ${results.filter((x) => x?.success).length} channels to ${!isFluxer ? "Fluxer" : "Discord"}!`,
+        content: `🎉 Successfully bridged ${results.filter((x) => x?.success).length} channels to ${!isFluxer ? "Fluxer" : "Discord"}!${optionalWarning}`,
       });
 
       await changeBotBio(discordGuild);

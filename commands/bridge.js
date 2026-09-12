@@ -7,6 +7,7 @@ import {
 } from "@fluxerjs/core";
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
+import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -26,6 +27,17 @@ Known issues:
     let isFluxer = message instanceof FluxerMessage;
     const channelId = params[0];
     const typeDef = params[1];
+
+    const botPerms = checkBotPermissions(
+      message.guild.members.me,
+      message.channel,
+    );
+
+    if (!botPerms.hasAllCritical) {
+      await message.reply(
+        `Fluxcord doesn't have these critical permissions on this server or channel: ${[...botPerms.missingCritical, ...botPerms.missingGuildCritical].join(", ")}\nPlease add those permissions to the bot first before using this command.`,
+      );
+    }
 
     if (!channelId || !typeDef) {
       await message.reply(`Missing parameters. Usage:

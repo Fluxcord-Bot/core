@@ -7,6 +7,7 @@ import { ChannelMap, GuildMap } from "../db/index.js";
 import { log } from "../utils/Logger.js";
 import { BridgeMap } from "../utils/CommandHandler.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
+import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -18,6 +19,24 @@ const command = {
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     const bridgeMap = BridgeMap.get(message.channelId);
+
+    const botPerms = checkBotPermissions(
+      message.guild.members.me,
+      message.channel,
+    );
+
+    if (!botPerms.hasAllCritical) {
+      await message.reply(
+        `Fluxcord doesn't have these critical permissions on this server or channel: ${[...botPerms.missingCritical, ...botPerms.missingGuildCritical].join(", ")}\nPlease add those permissions to the bot first before using this command.`,
+      );
+    }
+
+    const optionalWarning =
+      botPerms.missingOptional.length > 0
+        ? isFluxer
+          ? `\n\n> [!WARNING] The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+          : `\n\n> ⚠️ **Warning**\n> The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+        : "";
 
     if (!bridgeMap) {
       await message.reply(
@@ -134,18 +153,37 @@ const command = {
       bridgeType: type.toLowerCase(),
     });
 
+    let remoteOptionalWarning = "";
+    try {
+      const remoteMember = isFluxer
+        ? await (
+            await discordClient.guilds.fetch(discordGuildId)
+          ).members.fetchMe()
+        : await (
+            await fluxerClient.guilds.fetch(fluxerGuildId)
+          ).members.fetchMe();
+      const remotePerms = checkBotPermissions(remoteMember, channel);
+      if (remotePerms.missingOptional.length > 0) {
+        remoteOptionalWarning = isFluxer
+          ? `\n\n> ⚠️ **Warning**\n> The bot is missing these optional permissions here: ${remotePerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+          : `\n\n> [!WARNING] The bot is missing these optional permissions here: ${remotePerms.missingOptional.join(", ")}. Some things might not bridge properly.`;
+      }
+    } catch {}
+
     await channel.send({
       content:
         "🎉 This channel is now bridged to " +
         (isFluxer ? "Fluxer" : "Discord") +
-        "!",
+        "!" +
+        remoteOptionalWarning,
     });
 
     await message.reply({
       content:
         "🎉 This channel is now bridged to " +
         (!isFluxer ? "Fluxer" : "Discord") +
-        "!",
+        "!" +
+        optionalWarning,
     });
 
     if (channel.guild) await changeBotBio(channel.guild);

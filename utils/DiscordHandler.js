@@ -26,6 +26,7 @@ import {
   SPOILER_ATTACHMENT_FLAG,
 } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
+import { normalizeFcJson } from "./NormalizeJson.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -77,6 +78,8 @@ export async function DiscordCreateMessageHandler(
     fluxcordBotEmojiCfg = JSON.parse(
       readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
     );
+
+  fluxcordBotEmojiCfg = normalizeFcJson(fluxcordBotEmojiCfg);
 
   if (!message.guildId || message.type === MessageType.ChannelPinnedMessage)
     return;
@@ -151,7 +154,7 @@ export async function DiscordCreateMessageHandler(
   if (!channelMap || channelMap.discordWebhookId === message.webhookId) return;
 
   let forwardedMessage;
-  if (message.reference?.type === 1) {
+  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin) {
     forwardedMessage = message.messageSnapshots.first();
   }
 
@@ -230,10 +233,10 @@ export async function DiscordCreateMessageHandler(
 
     const webhookContent =
       (forwardedMessage
-        ? `-# <:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
       (interactingUser
-        ? `-# <:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><:${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2)
         ? "*Components V2 message*"

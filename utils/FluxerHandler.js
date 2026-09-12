@@ -203,7 +203,7 @@ export async function FluxerCreateMessageHandler(
 
   const attachmentDescs =
     (forwardedMessage ?? message).attachments
-      ?.filter((x) => x.size < 9999000)
+      ?.filter((x) => x.size < 19999000)
       .map((a) => ({
         url: a.proxyUrl ?? a.url ?? "",
         name: toDiscordSpoilerFilename(
@@ -234,6 +234,7 @@ export async function FluxerCreateMessageHandler(
         )
       : undefined;
 
+  /** @type {import("discord.js").MessagePayload | import("discord.js").WebhookMessageCreateOptions} */
   const webhookPayload = {
     content:
       // @ts-expect-error
@@ -247,7 +248,7 @@ export async function FluxerCreateMessageHandler(
       userJoin +
       stickerMsg +
       (overAttachmentsStr
-        ? "\n-# has attachments over 10mb: " + overAttachmentsStr
+        ? "\n-# has attachments over 20mb: " + overAttachmentsStr
         : ""),
     // @ts-expect-error
     attachments,
@@ -260,6 +261,9 @@ export async function FluxerCreateMessageHandler(
       discordClient,
     ),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
+    allowedMentions: {
+      parse: ["roles", "users", ...(canUserPing ? ["everyone"] : [])],
+    },
   };
 
   const msg = await webhook.send(webhookPayload);

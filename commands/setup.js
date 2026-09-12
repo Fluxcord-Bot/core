@@ -11,6 +11,7 @@ import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
+import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -28,6 +29,24 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
      * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d" | "template"}
      */
     const directionOrCode = params[0] ?? "both";
+
+    const botPerms = checkBotPermissions(
+      message.guild.members.me,
+      message.channel,
+    );
+
+    if (!botPerms.hasAllCritical) {
+      await message.reply(
+        `Fluxcord doesn't have these critical permissions on this server or channel: ${[...botPerms.missingCritical, ...botPerms.missingGuildCritical].join(", ")}\nPlease add those permissions to the bot first before using this command.`,
+      );
+    }
+
+    const optionalWarning =
+      botPerms.missingOptional.length > 0
+        ? isFluxer
+          ? `\n\n> [!WARNING] The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+          : `\n\n> ⚠️ **Warning**\n> The bot is missing these optional permissions here: ${botPerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+        : "";
 
     if (directionOrCode.length !== 6) {
       const channelMap = await ChannelMap.findOne({
@@ -95,7 +114,7 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
             .setTitle("Set up Fluxcord")
             .setDescription(
               `# \`${Config.BotPrefix}setup ${code}\`
-Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.${vcBridgeWarning}
+Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.${vcBridgeWarning}${optionalWarning}
 
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`,
             )
@@ -165,9 +184,9 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       let channel;
       let currentChannel;
       try {
-        channel = await (isFluxer ? discordClient : fluxerClient).channels.fetch(
-          setup.channelId,
-        );
+        channel = await (
+          isFluxer ? discordClient : fluxerClient
+        ).channels.fetch(setup.channelId);
         currentChannel = await message.client.channels.fetch(message.channelId);
       } catch {
         await message.reply("Channel not found. Maybe invite the bot?");
@@ -279,13 +298,31 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       PendingSetup.delete(directionOrCode);
 
+      let remoteOptionalWarning = "";
+      try {
+        const remoteMember = isFluxer
+          ? await (
+              await discordClient.guilds.fetch(discordGuildId)
+            ).members.fetchMe()
+          : await (
+              await fluxerClient.guilds.fetch(fluxerGuildId)
+            ).members.fetchMe();
+        const remotePerms = checkBotPermissions(remoteMember, channel);
+        if (remotePerms.missingOptional.length > 0) {
+          remoteOptionalWarning = isFluxer
+            ? `\n\n> ⚠️ **Warning**\n> The bot is missing these optional permissions here: ${remotePerms.missingOptional.join(", ")}. Some things might not bridge properly.`
+            : `\n\n> [!WARNING] The bot is missing these optional permissions here: ${remotePerms.missingOptional.join(", ")}. Some things might not bridge properly.`;
+        }
+      } catch {}
+
       await channel.send({
         content:
           "🎉 This " +
           voiceText +
           " channel is now bridged to " +
           (isFluxer ? "Fluxer" : "Discord") +
-          "!",
+          "!" +
+          remoteOptionalWarning,
       });
 
       await message.reply({
@@ -294,7 +331,8 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
           voiceText +
           " channel is now bridged to " +
           (!isFluxer ? "Fluxer" : "Discord") +
-          "!",
+          "!" +
+          optionalWarning,
       });
 
       await changeBotBio(channel.guild);
