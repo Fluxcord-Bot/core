@@ -37,6 +37,7 @@ Known issues:
       await message.reply(
         `Fluxcord doesn't have these critical permissions on this server or channel: ${[...botPerms.missingCritical, ...botPerms.missingGuildCritical].join(", ")}\nPlease add those permissions to the bot first before using this command.`,
       );
+      return;
     }
 
     if (!channelId || !typeDef) {

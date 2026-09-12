@@ -27,6 +27,7 @@ import {
 } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
+import { cacheUser, resolveMentions } from "./MentionResolver.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -74,6 +75,8 @@ export async function DiscordCreateMessageHandler(
   fluxerClient,
   doNotExecuteCommand = false,
 ) {
+  cacheUser(message.author);
+
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
       readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
@@ -213,13 +216,16 @@ export async function DiscordCreateMessageHandler(
     );
     const parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
-        sanitizePings(
-          await parseMentions(
-            forwardedMessage ?? message,
-            bridgeContent.messageData.parsedContent,
-            otherSideGuild,
+        await resolveMentions(
+          otherSideGuild,
+          sanitizePings(
+            await parseMentions(
+              forwardedMessage ?? message,
+              bridgeContent.messageData.parsedContent,
+              otherSideGuild,
+            ),
+            canUserPing,
           ),
-          canUserPing,
         ),
         fluxerClient,
         channelMap.fluxerGuildId,
@@ -397,13 +403,16 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const otherSideGuild = await client.guilds.fetch(channelMap.fluxerGuildId);
     const newContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
-        sanitizePings(
-          await parseMentions(
-            newMsg,
-            bridgeContent.messageData.parsedContent,
-            otherSideGuild,
+        await resolveMentions(
+          otherSideGuild,
+          sanitizePings(
+            await parseMentions(
+              newMsg,
+              bridgeContent.messageData.parsedContent,
+              otherSideGuild,
+            ),
+            canUserPing,
           ),
-          canUserPing,
         ),
         client,
         channelMap.fluxerGuildId,

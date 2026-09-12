@@ -22,6 +22,7 @@ import {
   toDiscordSpoilerFilename,
 } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
+import { cacheUser, resolveMentions } from "./MentionResolver.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -88,6 +89,8 @@ export async function FluxerCreateMessageHandler(
   discordClient,
   forceGuildId = null,
 ) {
+  cacheUser(message.author);
+
   if (!fluxcordBotEmojiCfg)
     fluxcordBotEmojiCfg = JSON.parse(
       readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
@@ -192,9 +195,12 @@ export async function FluxerCreateMessageHandler(
 
   const parsedContent = await traverseMessageLinks(
     await parseFluxerEmojiToDiscord(
-      sanitizePings(
-        await parseMentions(forwardedMessage ?? message, null, otherSideGuild),
-        canUserPing,
+      await resolveMentions(
+        otherSideGuild,
+        sanitizePings(
+          await parseMentions(forwardedMessage ?? message, null, otherSideGuild),
+          canUserPing,
+        ),
       ),
       discordClient,
       channelMap.discordGuildId,
@@ -375,9 +381,12 @@ export async function FluxerUpdateMessageHandler(
         : "") +
       (await traverseMessageLinks(
         await parseFluxerEmojiToDiscord(
-          sanitizePings(
-            await parseMentions(newMessage, null, otherSideGuild),
-            canUserPing,
+          await resolveMentions(
+            otherSideGuild,
+            sanitizePings(
+              await parseMentions(newMessage, null, otherSideGuild),
+              canUserPing,
+            ),
           ),
           client,
           channelMap.discordGuildId,
