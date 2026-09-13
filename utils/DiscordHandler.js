@@ -84,7 +84,11 @@ export async function DiscordCreateMessageHandler(
 
   fluxcordBotEmojiCfg = normalizeFcJson(fluxcordBotEmojiCfg);
 
-  if (!message.guildId || message.type === MessageType.ChannelPinnedMessage)
+  if (
+    !message.guildId ||
+    message.type === MessageType.ChannelPinnedMessage ||
+    message.type === MessageType.ThreadCreated
+  )
     return;
 
   const guildPrefix = await getGuildPrefix(message.guildId);
@@ -181,6 +185,10 @@ export async function DiscordCreateMessageHandler(
         ],
       },
     });
+
+    if (messageReference && messageReference.channelMapId !== channelMap?.id) {
+      messageReference = null;
+    }
   }
 
   const interactingUser = message.interaction

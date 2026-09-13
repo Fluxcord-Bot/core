@@ -12,6 +12,7 @@ import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
+import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -195,9 +196,22 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
+      const currentWebhookChannel = isFluxer
+        ? currentChannel
+        : await resolveDiscordParentChannel(discordClient, currentChannel);
+      const channelWebhookChannel = isFluxer
+        ? await resolveDiscordParentChannel(discordClient, channel)
+        : channel;
+
+      if (!currentWebhookChannel || !channelWebhookChannel) {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
+
       if (
-        (currentChannel.nsfw && !channel.nsfw) ||
-        (!currentChannel.nsfw && channel.nsfw)
+        (currentWebhookChannel.nsfw && !channelWebhookChannel.nsfw) ||
+        (!currentWebhookChannel.nsfw && channelWebhookChannel.nsfw)
       ) {
         await message.reply(
           "Both channels needs to be set as NSFW to bridge them.",
@@ -226,7 +240,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         fluxerChannelId = currentChannel.id;
         fluxerGuildId = currentChannel.guildId;
       } else if (setup.direction !== "d2f") {
-        const webhook = await currentChannel.createWebhook({
+        const webhook = await currentWebhookChannel.createWebhook({
           name: `Fluxcord Bridge (${currentChannel.id} (D) ${setup.direction === "both" ? "<->" : "<--"} ${channel.id} (F))`,
         });
         discordWebhookToken = webhook.token;
@@ -244,10 +258,10 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         fluxerChannelId = channel.id;
         fluxerGuildId = channel.guildId;
       } else if (
-        channel instanceof DiscordGuildChannel &&
+        channelWebhookChannel instanceof DiscordGuildChannel &&
         setup.direction !== "d2f"
       ) {
-        const webhook = await channel.createWebhook({
+        const webhook = await channelWebhookChannel.createWebhook({
           name: `Fluxcord Bridge (${channel.id} (D) ${setup.direction === "both" ? "<->" : "<--"} ${currentChannel.id} (F))`,
         });
         discordWebhookToken = webhook.token;

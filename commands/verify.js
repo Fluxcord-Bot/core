@@ -8,6 +8,7 @@ import { log } from "../utils/Logger.js";
 import { BridgeMap } from "../utils/CommandHandler.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
+import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -71,6 +72,18 @@ const command = {
       return;
     }
 
+    const thisWebhookChannel = isFluxer
+      ? thisChannel
+      : await resolveDiscordParentChannel(discordClient, thisChannel);
+    const webhookChannel = isFluxer
+      ? await resolveDiscordParentChannel(discordClient, channel)
+      : channel;
+
+    if (!thisWebhookChannel || !webhookChannel) {
+      await message.reply("Channel not found. Maybe invite the bot?");
+      return;
+    }
+
     let fluxerWebhookId = "";
     let fluxerWebhookToken = "";
     let fluxerChannelId = "";
@@ -92,11 +105,11 @@ const command = {
       fluxerChannelId = thisChannel.id;
       fluxerGuildId = thisChannel.guildId;
     } else if (
-      thisChannel instanceof DiscordGuildChannel &&
-      thisChannel.isTextBased() &&
+      thisWebhookChannel instanceof DiscordGuildChannel &&
+      thisWebhookChannel.isTextBased() &&
       type !== "DISCORD2FLUXER"
     ) {
-      const webhook = await thisChannel.createWebhook({
+      const webhook = await thisWebhookChannel.createWebhook({
         name: `Fluxcord Bridge (${thisChannel.id} (D) ${type === "BOTH" ? "<->" : "<--"} ${channel.id} (F))`,
       });
       discordWebhookToken = webhook.token;
@@ -114,11 +127,11 @@ const command = {
       fluxerChannelId = channel.id;
       fluxerGuildId = channel.guildId;
     } else if (
-      channel instanceof DiscordGuildChannel &&
-      channel.isTextBased() &&
+      webhookChannel instanceof DiscordGuildChannel &&
+      webhookChannel.isTextBased() &&
       type !== "DISCORD2FLUXER"
     ) {
-      const webhook = await channel.createWebhook({
+      const webhook = await webhookChannel.createWebhook({
         name: `Fluxcord Bridge (${channel.id} (D) ${type === "BOTH" ? "<->" : "<--"} ${thisChannel.id} (F))`,
       });
       discordWebhookToken = webhook.token;

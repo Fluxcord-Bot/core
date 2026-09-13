@@ -23,6 +23,7 @@ import {
 } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
+import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -142,6 +143,10 @@ export async function FluxerCreateMessageHandler(
         ],
       },
     });
+
+    if (messageReference && messageReference.channelMapId !== channelMap?.id) {
+      messageReference = null;
+    }
   }
 
   let forwardedMessage;
@@ -178,6 +183,11 @@ export async function FluxerCreateMessageHandler(
   const webhook = await discordClient.fetchWebhook(
     channelMap.discordWebhookId,
     channelMap.discordWebhookToken,
+  );
+
+  const threadId = await resolveDiscordThreadId(
+    discordClient,
+    channelMap.discordChannelId,
   );
 
   let guildUser = undefined;
@@ -270,6 +280,7 @@ export async function FluxerCreateMessageHandler(
     allowedMentions: {
       parse: ["roles", "users", ...(canUserPing ? ["everyone"] : [])],
     },
+    ...(threadId ? { threadId } : {}),
   };
 
   const msg = await webhook.send(webhookPayload);
@@ -364,6 +375,13 @@ export async function FluxerUpdateMessageHandler(
           ],
         },
       });
+
+      if (
+        messageReference &&
+        messageReference.channelMapId !== messageExisting.channelMapId
+      ) {
+        messageReference = null;
+      }
     }
 
     const canUserPing = await checkPingPerms(
@@ -413,9 +431,15 @@ export async function FluxerUpdateMessageHandler(
 
     if (!editContent && !attachments?.length) return;
 
+    const threadId = await resolveDiscordThreadId(
+      client,
+      channelMap.discordChannelId,
+    );
+
     await webhook.editMessage(messageExisting.discordMessageId, {
       content: editContent,
       attachments,
+      ...(threadId ? { threadId } : {}),
     });
   }
 }
@@ -461,7 +485,18 @@ export async function FluxerDeleteMessageHandler(
           channelMap.discordWebhookId,
           channelMap.discordWebhookToken,
         );
-        await webhook.deleteMessage(messageExisting.discordMessageId);
+        const threadId = await resolveDiscordThreadId(
+          client,
+          channelMap.discordChannelId,
+        );
+        if (threadId) {
+          await webhook.deleteMessage(
+            messageExisting.discordMessageId,
+            threadId,
+          );
+        } else {
+          await webhook.deleteMessage(messageExisting.discordMessageId);
+        }
       }
     } catch (e) {
       if (!isDiscordUnknownMessageError(e)) {
@@ -580,6 +615,13 @@ export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
       fluxerChannelId: chnl.channelId,
     },
   });
+
+  if (
+    channelMap &&
+    (await resolveDiscordThreadId(client, channelMap.discordChannelId))
+  ) {
+    return;
+  }
 
   if (channelMap) {
     const channel = /** @type {FluxerTextChannel} */ (

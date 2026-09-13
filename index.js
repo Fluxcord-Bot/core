@@ -29,10 +29,16 @@ import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
+import {
+  buildDiscordUserAgentSuffix,
+  buildExtHttpUserAgent,
+  buildFluxerUserAgent,
+} from "./utils/UserAgent.js";
 
 const discordClient = new DiscordClient({
   rest: {
     timeout: 30_000,
+    userAgentAppendix: buildDiscordUserAgentSuffix(),
   },
   intents: [
     GatewayIntentBits.Guilds,
@@ -52,8 +58,8 @@ const maps = await ChannelMap.findAll();
 const fluxerClient = new FluxerClient({
   rest: {
     api: Config.FluxerAPIBaseURL,
+    userAgent: buildFluxerUserAgent(),
   },
-  gatewayDebug: true,
   presence: {
     status: "online",
     customStatus: {
@@ -126,6 +132,14 @@ discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
     await destroyChannelMaps({ discordChannelId: chnl.id });
   } catch (e) {
     log("DB", `ChannelDelete cleanup failed for discord channel ${chnl.id}`, e);
+  }
+});
+
+discordClient.on(DiscordEvents.ThreadDelete, async (thread) => {
+  try {
+    await destroyChannelMaps({ discordChannelId: thread.id });
+  } catch (e) {
+    log("DB", `ThreadDelete cleanup failed for discord thread ${thread.id}`, e);
   }
 });
 
@@ -324,9 +338,19 @@ async function onBothReady() {
     try {
       const replyLRes = await fetch(
         Config.InternalAssetsPrefixUrl + "/reply-l.webp",
+        {
+          headers: {
+            "User-Agent": buildExtHttpUserAgent(),
+          },
+        },
       );
       const replyRRes = await fetch(
         Config.InternalAssetsPrefixUrl + "/reply-r.webp",
+        {
+          headers: {
+            "User-Agent": buildExtHttpUserAgent(),
+          },
+        },
       );
       const replyL = Buffer.from(await replyLRes.arrayBuffer());
       const replyR = Buffer.from(await replyRRes.arrayBuffer());
@@ -469,10 +493,6 @@ async function onBothReady() {
   startVoiceRecovery?.();
 }
 
-fluxerClient.on(FluxerEvents.Debug, async (e) => {
-  log("DEBUG", `FLUXERDBG: ${e}`);
-});
-
 fluxerClient.on(FluxerEvents.Ready, async () => {
   log(
     "FLUXER",
@@ -589,7 +609,7 @@ fluxerClient.login(Config.FluxerBotToken);
 
 function checkIfFluxerConnected() {
   if (!fluxerClient.isReady()) {
-    log("DEBUG", "Fluxer didn't connect after 10 seconds, restarting...");
+    log("META", "Fluxer didn't connect after 10 seconds, restarting...");
     process.exit(1);
   }
 }

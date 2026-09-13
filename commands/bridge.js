@@ -8,6 +8,7 @@ import {
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
+import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -90,9 +91,18 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
         return;
       }
 
+      const targetParent = await resolveDiscordParentChannel(
+        discordClient,
+        channel,
+      );
+      if (!targetParent) {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        return;
+      }
+
       if (
-        (currentChannel.nsfw && !channel.nsfw) ||
-        (!currentChannel.nsfw && channel.nsfw)
+        (currentChannel.nsfw && !targetParent.nsfw) ||
+        (!currentChannel.nsfw && targetParent.nsfw)
       ) {
         await message.reply(
           "Both channels needs to be set as NSFW to bridge them.",
@@ -112,9 +122,18 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
         return;
       }
 
+      const currentParent = await resolveDiscordParentChannel(
+        discordClient,
+        currentChannel,
+      );
+      if (!currentParent) {
+        await message.reply("Channel not found. Maybe invite the bot?");
+        return;
+      }
+
       if (
-        (channel.nsfw && !currentChannel.nsfw) ||
-        (!channel.nsfw && currentChannel.nsfw)
+        (channel.nsfw && !currentParent.nsfw) ||
+        (!channel.nsfw && currentParent.nsfw)
       ) {
         await message.reply(
           "Both channels needs to be set as NSFW to bridge them.",
