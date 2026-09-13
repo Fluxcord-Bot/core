@@ -28,6 +28,7 @@ import {
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
+import { resetBridgeHealth } from "./BridgeHealth.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -303,6 +304,8 @@ export async function DiscordCreateMessageHandler(
         },
       },
     );
+
+    resetBridgeHealth(message.guildId);
 
     let bridgedMessageMap;
     try {

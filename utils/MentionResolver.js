@@ -77,15 +77,17 @@ export async function resolveUsername(guild, username, discriminator) {
   const raw = await searchMembers(guild, username);
   if (!raw) return null;
   const hits = raw.members ?? [...raw.values()];
+  const hidden = hiddenDiscriminatorFor(platform);
 
   for (const hit of hits) {
     const parsed = hitToUser(hit);
     if (!parsed) continue;
-    if (
-      tagOf(parsed.user, platform) !== key &&
-      parsed.user.username.toLowerCase() !== name
-    )
-      continue;
+    if (discriminator) {
+      if (tagOf(parsed.user, platform) !== key) continue;
+    } else {
+      if (parsed.user.username.toLowerCase() !== name) continue;
+      if (String(parsed.user.discriminator ?? hidden) !== hidden) continue;
+    }
     if (parsed.member) {
       cacheUser(parsed.user, platform);
       return parsed.member;

@@ -23,6 +23,7 @@ import {
 } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
+import { resetBridgeHealth } from "./BridgeHealth.js";
 import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -284,6 +285,8 @@ export async function FluxerCreateMessageHandler(
   };
 
   const msg = await webhook.send(webhookPayload);
+
+  resetBridgeHealth(guildId);
 
   let bridgedMessageMap;
   try {

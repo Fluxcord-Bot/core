@@ -3,6 +3,10 @@ import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import { GuildMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import { genMsgLink } from "./GenMsgLink.js";
+import {
+  isBridgeHealthDegraded,
+  recordBridgeFailure,
+} from "./BridgeHealth.js";
 
 /**
  * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | Message} message
@@ -18,6 +22,9 @@ export async function sendErrorMessage(
   error,
   replyFallback = false,
 ) {
+  recordBridgeFailure(message.guildId);
+  const suppressReaction = isBridgeHealthDegraded(message.guildId);
+
   const guildMap = await GuildMap.findOne({
     where: {
       guildId: message.guildId,
@@ -70,10 +77,10 @@ export async function sendErrorMessage(
         }
       }
 
-      if (guildMap.errorReaction) {
+      if (guildMap.errorReaction && !suppressReaction) {
         await message.react(guildMap.errorReaction);
       }
-    } else {
+    } else if (!suppressReaction) {
       await message.react("⛓️‍💥");
     }
   } catch {}
