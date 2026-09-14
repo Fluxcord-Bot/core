@@ -162,7 +162,11 @@ export async function DiscordCreateMessageHandler(
   if (!channelMap || channelMap.discordWebhookId === message.webhookId) return;
 
   let forwardedMessage;
-  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin) {
+  if (
+    message.reference?.type === 1 &&
+    message.type !== MessageType.UserJoin &&
+    message.flags !== MessageFlags.IsCrosspost
+  ) {
     forwardedMessage = message.messageSnapshots.first();
   }
 
