@@ -49,6 +49,21 @@ function isFluxerUnknownMessageError(error) {
   );
 }
 
+function isMissingPermissionsError(error) {
+  const message = [error?.message, error?.cause?.message, error?.rawBody?.message]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    error?.code === "MISSING_PERMISSIONS" ||
+    error?.cause?.code === "MISSING_PERMISSIONS" ||
+    error?.status === 403 ||
+    error?.statusCode === 403 ||
+    error?.cause?.statusCode === 403 ||
+    /missing permissions/i.test(message) ||
+    /you don't have the permissions/i.test(message)
+  );
+}
+
 async function deleteFluxerMessage(client, channelMap, messageId) {
   await client.rest.delete(
     FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId),
@@ -325,10 +340,33 @@ export async function DiscordCreateMessageHandler(
     }
   }
 
-  const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
-  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (
-    channel
-  ).fetchWebhooks();
+  let channel;
+  let webhooks;
+  try {
+    channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
+    webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (
+      channel
+    ).fetchWebhooks();
+  } catch (e) {
+    if (isMissingPermissionsError(e)) {
+      log(
+        "FLUXER",
+        `Skipping bridge for ${message.id}: no permission to access Fluxer channel ${channelMap.fluxerChannelId}`,
+        e,
+      );
+      if (earlyFluxerMsgId) {
+        try {
+          await deleteFluxerMessageIfExists(
+            fluxerClient,
+            channelMap,
+            earlyFluxerMsgId,
+          );
+        } catch {}
+      }
+      return;
+    }
+    throw e;
+  }
   const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
   if (!webhook) {
     if (earlyFluxerMsgId) {
