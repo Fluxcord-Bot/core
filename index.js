@@ -29,6 +29,7 @@ import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
+import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
 import {
   buildDiscordUserAgentSuffix,
   buildExtHttpUserAgent,
@@ -463,6 +464,16 @@ async function onBothReady() {
       ]);
       process.exit(0);
     }
+  }
+
+  try {
+    await ensureLoadingEmojis(discordClient, fluxerClient);
+  } catch (e) {
+    log(
+      "META",
+      "Loading emoji setup failed, early bridge placeholders will use fallback markers.",
+      e,
+    );
   }
 
   if (

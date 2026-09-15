@@ -80,6 +80,14 @@ function isDiscordUnknownMessageError(error) {
   );
 }
 
+const earlyBridgeEmojiThreshold = 3;
+
+function countCustomEmojis(content) {
+  if (!content) return 0;
+  const matches = content.match(/<a?:.+?:\d+>/g);
+  return matches ? matches.length : 0;
+}
+
 /**
  * @param {import("@fluxerjs/core").Message} message
  * @param {import("@fluxerjs/core").Client} client
@@ -91,6 +99,10 @@ export async function FluxerCreateMessageHandler(
   discordClient,
   forceGuildId = null,
 ) {
+  log(
+    "DEBUG",
+    `FluxerCreate received id=${message.id} channelId=${message.channelId} guildId=${forceGuildId ?? message.guildId} authorId=${message.author?.id} type=${message.type} hasReference=${Boolean(message.messageReference)}`,
+  );
   cacheUser(message.author);
 
   if (!fluxcordBotEmojiCfg)
@@ -100,10 +112,20 @@ export async function FluxerCreateMessageHandler(
 
   const guildId = forceGuildId || message.guildId;
 
-  if (!guildId || message.type === 6) return;
+  if (!guildId || message.type === 6) {
+    log(
+      "DEBUG",
+      `FluxerCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`,
+    );
+    return;
+  }
 
   const guildPrefix = await getGuildPrefix(guildId);
   if (message.content.startsWith(guildPrefix)) {
+    log(
+      "DEBUG",
+      `FluxerCreate id=${message.id} isCommand=${!forceGuildId}`,
+    );
     if (forceGuildId) return;
     CommandHandler(message, discordClient, client);
     return;
@@ -118,7 +140,13 @@ export async function FluxerCreateMessageHandler(
     },
   });
 
-  if (channelMapViaUserId) return;
+  if (channelMapViaUserId) {
+    log(
+      "DEBUG",
+      `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=webhookAuthor`,
+    );
+    return;
+  }
 
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -127,7 +155,13 @@ export async function FluxerCreateMessageHandler(
     raw: true,
   });
 
-  if (channelMap?.bridgeType === "discord2fluxer") return;
+  if (channelMap?.bridgeType === "discord2fluxer") {
+    log(
+      "DEBUG",
+      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=oneWayBridge bridgeType=${channelMap.bridgeType}`,
+    );
+    return;
+  }
 
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
@@ -161,7 +195,18 @@ export async function FluxerCreateMessageHandler(
       ? `*@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`
       : "";
 
-  if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) return;
+  if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) {
+    log(
+      "DEBUG",
+      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=${!channelMap ? "noChannelMap" : "webhookEcho"} webhookId=${message.webhookId ?? "none"}`,
+    );
+    return;
+  }
+
+  log(
+    "DEBUG",
+    `FluxerCreate bridge start id=${message.id} channelMapId=${channelMap.id} hasForward=${Boolean(forwardedMessage)} hasReply=${Boolean(messageReference)} attachmentCount=${(forwardedMessage ?? message).attachments?.length ?? 0} stickerCount=${message.stickers?.length ?? 0}`,
+  );
 
   const stickers = message.stickers.map((x) => `${x.name}`);
 
@@ -190,6 +235,42 @@ export async function FluxerCreateMessageHandler(
     discordClient,
     channelMap.discordChannelId,
   );
+
+  const fastUsername =
+    message.author.globalName ?? message.author.username;
+
+  let earlyDiscordMsgId = null;
+  const earlySourceText = (forwardedMessage ?? message).content ?? "";
+  const customEmojiCount = countCustomEmojis(earlySourceText);
+  if (customEmojiCount >= earlyBridgeEmojiThreshold) {
+    const loadingEmoji = fluxcordBotEmojiCfg.discordLoadingEmoji
+      ? `<a:loading:${fluxcordBotEmojiCfg.discordLoadingEmoji}>`
+      : "⏳";
+    const loadingText =
+      earlySourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) ||
+      `${loadingEmoji} Bridging message with ${customEmojiCount} custom emojis...`;
+    try {
+      const earlyMsg = await webhook.send({
+        content:
+          (forwardedMessage
+            ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Forwarded message\n`
+            : "") +
+          loadingText +
+          userJoin,
+        username: fastUsername,
+        avatarURL: await getFluxerAvatarURL(message.author, undefined),
+        allowedMentions: { parse: [] },
+        ...(threadId ? { threadId } : {}),
+      });
+      earlyDiscordMsgId = earlyMsg.id;
+      log(
+        "DEBUG",
+        `FluxerCreate early bridge id=${message.id} discordId=${earlyDiscordMsgId} emojiCount=${customEmojiCount}`,
+      );
+    } catch (e) {
+      log("DISCORD", `Early bridge placeholder failed for ${message.id}`, e);
+    }
+  }
 
   let guildUser = undefined;
   try {
@@ -284,9 +365,31 @@ export async function FluxerCreateMessageHandler(
     ...(threadId ? { threadId } : {}),
   };
 
-  const msg = await webhook.send(webhookPayload);
+  let msg;
+  if (earlyDiscordMsgId) {
+    try {
+      msg = await webhook.editMessage(earlyDiscordMsgId, {
+        ...webhookPayload,
+        ...(threadId ? { threadId } : {}),
+      });
+    } catch (e) {
+      log(
+        "DISCORD",
+        `Failed to edit early bridged Discord message ${earlyDiscordMsgId}`,
+        e,
+      );
+      msg = await webhook.send(webhookPayload);
+    }
+  } else {
+    msg = await webhook.send(webhookPayload);
+  }
 
   resetBridgeHealth(guildId);
+
+  log(
+    "DEBUG",
+    `FluxerCreate bridged fluxerId=${message.id} discordId=${msg.id} channelMapId=${channelMap.id} fileCount=${files.length} hasReply=${Boolean(messageReference)} hasThread=${Boolean(threadId)}`,
+  );
 
   let bridgedMessageMap;
   try {
@@ -336,6 +439,10 @@ export async function FluxerUpdateMessageHandler(
   newMessage,
   client,
 ) {
+  log(
+    "DEBUG",
+    `FluxerUpdate received id=${newMessage.id} channelId=${newMessage.channelId} guildId=${newMessage.guildId} authorId=${newMessage.author?.id} partial=${Boolean(newMessage.partial)}`,
+  );
   if (newMessage.partial) return;
 
   const channelMapViaUserId = await ChannelMap.findOne({
@@ -432,11 +539,19 @@ export async function FluxerUpdateMessageHandler(
           )
         : undefined;
 
-    if (!editContent && !attachments?.length) return;
+    if (!editContent && !attachments?.length) {
+      log("DEBUG", `FluxerUpdate skip id=${newMessage.id} reason=emptyEdit`);
+      return;
+    }
 
     const threadId = await resolveDiscordThreadId(
       client,
       channelMap.discordChannelId,
+    );
+
+    log(
+      "DEBUG",
+      `FluxerUpdate bridged fluxerId=${newMessage.id} discordId=${messageExisting.discordMessageId} channelMapId=${channelMap.id} fileCount=${editFiles.length} hasThread=${Boolean(threadId)}`,
     );
 
     await webhook.editMessage(messageExisting.discordMessageId, {
@@ -457,6 +572,7 @@ export async function FluxerDeleteMessageHandler(
   client,
   fluxerClient,
 ) {
+  log("DEBUG", `FluxerDelete received id=${message.id}`);
   const messageExisting = await MessageMap.findOne({
     where: {
       fluxerMessageId: message.id,
@@ -573,6 +689,10 @@ ${replyContent}`,
  * @param {DiscordClient} client
  */
 export async function FluxerBulkDeleteMessageHandler(msgs, client) {
+  log(
+    "DEBUG",
+    `FluxerBulkDelete received channelId=${msgs.channelId} count=${msgs.ids.length}`,
+  );
   const messagesExisting = await MessageMap.findAll({
     where: {
       fluxerMessageId: {
@@ -613,6 +733,7 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
  * @param {FluxerClient} fluxerClient
  */
 export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
+  log("DEBUG", `FluxerPinsUpdate received channelId=${chnl.channelId}`);
   const channelMap = await ChannelMap.findOne({
     where: {
       fluxerChannelId: chnl.channelId,
