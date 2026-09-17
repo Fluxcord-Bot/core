@@ -29,8 +29,12 @@ import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
+import { processSticker } from "./StickerProcessor.js"
+
 
 let fluxcordBotEmojiCfg = undefined;
+
+const MAX_ATTACHMENT_SIZE = 24999900 // 25 MB, discord default max
 
 function isDiscordUnknownMessageError(error) {
   return (
@@ -136,6 +140,8 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
+
+
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -168,21 +174,6 @@ export async function DiscordCreateMessageHandler(
     }, 5000);
     return;
   }
-
-  const stickers = message.stickers.map((x) => `${x.name}`);
-
-  let stickerMsg = "";
-
-  if (message.stickers.find((x) => x.url.endsWith("json")))
-    stickerMsg =
-      stickers.length > 0
-        ? `-# Message contains stickers: ${stickers.join(", ")}`
-        : "";
-  else
-    stickerMsg =
-      stickers.length > 0
-        ? `${message.stickers.map((x) => `[${x.name}](${x.url})`).join(", ")}`
-        : "";
 
   const channelMap = await ChannelMap.findOne({
     where: {
@@ -247,6 +238,34 @@ export async function DiscordCreateMessageHandler(
     }
   }
 
+  const stickerFiles = [];
+  const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
+  const stickerLottie = []; // Discord does this for some of their native stickers. Ick.
+
+  for (const sticker of message.stickers.values()) {
+    if (sticker.url?.endsWith("json")) {
+      stickerLottie.push(sticker.name);
+      continue;
+    }
+
+    const stickerUrl = sticker.url;
+    const processed = await processSticker(stickerUrl, { animated: stickerUrl.endsWith(".gif"), name: sticker.name });
+
+    if (processed) {
+      stickerFiles.push({ name: processed.filename, data: processed.buffer });
+    } else {
+      stickerFallbacks.push(`[${sticker.name}](${stickerUrl})`);
+    }
+  }
+
+  let stickerMsg = "";
+  if (stickerLottie.length > 0) {
+    stickerMsg = `-# Message contains stickers: ${stickerLottie.join(", ")}`;
+  }
+  if (stickerFallbacks.length > 0) {
+    stickerMsg += (stickerMsg ? "\n" : "") + stickerFallbacks.join(", ");
+  }
+
   const interactingUser = message.interaction
     ? message.interactionMetadata?.user
     : undefined;
@@ -256,7 +275,7 @@ export async function DiscordCreateMessageHandler(
       : "";
 
   const bridgeAttachments = (forwardedMessage ?? message).attachments.filter(
-    (x) => x.size < 24999900,
+    (x) => x.size < MAX_ATTACHMENT_SIZE,
   );
   const webhookFiles = bridgeAttachments.map((a) => ({
     name: a.name,
@@ -265,7 +284,8 @@ export async function DiscordCreateMessageHandler(
       ? SPOILER_ATTACHMENT_FLAG
       : undefined,
     description: a.description,
-  }));
+  })).concat(stickerFiles);
+
   const fastUsername =
     message.author.displayName ?? message.author.globalName ?? "Fluxcord";
 
@@ -338,7 +358,7 @@ export async function DiscordCreateMessageHandler(
           channelMap,
           earlyFluxerMsgId,
         );
-      } catch {}
+      } catch { }
     }
     return;
   }
@@ -348,10 +368,11 @@ export async function DiscordCreateMessageHandler(
   const overAttachmentsStr = overAttachments
     .map((x) => `[${x.name}](${x.url})`)
     .join(" ");
-  if (webhook) {    let guildUser = undefined;
+  if (webhook) {
+    let guildUser = undefined;
     try {
       guildUser = await message.guild.members.fetch(message.author.id);
-    } catch {}
+    } catch { }
     const otherSideGuild = await fluxerClient.guilds.fetch(
       channelMap.fluxerGuildId,
     );
