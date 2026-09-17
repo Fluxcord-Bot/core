@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
-      - "**"
   workflow_dispatch:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -106,6 +106,7 @@ jobs:
             jbcrn/fluxcord-core:${{ steps.pkg.outputs.version }}-${{ matrix.arch }}
 
   merge:
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: rotfront-node
     steps:
