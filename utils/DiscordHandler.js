@@ -242,18 +242,25 @@ export async function DiscordCreateMessageHandler(
   const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
   const stickerLottie = []; // Discord does this for some of their native stickers. Ick.
 
+  log("DEBUG", `[StickerRoute] Message ${message.id} has ${message.stickers.size} stickers.`);
   for (const sticker of message.stickers.values()) {
+    log("DEBUG", `[StickerRoute] Processing sticker id=${sticker.id} name="${sticker.name}" format=${sticker.format} url=${sticker.url}`);
     if (sticker.url?.endsWith("json")) {
+      log("DEBUG", `[StickerRoute] Sticker ${sticker.id} is Lottie JSON. Skipping transcoding.`);
       stickerLottie.push(sticker.name);
       continue;
     }
 
     const stickerUrl = sticker.url;
-    const processed = await processSticker(stickerUrl, { animated: stickerUrl.endsWith(".gif"), name: sticker.name });
+    const isAnimated = stickerUrl.endsWith(".gif") || sticker.format === 2;
+    log("DEBUG", `[StickerRoute] Invoking processSticker with isAnimated=${isAnimated}`);
+    const processed = await processSticker(stickerUrl, { animated: isAnimated, name: sticker.name });
 
     if (processed) {
+      log("DEBUG", `[StickerRoute] Sticker ${sticker.id} processed successfully: filename="${processed.filename}" size=${processed.buffer.length} bytes`);
       stickerFiles.push({ name: processed.filename, data: processed.buffer });
     } else {
+      log("WARN", `[StickerRoute] Sticker ${sticker.id} processing returned empty or null. Adding fallback.`);
       stickerFallbacks.push(`[${sticker.name}](${stickerUrl})`);
     }
   }
@@ -420,6 +427,10 @@ export async function DiscordCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 25mb: " + overAttachmentsStr
         : "");
+    if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
+      log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
+      webhookContent = "-# Sent an unsupported sticker or empty message";
+    }
     const webhookUsername =
       guildUser?.displayName ?? fastUsername;
     const wEmbeds = (forwardedMessage ?? message).embeds;
