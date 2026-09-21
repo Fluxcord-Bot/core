@@ -238,7 +238,7 @@ export async function FluxerCreateMessageHandler(
       (x) => x.size > 9999000,
     ) ?? [];
   const overAttachmentsStr = overAttachments
-    .map((x) => `[${x.filename}](${x.url})`)
+    .map((x) => `[${x.filename}](<${x.url}>)`)
     .join(" ");
 
   const webhook = await discordClient.fetchWebhook(
