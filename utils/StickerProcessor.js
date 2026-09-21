@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,8 +6,6 @@ import { writeFile, readFile, unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 
 import { log } from "./Logger.js"
-
-const execFileAsync = promisify(execFile);
 
 // Magic param strings came from Thororen & Equicord team (MoreStickers & Fake Nitros plugin)
 // https://github.com/Equicord/Equicord/commits/main/src/equicordplugins/moreStickers
@@ -48,6 +46,7 @@ export async function processSticker(url, { animated = false, name = "sticker" }
 
     try {
         await writeFile(inputPath, rawBuffer);
+
         let args
         if (animated) {
             args = ["-y", "-i", inputPath, "-filter_complex", ANIMATED_PARAMS, outputPath];
@@ -55,24 +54,28 @@ export async function processSticker(url, { animated = false, name = "sticker" }
             args = ["-y", "-i", inputPath, "-vf", STATIC_PARAMS, "-pix_fmt", "rgba", "-frames:v", "1", outputPath];
         }
 
-        return new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
             const ffmpeg = spawn("ffmpeg", args);
             const outChunks = [];
             let errorLog = "";
 
             ffmpeg.stdout.on("data", (chunk) => {
-                outChunks.push(chunk);
-            });
-
-            ffmpeg.stderr.on("data", (chunk) => {
                 errorLog += chunk.toString();
             });
 
+            ffmpeg.stderr.on("error", (e) => {
+                reject(e);
+            });
 
 
-        })
-
-        const { stderr } = await execFileAsync("ffmpeg", args, { encoding: "utf8" });
+            ffmpeg.on("close", (code) => {
+                if (code === 0) {
+                    resolve();
+                } else {
+                    reject(new Error(`ffmpeg exited with code ${code}: ${errorLog}`));
+                }
+            });
+        });
 
         const out = await readFile(outputPath);
         return { buffer: out, filename: `${name}.${ext}` };
@@ -85,6 +88,4 @@ export async function processSticker(url, { animated = false, name = "sticker" }
             unlink(outputPath).catch(() => { })
         ]);
     }
-
-
 }
