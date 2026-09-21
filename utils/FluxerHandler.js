@@ -395,6 +395,21 @@ export async function FluxerCreateMessageHandler(
         `Failed to edit early bridged Discord message ${earlyDiscordMsgId}`,
         e,
       );
+
+      try {
+        if (threadId) {
+          await webhook.deleteMessage(earlyDiscordMsgId, threadId);
+        } else {
+          await webhook.deleteMessage(earlyDiscordMsgId);
+        }
+      } catch (e) {
+        log(
+          "DISCORD",
+          `Failed to delete early bridged Discord message ${earlyDiscordMsgId}`,
+          e,
+        );
+      }
+
       msg = await webhook.send(webhookPayload);
     }
   } else {

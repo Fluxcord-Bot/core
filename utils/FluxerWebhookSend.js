@@ -33,12 +33,23 @@ export async function sendFluxerWebhook(
   const resolvedFiles = [];
   const { files, ...jsonPayload } = params;
 
+  log("DEBUG", `[FluxerWebhookSend] Preparing to send webhook with ${files?.length ?? 0} files.`);
+
   if (files) {
     for (let i = 0; i < files.length; i++) {
       try {
         const file = files[i];
-        const res = await fetch(file.url);
-        const data = await res.arrayBuffer();
+        let data = file.data ?? file.attachment;
+
+        if (!data) {
+          if (!file.url) {
+            log("DEBUG", `File at index ${i} has no data or URL, skipping.`);
+            continue;
+          }
+
+          const res = await fetch(file.url);
+          data = await res.arrayBuffer();
+        }
 
         resolvedFiles.push({
           name: file.name,
