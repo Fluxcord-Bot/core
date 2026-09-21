@@ -242,22 +242,17 @@ export async function DiscordCreateMessageHandler(
   const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
   const stickerLottie = []; // Discord does this for some of their native stickers. Ick.
 
-  log("DEBUG", `[StickerRoute] Message ${message.id} has ${message.stickers.size} stickers.`);
   for (const sticker of message.stickers.values()) {
-    log("DEBUG", `[StickerRoute] Processing sticker id=${sticker.id} name="${sticker.name}" format=${sticker.format} url=${sticker.url}`);
     if (sticker.url?.endsWith("json")) {
-      log("DEBUG", `[StickerRoute] Sticker ${sticker.id} is Lottie JSON. Skipping transcoding.`);
       stickerLottie.push(sticker.name);
       continue;
     }
 
     const stickerUrl = sticker.url;
     const isAnimated = stickerUrl.endsWith(".gif") || sticker.format === 2;
-    log("DEBUG", `[StickerRoute] Invoking processSticker with isAnimated=${isAnimated}`);
     const processed = await processSticker(stickerUrl, { animated: isAnimated, name: sticker.name });
 
     if (processed) {
-      log("DEBUG", `[StickerRoute] Sticker ${sticker.id} processed successfully: filename="${processed.filename}" size=${processed.buffer.length} bytes`);
       stickerFiles.push({ name: processed.filename, data: processed.buffer });
     } else {
       log("WARN", `[StickerRoute] Sticker ${sticker.id} processing returned empty or null. Adding fallback.`);
