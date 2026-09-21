@@ -1,9 +1,4 @@
 import { spawn } from "node:child_process";
-import { promisify } from "node:util";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeFile, readFile, unlink } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
 
 import { log } from "./Logger.js"
 
@@ -32,7 +27,6 @@ export async function processSticker(url, { animated = false, name = "sticker" }
     }
 
     const rawBuffer = Buffer.from(await res.arrayBuffer());
-    const id = randomBytes(6).toString("hex");
 
     let ext
     if (animated) {
@@ -41,51 +35,60 @@ export async function processSticker(url, { animated = false, name = "sticker" }
         ext = "png";
     }
 
-    const inputPath = join(tmpdir(), `fc_sticker_${id}_in.${ext}`);
-    const outputPath = join(tmpdir(), `fc_sticker_${id}_out.${ext}`);
+    let args;
+    if (animated) {
+        args = [
+            "-y",
+            "-i", "pipe:0",
+            "-filter_complex", ANIMATED_PARAMS,
+            "-f", "gif",
+            "pipe:1"
+        ];
+    } else {
+        args = [
+            "-y",
+            "-i", "pipe:0",
+            "-vf", STATIC_PARAMS,
+            "-pix_fmt", "rgba",
+            "-frames:v", "1",
+            "-f", "image2pipe",
+            "-c:v", "png",
+            "pipe:1"
+        ];
+    }
 
     try {
-        await writeFile(inputPath, rawBuffer);
-
-        let args
-        if (animated) {
-            args = ["-y", "-i", inputPath, "-filter_complex", ANIMATED_PARAMS, outputPath];
-        } else {
-            args = ["-y", "-i", inputPath, "-vf", STATIC_PARAMS, "-pix_fmt", "rgba", "-frames:v", "1", outputPath];
-        }
-
-        await new Promise((resolve, reject) => {
+        const buffer = await new Promise((resolve, reject) => {
             const ffmpeg = spawn("ffmpeg", args);
             const outChunks = [];
             let errorLog = "";
 
             ffmpeg.stdout.on("data", (chunk) => {
+                outChunks.push(chunk);
+            });
+
+            ffmpeg.stderr.on("data", (chunk) => {
                 errorLog += chunk.toString();
             });
 
-            ffmpeg.stderr.on("error", (e) => {
-                reject(e);
+            ffmpeg.on("error", (err) => {
+                reject(err);
             });
-
 
             ffmpeg.on("close", (code) => {
                 if (code === 0) {
-                    resolve();
+                    resolve(Buffer.concat(outChunks));
                 } else {
                     reject(new Error(`ffmpeg exited with code ${code}: ${errorLog}`));
                 }
             });
+
+            ffmpeg.stdin.end(rawBuffer);
         });
 
-        const out = await readFile(outputPath);
-        return { buffer: out, filename: `${name}.${ext}` };
+        return { buffer, filename: `${name}.${ext}` };
     } catch (e) {
         log("DEBUG", `StickerProcessor: ffmpeg failed, ${e.message}`);
         return null;
-    } finally {
-        await Promise.all([
-            unlink(inputPath).catch(() => { }),
-            unlink(outputPath).catch(() => { })
-        ]);
     }
 }
