@@ -369,11 +369,13 @@ export async function DiscordCreateMessageHandler(
     }
     return;
   }
+
+
   const overAttachments = (forwardedMessage ?? message).attachments.filter(
     (x) => x.size > 24999900,
   );
   const overAttachmentsStr = overAttachments
-    .map((x) => `[${x.name}](${x.url})`)
+    .map((x) => `[${x.name}](<${x.proxyURL ?? x.url}>)`)
     .join(" ");
   if (webhook) {
     let guildUser = undefined;
@@ -388,7 +390,7 @@ export async function DiscordCreateMessageHandler(
       message.author.id,
       client,
     );
-    const parsedContent = await traverseMessageLinks(
+    let parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         await resolveMentions(
           otherSideGuild,
@@ -405,6 +407,15 @@ export async function DiscordCreateMessageHandler(
         channelMap.fluxerGuildId,
       ),
     );
+    for (const embed of (forwardedMessage ?? message).embeds ?? []) {
+      const proxyUrl =
+        embed.thumbnail?.proxyURL ??
+        embed.image?.proxyURL;
+
+      if (embed.url && proxyUrl && embed.url.includes("cdn.discordapp.com/attachments/")) {
+        parsedContent = parsedContent.replaceAll(embed.url, proxyUrl);
+      }
+    }
 
     let messageReferenceOption;
     if (messageReference && !forwardedMessage) {
