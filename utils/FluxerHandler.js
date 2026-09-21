@@ -25,6 +25,8 @@ import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
 import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
+import { processSticker } from "./StickerProcessor.js";
+
 
 let fluxcordBotEmojiCfg = undefined;
 
