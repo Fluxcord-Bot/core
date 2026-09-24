@@ -25,6 +25,8 @@ import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
 import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
+import { processSticker } from "./StickerProcessor.js";
+
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -208,22 +210,35 @@ export async function FluxerCreateMessageHandler(
     `FluxerCreate bridge start id=${message.id} channelMapId=${channelMap.id} hasForward=${Boolean(forwardedMessage)} hasReply=${Boolean(messageReference)} attachmentCount=${(forwardedMessage ?? message).attachments?.length ?? 0} stickerCount=${message.stickers?.length ?? 0}`,
   );
 
-  const stickers = message.stickers.map((x) => `${x.name}`);
-
   const mediaBase =
     (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
     Config.FluxerCDNBaseURL;
-  const stickerMsg =
-    stickers.length > 0
-      ? `${message.stickers.map((x) => `[${x.name}](${mediaBase}/stickers/${x.id}.webp?size=320&animated=${x.animated})`).join(", ")}`
-      : "";
+
+  const stickerFiles = [];
+  const stickerFallbacks = [];
+
+  for (const sticker of message.stickers) {
+    const url = `${mediaBase}/stickers/${sticker.id}.webp?size=320&animated=${sticker.animated}`;
+    const processed = await processSticker(url, {
+      animated: sticker.animated,
+      name: sticker.name,
+    });
+
+    if (processed) {
+      stickerFiles.push({ name: processed.filename, attachment: processed.buffer });
+    } else {
+      stickerFallbacks.push(`[${sticker.name}](${url})`);
+    }
+  }
+
+  const stickerMsg = stickerFallbacks.join(", ");
 
   const overAttachments =
     (forwardedMessage ?? message).attachments?.filter(
       (x) => x.size > 9999000,
     ) ?? [];
   const overAttachmentsStr = overAttachments
-    .map((x) => `[${x.filename}](${x.url})`)
+    .map((x) => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`)
     .join(" ");
 
   const webhook = await discordClient.fetchWebhook(
@@ -323,13 +338,15 @@ export async function FluxerCreateMessageHandler(
     });
   }
 
+  files.push(...stickerFiles);
+
   const attachments =
     files.length > 0
       ? await cloudUploadAttachments(
-          discordClient,
-          channelMap.discordChannelId,
-          files,
-        )
+        discordClient,
+        channelMap.discordChannelId,
+        files,
+      )
       : undefined;
 
   /** @type {import("discord.js").MessagePayload | import("discord.js").WebhookMessageCreateOptions} */
@@ -378,6 +395,21 @@ export async function FluxerCreateMessageHandler(
         `Failed to edit early bridged Discord message ${earlyDiscordMsgId}`,
         e,
       );
+
+      try {
+        if (threadId) {
+          await webhook.deleteMessage(earlyDiscordMsgId, threadId);
+        } else {
+          await webhook.deleteMessage(earlyDiscordMsgId);
+        }
+      } catch (e) {
+        log(
+          "DISCORD",
+          `Failed to delete early bridged Discord message ${earlyDiscordMsgId}`,
+          e,
+        );
+      }
+
       msg = await webhook.send(webhookPayload);
     }
   } else {
@@ -415,7 +447,7 @@ export async function FluxerCreateMessageHandler(
         if (isFluxerMessageNotFoundError(e)) {
           try {
             await msg.delete();
-          } catch {}
+          } catch { }
           await bridgedMessageMap?.destroy();
           return;
         }
@@ -533,10 +565,10 @@ export async function FluxerUpdateMessageHandler(
     const attachments =
       editFiles.length > 0
         ? await cloudUploadAttachments(
-            client,
-            channelMap.discordChannelId,
-            editFiles,
-          )
+          client,
+          channelMap.discordChannelId,
+          editFiles,
+        )
         : undefined;
 
     if (!editContent && !attachments?.length) {
@@ -718,10 +750,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
         await channel.bulkDelete(
           messagesExisting.map((x) => x.discordMessageId),
         );
-      } catch {}
+      } catch { }
 
       await reply.delete();
-    } catch {}
+    } catch { }
 
     await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
   }
