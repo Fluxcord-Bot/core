@@ -183,6 +183,13 @@ export async function attemptParseBridgedMessage(message) {
       regex:
         /> \[Reply to\]\(<https:\/\/discord\.com\/channels\/((?:\d+|@me))\/(\d+)\/(\d+)>.+?\n>.*\n?/,
     },
+    {
+      type: "kuma",
+      isBridge: true,
+      isProxy: false,
+      regex:
+        /-# ↩ \[.*\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)\).*\n?/,
+    },
   ];
 
   for (const parser of contentParsers) {
