@@ -29,8 +29,12 @@ import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
-import { processSticker } from "./StickerProcessor.js"
-
+import { processSticker } from "./StickerProcessor.js";
+import {
+  indicatorPrefix,
+  resolveNameIndicator,
+  withIndicator,
+} from "./NameIndicator.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -198,6 +202,11 @@ export async function DiscordCreateMessageHandler(
     return;
   }
 
+  const nameIndicator = await resolveNameIndicator(
+    channelMap.fluxerGuildId,
+    message.guildId,
+  );
+
   let forwardedMessage;
   if (
     message.reference?.type === 1 &&
@@ -273,7 +282,7 @@ export async function DiscordCreateMessageHandler(
     : undefined;
   const userJoin =
     message.type === MessageType.UserJoin
-      ? `*@${message.author.tag} joined the bridged server*`
+      ? `*${indicatorPrefix("discord", nameIndicator)}@${message.author.tag} joined the bridged server*`
       : "";
 
   const bridgeAttachments = (forwardedMessage ?? message).attachments.filter(
@@ -288,8 +297,11 @@ export async function DiscordCreateMessageHandler(
     description: a.description,
   })).concat(stickerFiles);
 
-  const fastUsername =
-    message.author.displayName ?? message.author.globalName ?? "Fluxcord";
+  const fastUsername = withIndicator(
+    message.author.displayName ?? message.author.globalName ?? "Fluxcord",
+    "discord",
+    nameIndicator,
+  );
 
   let earlyFluxerMsgId = null;
   let earlyMessageReferenceOption;
@@ -422,7 +434,7 @@ export async function DiscordCreateMessageHandler(
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
       (interactingUser
-        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> @${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${indicatorPrefix("discord", nameIndicator)}@${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2)
         ? "*Components V2 message*"
@@ -437,8 +449,9 @@ export async function DiscordCreateMessageHandler(
       log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
       webhookContent = "-# Sent an unsupported sticker or empty message";
     }
-    const webhookUsername =
-      guildUser?.displayName ?? fastUsername;
+    const webhookUsername = guildUser?.displayName
+      ? withIndicator(guildUser.displayName, "discord", nameIndicator)
+      : fastUsername;
     const wEmbeds = (forwardedMessage ?? message).embeds;
     if (typeof bridgeContent.excludeEmbed === "number")
       wEmbeds.splice(bridgeContent.excludeEmbed, 1);

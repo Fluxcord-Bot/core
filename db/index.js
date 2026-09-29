@@ -79,6 +79,11 @@ GuildMap.init(
       allowNull: false,
       defaultValue: true,
     },
+    nameIndicator: {
+      type: DataTypes.ENUM("off", "full", "short"),
+      allowNull: false,
+      defaultValue: "off",
+    },
   },
   { sequelize, modelName: "GuildMap" },
 );

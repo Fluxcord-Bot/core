@@ -24,6 +24,11 @@ import {
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
+import {
+  indicatorPrefix,
+  resolveNameIndicator,
+  withIndicator,
+} from "./NameIndicator.js";
 import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
 import { processSticker } from "./StickerProcessor.js";
 
@@ -192,11 +197,6 @@ export async function FluxerCreateMessageHandler(
     messageReference = undefined;
   }
 
-  const userJoin =
-    message.type === 7
-      ? `*@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`
-      : "";
-
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) {
     log(
       "DEBUG",
@@ -204,6 +204,16 @@ export async function FluxerCreateMessageHandler(
     );
     return;
   }
+
+  const nameIndicator = await resolveNameIndicator(
+    channelMap.discordGuildId,
+    guildId,
+  );
+
+  const userJoin =
+    message.type === 7
+      ? `*${indicatorPrefix("fluxer", nameIndicator)}@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""} joined the bridged community*`
+      : "";
 
   log(
     "DEBUG",
@@ -251,8 +261,11 @@ export async function FluxerCreateMessageHandler(
     channelMap.discordChannelId,
   );
 
-  const fastUsername =
-    message.author.globalName ?? message.author.username;
+  const fastUsername = withIndicator(
+    message.author.globalName ?? message.author.username,
+    "fluxer",
+    nameIndicator,
+  );
 
   let earlyDiscordMsgId = null;
   const earlySourceText = (forwardedMessage ?? message).content ?? "";
@@ -357,7 +370,7 @@ export async function FluxerCreateMessageHandler(
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Forwarded message\n`
         : "") +
       (messageReference
-        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${await processReplyContent(message.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${await processReplyContent(message.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
       parsedContent +
       userJoin +
@@ -367,10 +380,13 @@ export async function FluxerCreateMessageHandler(
         : ""),
     // @ts-expect-error
     attachments,
-    username:
+    username: withIndicator(
       guildUser?.displayName ??
-      message.author.globalName ??
-      message.author.username,
+        message.author.globalName ??
+        message.author.username,
+      "fluxer",
+      nameIndicator,
+    ),
     embeds: await fluxerEmbedToDiscord(
       forwardedMessage ?? message,
       discordClient,
@@ -497,6 +513,10 @@ export async function FluxerUpdateMessageHandler(
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
+    const nameIndicator = await resolveNameIndicator(
+      channelMap.discordGuildId,
+      newMessage.guildId,
+    );
     const webhook = await client.fetchWebhook(
       channelMap.discordWebhookId,
       channelMap.discordWebhookToken,
@@ -537,7 +557,7 @@ export async function FluxerUpdateMessageHandler(
     const editContent =
       // @ts-expect-error
       (messageReference
-        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `<@${messageReference.authorId}>` : `@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${await processReplyContent(newMessage.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${await processReplyContent(newMessage.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
       (await traverseMessageLinks(
         await parseFluxerEmojiToDiscord(

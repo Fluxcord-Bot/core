@@ -42,3 +42,26 @@ export async function applyBridgeToggle(guildId, guildType, field, requested) {
 
   return { current, enabled, changed: enabled !== current };
 }
+
+export async function applyBridgeValue(
+  guildId,
+  guildType,
+  field,
+  value,
+  neutral,
+) {
+  const guildMaps = await getBridgeGuildMaps(guildId, guildType);
+  const current =
+    guildMaps.find((guildMap) => guildMap.get(field) !== neutral)?.get(field) ??
+    neutral;
+
+  const changed = value !== undefined && value !== current;
+  if (changed) {
+    for (const guildMap of guildMaps) {
+      guildMap.set(field, value);
+      await guildMap.save();
+    }
+  }
+
+  return { current, changed };
+}
