@@ -8,13 +8,6 @@ import {
 } from "@fluxerjs/core";
 
 export function checkBotPermissions(botMember, channel) {
-  if (!channel || !channel.type) {
-    const a = `${Math.random()}`.replace(".", "");
-    console.log("BOTPERMS CHNL NULL", `(${a}):`, channel, botMember);
-    throw new Error(
-      `channel is null. this should not happen at all. errCtx: ${a}`,
-    );
-  }
   const isFluxer = botMember instanceof FluxerGuildMember;
   const isVoice = isFluxer
     ? channel.type === FluxerChannelType.GuildVoice
