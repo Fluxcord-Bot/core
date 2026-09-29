@@ -4,6 +4,9 @@ import { applyBridgeValue } from "../utils/BridgeToggle.js";
 const USAGE =
   "Usage: `off`, `full` (`[Discord]`/`[Fluxer]`) or `short` (`[D]`/`[F]`).";
 
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
 const command = {
   name: "nameindicator",
   aliases: ["indicator"],
