@@ -5,9 +5,9 @@ import { applyBridgeToggle } from "../utils/BridgeToggle.js";
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "toggletyping",
-  aliases: ["typing"],
-  description: "Toggle typing indicator relaying",
+  name: "toggleinvite",
+  aliases: ["toggleinv"],
+  description: "Toggle the invite command for this bridge",
   requireElevated: true,
   params: "[on|off]",
   async run(params, message) {
@@ -32,20 +32,18 @@ const command = {
     const { enabled, changed } = await applyBridgeToggle(
       message.guildId,
       isFluxer ? "fluxer" : "discord",
-      "typingEnabled",
+      "inviteEnabled",
       requested,
     );
 
     if (!changed) {
       await message.reply(
-        `Typing indicator relaying is already ${enabled ? "enabled" : "disabled"}.`,
+        `Invite command is already ${enabled ? "enabled" : "disabled"}.`,
       );
       return;
     }
 
-    await message.reply(
-      `Typing indicator relaying ${enabled ? "enabled" : "disabled"}.`,
-    );
+    await message.reply(`Invite command ${enabled ? "enabled" : "disabled"}.`);
   },
 };
 

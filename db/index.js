@@ -74,6 +74,11 @@ GuildMap.init(
       allowNull: false,
       defaultValue: true,
     },
+    inviteEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   { sequelize, modelName: "GuildMap" },
 );

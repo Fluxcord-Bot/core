@@ -1,5 +1,5 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { getFluxerInviteBaseUrl } from "../utils/GetFluxerUrls.js";
 
@@ -24,6 +24,26 @@ const command = {
 
     if (!channelMap) {
       await message.reply("This channel isn't part of a bridge.");
+      return;
+    }
+
+    const guildMaps = await GuildMap.findAll({
+      where: {
+        [Op.or]: [
+          {
+            guildId: channelMap.get("discordGuildId"),
+            guildType: "discord",
+          },
+          {
+            guildId: channelMap.get("fluxerGuildId"),
+            guildType: "fluxer",
+          },
+        ],
+      },
+    });
+
+    if (guildMaps.some((g) => g.get("inviteEnabled") === false)) {
+      await message.reply("The invite command is disabled in this guild.");
       return;
     }
 
