@@ -429,7 +429,7 @@ export async function DiscordCreateMessageHandler(
       messageReferenceOption = { message_id: messageReference.fluxerMessageId };
     }
 
-    const webhookContent =
+    let webhookContent =
       (forwardedMessage
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
@@ -445,10 +445,6 @@ export async function DiscordCreateMessageHandler(
       (overAttachmentsStr
         ? "\n-# has attachments over 25mb: " + overAttachmentsStr
         : "");
-    if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
-      log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
-      webhookContent = "-# Sent an unsupported sticker or empty message";
-    }
     const webhookUsername = guildUser?.displayName
       ? withIndicator(guildUser.displayName, "discord", nameIndicator)
       : fastUsername;
@@ -460,6 +456,10 @@ export async function DiscordCreateMessageHandler(
         .filter((x) => !x.url || !webhookContent.includes(x.url))
         .map(async (x) => await discordEmbedToFluxer(x, fluxerClient)),
     );
+    if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
+      log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
+      webhookContent = "-# Sent an unsupported sticker or empty message";
+    }
 
     let msg;
     if (earlyFluxerMsgId) {
