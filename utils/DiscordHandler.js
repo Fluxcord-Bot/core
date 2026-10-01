@@ -322,6 +322,10 @@ export async function DiscordCreateMessageHandler(
     "DEBUG",
     `DiscordCreate emoji check id=${message.id} emojiCount=${customEmojiCount} threshold=${earlyBridgeEmojiThreshold} contentLength=${sourceText?.length ?? 0} ltCount=${sourceText?.split("<").length - 1 ?? 0} colonCount=${sourceText?.split(":").length - 1 ?? 0} hasForward=${Boolean(forwardedMessage)} isBridge=${bridgeContent.isBridge} isProxy=${bridgeContent.isProxy}`,
   );
+  let guildUser = undefined;
+  try {
+    guildUser = await message.guild.members.fetch(message.author.id);
+  } catch { }
   if (customEmojiCount >= earlyBridgeEmojiThreshold) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji
       ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>`
@@ -343,7 +347,7 @@ export async function DiscordCreateMessageHandler(
             stickerMsg +
             userJoin,
           username: fastUsername,
-          avatar_url: message.author.avatarURL() ?? undefined,
+          avatar_url: (guildUser?.avatarURL() ?? message.author.avatarURL()) ?? undefined,
           files: webhookFiles,
           message_reference: earlyMessageReferenceOption,
           allowed_mentions: { parse: [] },
@@ -385,10 +389,6 @@ export async function DiscordCreateMessageHandler(
     .map((x) => `[${x.name}](<${x.proxyURL ?? x.url}>)`)
     .join(" ");
   if (webhook) {
-    let guildUser = undefined;
-    try {
-      guildUser = await message.guild.members.fetch(message.author.id);
-    } catch { }
     const otherSideGuild = await fluxerClient.guilds.fetch(
       channelMap.fluxerGuildId,
     );
@@ -494,7 +494,7 @@ export async function DiscordCreateMessageHandler(
         {
           content: webhookContent,
           username: webhookUsername,
-          avatar_url: message.author.avatarURL() ?? undefined,
+          avatar_url: (guildUser?.avatarURL() ?? message.author.avatarURL()) ?? undefined,
           embeds: webhookEmbeds,
           files: webhookFiles,
           message_reference: messageReferenceOption,
