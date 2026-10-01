@@ -397,6 +397,9 @@ export async function DiscordCreateMessageHandler(
       message.author.id,
       client,
     );
+    const webhookAllowedMentions = forwardedMessage
+      ? { parse: [] }
+      : { parse: ["users", "roles", ...(canUserPing ? ["everyone"] : [])], replied_user: true };
     let parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         await resolveMentions(
@@ -407,7 +410,7 @@ export async function DiscordCreateMessageHandler(
               bridgeContent.messageData.parsedContent,
               otherSideGuild,
             ),
-            canUserPing,
+            canUserPing && !forwardedMessage,
           ),
         ),
         fluxerClient,
@@ -470,6 +473,7 @@ export async function DiscordCreateMessageHandler(
             body: {
               content: webhookContent,
               embeds: webhookEmbeds,
+              allowed_mentions: webhookAllowedMentions,
             },
             auth: false,
           },
@@ -494,10 +498,7 @@ export async function DiscordCreateMessageHandler(
           embeds: webhookEmbeds,
           files: webhookFiles,
           message_reference: messageReferenceOption,
-          allowed_mentions: {
-            parse: ["users", "roles", ...(canUserPing ? ["everyone"] : [])],
-            replied_user: true,
-          },
+          allowed_mentions: webhookAllowedMentions,
         },
       );
     }

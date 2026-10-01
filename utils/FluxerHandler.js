@@ -319,7 +319,7 @@ export async function FluxerCreateMessageHandler(
         otherSideGuild,
         sanitizePings(
           await parseMentions(forwardedMessage ?? message, null, otherSideGuild),
-          canUserPing,
+          canUserPing && !forwardedMessage,
         ),
       ),
       discordClient,
@@ -392,9 +392,9 @@ export async function FluxerCreateMessageHandler(
       discordClient,
     ),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
-    allowedMentions: {
-      parse: ["roles", "users", ...(canUserPing ? ["everyone"] : [])],
-    },
+    allowedMentions: forwardedMessage
+      ? { parse: [] }
+      : { parse: ["roles", "users", ...(canUserPing ? ["everyone"] : [])] },
     ...(threadId ? { threadId } : {}),
   };
 
