@@ -1,0 +1,51 @@
+import { Message as FluxerMessage } from "@fluxerjs/core";
+import { applyBridgeToggle } from "../utils/BridgeToggle.js";
+
+/**
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ */
+const command = {
+  name: "toggleeveryone",
+  description: "Toggle @\u200beveryone/@\u200bhere ping bridging for this bridge",
+  requireElevated: true,
+  params: "[on|off]",
+  async run(params, message) {
+    if (!message.guildId) {
+      await message.reply("This command can only be used in a server.");
+      return;
+    }
+
+    const isFluxer = message instanceof FluxerMessage;
+    const arg = params[0]?.toLowerCase();
+
+    let requested;
+    if (arg === "on") {
+      requested = true;
+    } else if (arg === "off") {
+      requested = false;
+    } else if (arg) {
+      await message.reply("Usage: `on` or `off`.");
+      return;
+    }
+
+    const { enabled, changed } = await applyBridgeToggle(
+      message.guildId,
+      isFluxer ? "fluxer" : "discord",
+      "everyonePingEnabled",
+      requested,
+    );
+
+    if (!changed) {
+      await message.reply(
+        `@\u200beveryone/@\u200bhere ping bridging is already ${enabled ? "enabled" : "disabled"}.`,
+      );
+      return;
+    }
+
+    await message.reply(
+      `@\u200beveryone/@\u200bhere ping bridging ${enabled ? "enabled" : "disabled"}.`,
+    );
+  },
+};
+
+export default command;

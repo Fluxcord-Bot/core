@@ -24,6 +24,7 @@ import {
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
+import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 import {
   indicatorPrefix,
   resolveNameIndicator,
@@ -312,6 +313,11 @@ export async function FluxerCreateMessageHandler(
   );
 
   const canUserPing = await checkPingPerms(guildId, message.author.id, client);
+  const everyonePingsEnabled = await isBridgeToggleEnabled(
+    channelMap,
+    "everyonePingEnabled",
+  );
+  const canBridgePing = canUserPing && everyonePingsEnabled;
 
   const parsedContent = await traverseMessageLinks(
     await parseFluxerEmojiToDiscord(
@@ -319,7 +325,7 @@ export async function FluxerCreateMessageHandler(
         otherSideGuild,
         sanitizePings(
           await parseMentions(forwardedMessage ?? message, null, otherSideGuild),
-          canUserPing && !forwardedMessage,
+          canBridgePing && !forwardedMessage,
         ),
       ),
       discordClient,
@@ -394,7 +400,7 @@ export async function FluxerCreateMessageHandler(
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
     allowedMentions: forwardedMessage
       ? { parse: [] }
-      : { parse: ["roles", "users", ...(canUserPing ? ["everyone"] : [])] },
+      : { parse: ["roles", "users", ...(canBridgePing ? ["everyone"] : [])] },
     ...(threadId ? { threadId } : {}),
   };
 
@@ -551,6 +557,11 @@ export async function FluxerUpdateMessageHandler(
       newMessage.author.id,
       client,
     );
+    const everyonePingsEnabled = await isBridgeToggleEnabled(
+      channelMap,
+      "everyonePingEnabled",
+    );
+    const canBridgePing = canUserPing && everyonePingsEnabled;
 
     const otherSideGuild = await client.guilds.fetch(channelMap.discordGuildId);
 
@@ -565,7 +576,7 @@ export async function FluxerUpdateMessageHandler(
             otherSideGuild,
             sanitizePings(
               await parseMentions(newMessage, null, otherSideGuild),
-              canUserPing,
+              canBridgePing,
             ),
           ),
           client,
@@ -719,7 +730,7 @@ export async function FluxerDeleteMessageHandler(
           continue;
         }
         if (!message) continue;
-        replyContent = message.content;
+        replyContent = sanitizePings(message.content);
       } else {
         // native message
         continue;

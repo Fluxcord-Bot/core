@@ -29,6 +29,7 @@ import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
+import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 import { processSticker } from "./StickerProcessor.js";
 import {
   indicatorPrefix,
@@ -397,9 +398,14 @@ export async function DiscordCreateMessageHandler(
       message.author.id,
       client,
     );
+    const everyonePingsEnabled = await isBridgeToggleEnabled(
+      channelMap,
+      "everyonePingEnabled",
+    );
+    const canBridgePing = canUserPing && everyonePingsEnabled;
     const webhookAllowedMentions = forwardedMessage
       ? { parse: [] }
-      : { parse: ["users", "roles", ...(canUserPing ? ["everyone"] : [])], replied_user: true };
+      : { parse: ["users", "roles", ...(canBridgePing ? ["everyone"] : [])], replied_user: true };
     let parsedContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         await resolveMentions(
@@ -410,7 +416,7 @@ export async function DiscordCreateMessageHandler(
               bridgeContent.messageData.parsedContent,
               otherSideGuild,
             ),
-            canUserPing && !forwardedMessage,
+            canBridgePing && !forwardedMessage,
           ),
         ),
         fluxerClient,
@@ -614,6 +620,11 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       newMsg.author.id,
       client,
     );
+    const everyonePingsEnabled = await isBridgeToggleEnabled(
+      channelMap,
+      "everyonePingEnabled",
+    );
+    const canBridgePing = canUserPing && everyonePingsEnabled;
 
     const wEmbeds = newMsg.embeds;
     if (typeof bridgeContent.excludeEmbed === "number")
@@ -629,7 +640,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
               bridgeContent.messageData.parsedContent,
               otherSideGuild,
             ),
-            canUserPing,
+            canBridgePing,
           ),
         ),
         client,

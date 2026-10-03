@@ -28,6 +28,16 @@ export async function getBridgeGuildMaps(guildId, guildType) {
   return guildMaps;
 }
 
+export async function isBridgeToggleEnabled(channelMap, field) {
+  const guildIds = [channelMap.discordGuildId, channelMap.fluxerGuildId].filter(
+    Boolean,
+  );
+  if (guildIds.length === 0) return true;
+
+  const guildMaps = await GuildMap.findAll({ where: { guildId: guildIds } });
+  return !guildMaps.some((g) => g.get(field) === false);
+}
+
 export async function applyBridgeToggle(guildId, guildType, field, requested) {
   const guildMaps = await getBridgeGuildMaps(guildId, guildType);
   const current = !guildMaps.some((g) => g.get(field) === false);
