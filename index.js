@@ -69,6 +69,7 @@ const fluxerClient = new FluxerClient({
   },
   cache: {
     guilds: Infinity,
+    channels: Infinity, // <- rmember when i said its cache bruh
   },
 });
 
