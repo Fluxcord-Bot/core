@@ -36,6 +36,7 @@ import {
   resolveNameIndicator,
   withIndicator,
 } from "./NameIndicator.js";
+import { maybePublishFluxerMessage } from "./AnnouncementPublish.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -510,6 +511,10 @@ export async function DiscordCreateMessageHandler(
     }
 
     resetBridgeHealth(message.guildId);
+
+    try {
+      await maybePublishFluxerMessage(fluxerClient, channelMap, msg?.id);
+    } catch {}
 
     log(
       "DEBUG",

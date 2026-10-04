@@ -84,6 +84,11 @@ GuildMap.init(
       allowNull: false,
       defaultValue: true,
     },
+    autoPublishEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
     nameIndicator: {
       type: DataTypes.ENUM("off", "full", "short"),
       allowNull: false,

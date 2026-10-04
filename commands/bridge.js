@@ -9,6 +9,7 @@ import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
+import { hasSilentFlag } from "../utils/SilentFlag.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -17,8 +18,9 @@ const command = {
   name: "bridge",
   description: "Bridge a channel",
   requireElevated: true,
-  params: "<channelId> <both|discord2fluxer|fluxer2discord>",
+  params: "<channelId> <both|discord2fluxer|fluxer2discord> [silent]",
   additionalInfo: `The channelId parameter takes a channel ID of the other end's channel (e.g. if you're running it on Fluxer, it needs a Discord channel ID.)
+silent - skip the "this channel is now bridged" messages when the bridge is verified
 
 Known issues:
 - Bridge "eats" attachments, basically happens when fluxer cdn just explodes (corrupted attachment), also happens when discord cdn also explodes (missing attachment)
@@ -44,7 +46,7 @@ Known issues:
     if (!channelId || !typeDef) {
       await message.reply(`Missing parameters. Usage:
 \`\`\`
-${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
+${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE] [silent]
 \`\`\``);
       return;
     }
@@ -174,6 +176,7 @@ ${Config.BotPrefix}bridge [CHANNEL_ID] [TYPE]
       discordChannel: isFluxer ? channelId : message.channelId,
       fluxerChannel: isFluxer ? message.channelId : channelId,
       bridgeType: type,
+      silent: hasSilentFlag(params),
     });
 
     message.reply(

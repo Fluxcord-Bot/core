@@ -9,6 +9,13 @@ import { BridgeMap } from "../utils/CommandHandler.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
+import Config from "../utils/ConfigHandler.js";
+import {
+  isDiscordAnnouncementChannel,
+  isFluxerAnnouncementChannel,
+  resolveChannelVoiceText,
+} from "../utils/AnnouncementPublish.js";
+import { hasSilentFlag } from "../utils/SilentFlag.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -17,9 +24,12 @@ const command = {
   name: "verify",
   description: "Verify/approve a bridge",
   requireElevated: true,
+  params: "[silent]",
+  additionalInfo: `silent - skip the "this channel is now bridged" messages on both sides`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     const bridgeMap = BridgeMap.get(message.channelId);
+    const silent = (bridgeMap?.silent ?? false) || hasSilentFlag(params);
 
     const botPerms = checkBotPermissions(
       message.guild.members.me,
@@ -184,21 +194,41 @@ const command = {
       }
     } catch {}
 
-    await channel.send({
-      content:
-        "🎉 This channel is now bridged to " +
-        (isFluxer ? "Fluxer" : "Discord") +
-        "!" +
-        remoteOptionalWarning,
-    });
+    if (!silent) {
+      await channel.send({
+        content:
+          "🎉 This " +
+          resolveChannelVoiceText(
+            isFluxer ? channel : thisChannel,
+            isFluxer ? thisChannel : channel,
+          ) +
+          " channel is now bridged to " +
+          (isFluxer ? "Fluxer" : "Discord") +
+          "!" +
+          remoteOptionalWarning +
+          (isDiscordAnnouncementChannel(isFluxer ? channel : thisChannel) ||
+          isFluxerAnnouncementChannel(isFluxer ? thisChannel : channel)
+            ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}toggleautopublish on|off\`.`
+            : ""),
+      });
 
-    await message.reply({
-      content:
-        "🎉 This channel is now bridged to " +
-        (!isFluxer ? "Fluxer" : "Discord") +
-        "!" +
-        optionalWarning,
-    });
+      await message.reply({
+        content:
+          "🎉 This " +
+          resolveChannelVoiceText(
+            isFluxer ? channel : thisChannel,
+            isFluxer ? thisChannel : channel,
+          ) +
+          " channel is now bridged to " +
+          (!isFluxer ? "Fluxer" : "Discord") +
+          "!" +
+          optionalWarning +
+          (isDiscordAnnouncementChannel(isFluxer ? channel : thisChannel) ||
+          isFluxerAnnouncementChannel(isFluxer ? thisChannel : channel)
+            ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}toggleautopublish on|off\`.`
+            : ""),
+      });
+    }
 
     if (channel.guild) await changeBotBio(channel.guild);
     if (message.guild) await changeBotBio(message.guild);

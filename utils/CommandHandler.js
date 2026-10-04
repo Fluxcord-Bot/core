@@ -7,6 +7,14 @@ import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { log } from "./Logger.js";
 import { sanitizePings } from "./SanitizePings.js";
 
+/**
+ * @type {ExpiryMap<string, {
+ *  discordChannel: string,
+ *  fluxerChannel: string,
+ *  bridgeType: string,
+ *  silent: boolean
+ * }>}
+ */
 export let BridgeMap = new ExpiryMap(120000);
 /**
  * @type {ExpiryMap<string, {
@@ -14,7 +22,8 @@ export let BridgeMap = new ExpiryMap(120000);
  *  channelId: string,
  *  isFluxer: boolean,
  *  isVoice: boolean,
- *  direction: "f2d" | "d2f" | "both"
+ *  direction: "f2d" | "d2f" | "both",
+ *  silent: boolean
  * }>}
  */
 export let PendingSetup = new ExpiryMap(300000);

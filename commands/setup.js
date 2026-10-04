@@ -13,6 +13,13 @@ import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../utils/CheckBotPerms.js";
 import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
+import {
+  isAnnouncementPairAllowed,
+  isDiscordAnnouncementChannel,
+  isFluxerAnnouncementChannel,
+  resolveChannelVoiceText,
+} from "../utils/AnnouncementPublish.js";
+import { hasSilentFlag, stripSilentFlag } from "../utils/SilentFlag.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -21,15 +28,17 @@ const command = {
   name: "setup",
   description: "Set up bridging",
   requireElevated: true,
-  params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both]",
+  params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both] [silent]",
   additionalInfo: `(code) - the code of the setup to send to the other side
-both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaults to both`,
+both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaults to both
+silent - skip the "this channel is now bridged" messages on both sides`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     /**
      * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d" | "template"}
      */
-    const directionOrCode = params[0] ?? "both";
+    const silentRequested = hasSilentFlag(params);
+    const directionOrCode = stripSilentFlag(params)[0] ?? "both";
 
     const botPerms = checkBotPermissions(
       message.guild.members.me,
@@ -78,6 +87,7 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
         channelId: message.channelId,
         isVoice,
         isFluxer,
+        silent: silentRequested,
         direction: directionOrCode.startsWith("f")
           ? "f2d"
           : directionOrCode.startsWith("d")
@@ -155,7 +165,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       }
 
       let isVoice = message.channel?.type == ChannelType.GuildVoice;
-      const voiceText = isVoice ? "voice" : "text";
+      let voiceText = isVoice ? "voice" : "text";
 
       if (setup.isVoice !== isVoice) {
         await message.reply(
@@ -208,6 +218,28 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         PendingSetup.delete(directionOrCode);
         return;
       }
+
+      const discordSideChannel = isFluxer ? channel : currentChannel;
+      const fluxerSideChannel = isFluxer ? currentChannel : channel;
+      voiceText = resolveChannelVoiceText(
+        discordSideChannel,
+        fluxerSideChannel,
+      );
+
+      if (!isAnnouncementPairAllowed(discordSideChannel, fluxerSideChannel)) {
+        await message.reply(
+          `You can only bridge voice channels to voice channels on the other side.`,
+        );
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
+
+      const bridgesAnnouncement =
+        isDiscordAnnouncementChannel(discordSideChannel) ||
+        isFluxerAnnouncementChannel(fluxerSideChannel);
+      const announcementNote = bridgesAnnouncement
+        ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}toggleautopublish on|off\`.`
+        : "";
 
       if (
         (currentWebhookChannel.nsfw && !channelWebhookChannel.nsfw) ||
@@ -313,6 +345,8 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       PendingSetup.delete(directionOrCode);
 
+      const silent = setup.silent || silentRequested;
+
       let remoteOptionalWarning = "";
       try {
         const remoteMember = isFluxer
@@ -330,25 +364,29 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         }
       } catch {}
 
-      await channel.send({
-        content:
-          "🎉 This " +
-          voiceText +
-          " channel is now bridged to " +
-          (isFluxer ? "Fluxer" : "Discord") +
-          "!" +
-          remoteOptionalWarning,
-      });
+      if (!silent) {
+        await channel.send({
+          content:
+            "🎉 This " +
+            voiceText +
+            " channel is now bridged to " +
+            (isFluxer ? "Fluxer" : "Discord") +
+            "!" +
+            remoteOptionalWarning +
+            announcementNote,
+        });
 
-      await message.reply({
-        content:
-          "🎉 This " +
-          voiceText +
-          " channel is now bridged to " +
-          (!isFluxer ? "Fluxer" : "Discord") +
-          "!" +
-          optionalWarning,
-      });
+        await message.reply({
+          content:
+            "🎉 This " +
+            voiceText +
+            " channel is now bridged to " +
+            (!isFluxer ? "Fluxer" : "Discord") +
+            "!" +
+            optionalWarning +
+            announcementNote,
+        });
+      }
 
       await changeBotBio(channel.guild);
       if (message.guild) await changeBotBio(message.guild);
