@@ -11,6 +11,15 @@ const command = {
   description: "Bridge a Discord voice channel to a Fluxer voice channel",
   requireElevated: true,
   params: "<discordVoiceChannelId> <fluxerVoiceChannelId>",
+  slashOptions: [
+    {
+      name: "discord_channel",
+      type: "channel",
+      required: true,
+      channelTypes: [ChannelType.GuildVoice],
+    },
+    { name: "fluxer_channel_id", type: "string", required: true },
+  ],
   async run(params, message, discordClient, fluxerClient) {
     const discordChannelId = params[0];
     const fluxerChannelId = params[1];

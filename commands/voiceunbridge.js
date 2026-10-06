@@ -11,6 +11,7 @@ const command = {
   description: "Remove a voice bridge by Discord or Fluxer channel ID",
   requireElevated: true,
   params: "<channelId>",
+  slashOptions: [{ name: "channel_id", type: "string", required: true }],
   async run(params, message, discordClient, fluxerClient) {
     const channelId = params[0];
 

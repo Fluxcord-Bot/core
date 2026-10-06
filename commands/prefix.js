@@ -14,6 +14,7 @@ const command = {
     "View or change this server's command prefix. Once a custom prefix is set, the bot will only respond to that prefix here.",
   aliases: ["setprefix"],
   params: "[newPrefix|reset]",
+  slashOptions: [{ name: "value", type: "string" }],
   requireElevated: true,
   async run(params, message, _, _2) {
     const guildMap = await GuildMap.findOrCreate({

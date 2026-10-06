@@ -29,6 +29,10 @@ const command = {
   description: "Set up bridging",
   requireElevated: true,
   params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both] [silent]",
+  slashOptions: [
+    { name: "code_or_direction", type: "string" },
+    { name: "silent", type: "boolean", flag: "silent" },
+  ],
   additionalInfo: `(code) - the code of the setup to send to the other side
 both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaults to both
 silent - skip the "this channel is now bridged" messages on both sides`,

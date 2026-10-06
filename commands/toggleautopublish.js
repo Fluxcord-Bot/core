@@ -10,6 +10,16 @@ const command = {
   requireElevated: true,
   description: "Toggle auto publishing on bridged announcement channels",
   params: "[on|off]",
+  slashOptions: [
+    {
+      name: "state",
+      type: "string",
+      choices: [
+        { name: "on", value: "on" },
+        { name: "off", value: "off" },
+      ],
+    },
+  ],
   async run(params, message) {
     if (!message.guildId) {
       await message.reply("This command can only be used in a server.");

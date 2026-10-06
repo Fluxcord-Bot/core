@@ -1,4 +1,5 @@
 import { Channel as FluxerChannel } from "@fluxerjs/core";
+import { ChannelType } from "discord.js";
 import Config from "../utils/ConfigHandler.js";
 import { GuildMap } from "../db/index.js";
 
@@ -12,6 +13,14 @@ const command = {
   description: "Set error logging channel",
   requireElevated: true,
   params: "<channelId>",
+  slashOptions: [
+    {
+      name: "channel",
+      type: "channel",
+      required: true,
+      channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
+    },
+  ],
   additionalInfo:
     "Can take either a Discord channel or a Fluxer channel depends on where you ran it (if you run it on Discord, it needs a Discord channel ID)",
   async run(params, message, _, _2) {

@@ -13,6 +13,7 @@ const command = {
   description: "Unbridge all channels on this server/community",
   requireElevated: true,
   params: "[channelId...]",
+  slashOptions: [{ name: "channel_ids", type: "string", rest: true }],
   additionalInfo: `[channelId...] - only unbridge these channel IDs, defaults to every bridged channel on this server/community`,
   async run(params, message, discordClient, fluxerClient) {
     if (!message.guildId) {

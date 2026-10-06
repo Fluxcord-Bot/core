@@ -9,6 +9,7 @@ const command = {
   aliases: ["r"],
   description: "Reaction debug",
   requireElevated: false,
+  excludeFromSlash: true,
   requireOwner: true,
   async run(params, message, discordClient, fluxerClient) {
     const guildMap = await GuildMap.findOne({

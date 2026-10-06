@@ -19,6 +19,20 @@ const command = {
   description: "Bridge a channel",
   requireElevated: true,
   params: "<channelId> <both|discord2fluxer|fluxer2discord> [silent]",
+  slashOptions: [
+    { name: "channel_id", type: "string", required: true },
+    {
+      name: "direction",
+      type: "string",
+      required: true,
+      choices: [
+        { name: "both", value: "both" },
+        { name: "discord2fluxer", value: "discord2fluxer" },
+        { name: "fluxer2discord", value: "fluxer2discord" },
+      ],
+    },
+    { name: "silent", type: "boolean", flag: "silent" },
+  ],
   additionalInfo: `The channelId parameter takes a channel ID of the other end's channel (e.g. if you're running it on Fluxer, it needs a Discord channel ID.)
 silent - skip the "this channel is now bridged" messages when the bridge is verified
 

@@ -12,6 +12,7 @@ const command = {
   description: "Detach a bridged message without deleting it",
   requireElevated: true,
   params: "[messageId]",
+  slashOptions: [{ name: "message_id", type: "string" }],
   additionalInfo: `[messageId] - the Discord or Fluxer ID of the bridged message, defaults to the message you replied to
 Detaching removes the bridge link for that message only. Both copies stay, but edits, deletes and pins will no longer sync between them.`,
   async run(params, message) {

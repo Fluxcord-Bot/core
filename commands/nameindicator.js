@@ -13,6 +13,17 @@ const command = {
   description: "Show where a bridged name came from",
   requireElevated: true,
   params: "[off|full|short]",
+  slashOptions: [
+    {
+      name: "mode",
+      type: "string",
+      choices: [
+        { name: "off", value: "off" },
+        { name: "full", value: "full" },
+        { name: "short", value: "short" },
+      ],
+    },
+  ],
   async run(params, message) {
     if (!message.guildId) {
       await message.reply("This command can only be used in a server.");

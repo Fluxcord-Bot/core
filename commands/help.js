@@ -35,6 +35,7 @@ const command = {
   description: "Help for Fluxcord's functions",
   requireElevated: false,
   params: "[...command]",
+  slashOptions: [{ name: "command", type: "string", rest: true }],
   async run(params, message, _, _2) {
     const prefix = await getGuildPrefix(message.guildId ?? "");
     if (params[0]) {

@@ -17,7 +17,7 @@ const DefaultConfig = {
   DiscordBioStart: "",
   DatabaseEncryptionToken: "",
   PostgresConnectionString: "",
-  /** @type {{ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined }[]} */
+  /** @type {({ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string }| undefined } | { nontrinsic: true })[]} */
   Motds: [],
 
   VoiceBridgingEnabled: false,

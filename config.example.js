@@ -62,6 +62,7 @@ const Config = {
   //  { name: "MOTD 1!" }
   //  { name: "MOTD 2!", emoji: "✉️" },
   //  { name: "MOTD 3!", emoji: { discord: "✉️", fluxer: { name: "customEmoji", id: "123456789000000" } } }
+  // or use { nontrinsic: true } and it will use https://nontrinsic.linerly.xyz
   Motds: [],
 
   // The prefix of the bot

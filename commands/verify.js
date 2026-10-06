@@ -25,6 +25,7 @@ const command = {
   description: "Verify/approve a bridge",
   requireElevated: true,
   params: "[silent]",
+  slashOptions: [{ name: "silent", type: "boolean", flag: "silent" }],
   additionalInfo: `silent - skip the "this channel is now bridged" messages on both sides`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;

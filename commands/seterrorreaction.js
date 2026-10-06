@@ -11,6 +11,7 @@ const command = {
   description: "Set bot error emoji reaction, do not specify any to disable",
   aliases: ["setreact", "setemoji", "se"],
   params: "<emoji>",
+  slashOptions: [{ name: "emoji", type: "string" }],
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {
     if (params[0] && params[0].startsWith("<")) {

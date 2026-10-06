@@ -23,6 +23,7 @@ const command = {
   name: "about",
   description: "About Fluxcord",
   requireElevated: false,
+  allowDM: true,
   async run(params, message, discordClient, fluxerClient) {
     const channels = await ChannelMap.findAll();
 

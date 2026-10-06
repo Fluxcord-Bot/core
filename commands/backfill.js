@@ -26,6 +26,10 @@ const command = {
   description: "Bridge existing messages in a channel",
   requireElevated: true,
   params: "[numOfMessages=10|cancel]",
+  slashOptions: [
+    { name: "count", type: "integer" },
+    { name: "cancel", type: "boolean", flag: "cancel" },
+  ],
   additionalInfo: `numOfMessages = message count starting from the last message sent, up to ${maxBackfillMessages}
 cancel = interrupt the backfill currently running in this channel
 

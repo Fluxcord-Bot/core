@@ -13,6 +13,7 @@ const command = {
   description: "...pong? (bot latency and stats)",
   aliases: ["stats", "uptime"],
   requireElevated: false,
+  allowDM: true,
   async run(params, message, discordClient, fluxerClient) {
     const isFluxer = message instanceof Message;
     const now = new Date();

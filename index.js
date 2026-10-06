@@ -31,6 +31,10 @@ import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
 import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
 import {
+  registerDiscordCommands,
+  setupDiscordCommands,
+} from "./utils/DiscordCommands.js";
+import {
   buildDiscordUserAgentSuffix,
   buildExtHttpUserAgent,
   buildFluxerUserAgent,
@@ -136,7 +140,11 @@ discordClient.on(DiscordEvents.TypingStart, async (type) => {
       },
     });
 
-    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
+    if (
+      !channelMap ||
+      !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))
+    )
+      return;
 
     const channel = await fluxerClient.channels.fetch(
       //@ts-expect-error
@@ -261,7 +269,11 @@ fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
       },
     });
 
-    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
+    if (
+      !channelMap ||
+      !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))
+    )
+      return;
 
     const channel = await discordClient.channels.fetch(
       //@ts-expect-error
@@ -460,17 +472,19 @@ async function onBothReady() {
 
   if (
     Config.Motds &&
-    Config.Motds.length > 0 &&
-    // @ts-ignore
-    Config.Motds.every((x) => !!x)
+    ((Config.Motds.length > 0 &&
+      // @ts-ignore
+      Config.Motds.every((x) => !!x)) ||
+      // @ts-ignore
+      Config.Motds === "nontrinsic")
   ) {
     setInterval(
-      () => {
-        motdLoop();
+      async () => {
+        await motdLoop();
       },
       10 * 60 * 1000,
     );
-    motdLoop();
+    await motdLoop();
   }
 
   renderBox([
@@ -505,6 +519,12 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
 
 discordClient.on(DiscordEvents.ClientReady, async () => {
   log("DISCORD", `${discordClient.user?.tag} is ready!`);
+
+  try {
+    await registerDiscordCommands(discordClient, fluxerClient);
+  } catch (e) {
+    log("DISCORD", "Failed to register application commands:", e);
+  }
 
   discordClient.user?.setActivity(
     `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
@@ -597,6 +617,8 @@ setupReactionHandling(discordClient, fluxerClient);
 
 setupHealthcheck(discordClient, fluxerClient);
 
+setupDiscordCommands(discordClient, fluxerClient);
+
 discordClient.login(Config.DiscordBotToken);
 fluxerClient.login(Config.FluxerBotToken);
 
@@ -607,9 +629,41 @@ function checkIfFluxerConnected() {
   }
 }
 
-function motdLoop() {
+async function loadNontrinsic(maxLen = 128) {
+  log(
+    "DEBUG",
+    "Trying to fetch nonsense from endpoint /api/v1/nonsense/random, hostname nontrinsic.linerly.xyz",
+  );
+  const req = await fetch(
+    "https://nontrinsic.linerly.xyz/api/v1/nonsense/random",
+    {
+      headers: {
+        "User-Agent": buildExtHttpUserAgent(),
+      },
+    },
+  );
+  if (!req.ok) {
+    log("DEBUG", `Fetch failed (code ${req.status}), skipping MOTD rotation`);
+    return undefined;
+  }
+  const json = await req.json();
+  /** @type {string} */
+  // @ts-expect-error
+  const nonsense = json.nonsense;
+  if (
+    nonsense.length > maxLen ||
+    /\$.+\$/.test(nonsense) ||
+    /\$\{.+\\}/.test(nonsense) ||
+    /\:.+\:/.test(nonsense)
+  ) {
+    return await loadNontrinsic(maxLen);
+  }
+  return nonsense;
+}
+
+async function motdLoop() {
   /**
-   * @type {{ text: string, emoji?: string | { fluxer: { name: string, id: string }, discord: string } }[]}
+   * @type {({ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string }| undefined } | { nontrinsic: boolean })[]}
    */
   const motds = Config.Motds;
   const motd = motds[Math.floor(Math.random() * motds.length)];
@@ -619,10 +673,13 @@ function motdLoop() {
 }
 
 /**
- * @param {{ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string } | undefined }} status
+ * @param {({ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string }| undefined, nontrinsic: undefined } | { nontrinsic: true, text: undefined, emoji: undefined })} s
  */
-function updateBotStatus(status) {
+async function updateBotStatus(s) {
   let emoji = undefined;
+  let prefix = `${Config.BotPrefix}help | `;
+
+  let status = s;
 
   if (status.emoji)
     if (status.emoji instanceof Object) {
@@ -642,10 +699,23 @@ function updateBotStatus(status) {
       };
     }
 
+  let discordPrefix = `${emoji?.discord ? `${emoji.discord} ` : ""}${prefix}`;
+
+  if (status.nontrinsic === true) {
+    const nonsense = await loadNontrinsic(discordPrefix.length);
+    if (nonsense === undefined) return;
+
+    status = {
+      text: nonsense,
+      emoji: undefined,
+      nontrinsic: undefined,
+    };
+  }
+
   fluxerClient.user?.setPresence({
     status: "online",
     customStatus: {
-      text: `${Config.BotPrefix}help | ${status.text}`,
+      text: `${prefix}${status.text}`,
       ...(emoji
         ? {
             emojiName: emoji.fluxer.emoji_name,
@@ -655,9 +725,7 @@ function updateBotStatus(status) {
     },
   });
 
-  discordClient.user?.setActivity(
-    `${emoji?.discord ? `${emoji.discord} ` : ""}${Config.BotPrefix}help | ${status.text}`,
-  );
+  discordClient.user?.setActivity(`${discordPrefix}${status.text}`);
 }
 
 setInterval(() => checkIfFluxerConnected(), 10000);

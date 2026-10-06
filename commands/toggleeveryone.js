@@ -9,6 +9,16 @@ const command = {
   description: "Toggle @\u200beveryone/@\u200bhere ping bridging for this bridge",
   requireElevated: true,
   params: "[on|off]",
+  slashOptions: [
+    {
+      name: "state",
+      type: "string",
+      choices: [
+        { name: "on", value: "on" },
+        { name: "off", value: "off" },
+      ],
+    },
+  ],
   async run(params, message) {
     if (!message.guildId) {
       await message.reply("This command can only be used in a server.");

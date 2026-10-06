@@ -8,6 +8,16 @@ import {
   Client as FluxerClient,
 } from "@fluxerjs/core";
 
+export type SlashOptionDef = {
+  name: string;
+  type?: "string" | "integer" | "boolean" | "channel";
+  required?: boolean;
+  choices?: { name: string; value: string | number }[];
+  flag?: string;
+  rest?: boolean;
+  channelTypes?: number[];
+};
+
 export type CommandSchema = {
   groupNames?: string[];
   name: string;
@@ -17,6 +27,9 @@ export type CommandSchema = {
   requireOwner?: boolean;
   hideFromHelp?: boolean;
   params?: string;
+  slashOptions?: SlashOptionDef[];
+  allowDM?: boolean;
+  excludeFromSlash?: boolean;
   additionalInfo?: string;
   run: (
     params: string[],

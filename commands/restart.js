@@ -7,6 +7,7 @@ const command = {
   aliases: ["r"],
   description: "Restart bot",
   requireElevated: false,
+  allowDM: true,
   requireOwner: true,
   async run(params, message, _, _2) {
     await message.reply("Restarting...");
