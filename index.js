@@ -630,35 +630,42 @@ function checkIfFluxerConnected() {
 }
 
 async function loadNontrinsic(maxLen = 128) {
-  log(
-    "DEBUG",
-    "Trying to fetch nonsense from endpoint /api/v1/nonsense/random, hostname nontrinsic.linerly.xyz",
-  );
-  const req = await fetch(
-    "https://nontrinsic.linerly.xyz/api/v1/nonsense/random",
-    {
-      headers: {
-        "User-Agent": buildExtHttpUserAgent(),
+  try {
+    log(
+      "DEBUG",
+      "Trying to fetch nonsense from endpoint /api/v1/nonsense/random, hostname nontrinsic.linerly.xyz",
+    );
+    const req = await fetch(
+      "https://nontrinsic.linerly.xyz/api/v1/nonsense/random",
+      {
+        headers: {
+          "User-Agent": buildExtHttpUserAgent(),
+        },
       },
-    },
-  );
-  if (!req.ok) {
-    log("DEBUG", `Fetch failed (code ${req.status}), skipping MOTD rotation`);
-    return undefined;
+    );
+    if (!req.ok) {
+      log("DEBUG", `Fetch failed (code ${req.status}), skipping MOTD rotation`);
+      return undefined;
+    }
+    const json = await req.json();
+    /** @type {string} */
+    // @ts-expect-error
+    const nonsense = json.nonsense;
+    if (
+      nonsense.length > maxLen ||
+      /\$.+\$/.test(nonsense) ||
+      /\$\{.+\\}/.test(nonsense) ||
+      /\:.+\:/.test(nonsense)
+    ) {
+      return await loadNontrinsic(maxLen);
+    }
+    return nonsense;
+  } catch {
+    log(
+      "DEBUG",
+      `Fetch failed (probably the fetch function threw), skipping MOTD rotation`,
+    );
   }
-  const json = await req.json();
-  /** @type {string} */
-  // @ts-expect-error
-  const nonsense = json.nonsense;
-  if (
-    nonsense.length > maxLen ||
-    /\$.+\$/.test(nonsense) ||
-    /\$\{.+\\}/.test(nonsense) ||
-    /\:.+\:/.test(nonsense)
-  ) {
-    return await loadNontrinsic(maxLen);
-  }
-  return nonsense;
 }
 
 async function motdLoop() {
