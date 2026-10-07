@@ -1,7 +1,7 @@
 const waf = ["waf", "arf", "waff", "awaf"];
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   name: "waf",

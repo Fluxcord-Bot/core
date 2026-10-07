@@ -1,15 +1,15 @@
 import { Message } from "@fluxerjs/core";
-import { GuildMap } from "../db/index.js";
+import { GuildMap } from "../../db/index.js";
 import { log } from "node:console";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
-  name: "seterrorreaction",
+  name: "errorreact",
+  aliases: ["seterrorreaction", "setreact", "setemoji", "se"],
   description: "Set bot error emoji reaction, do not specify any to disable",
-  aliases: ["setreact", "setemoji", "se"],
   params: "<emoji>",
   slashOptions: [{ name: "emoji", type: "string" }],
   requireElevated: true,

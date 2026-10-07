@@ -1,11 +1,13 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { applyBridgeToggle } from "../utils/BridgeToggle.js";
+import { applyBridgeToggle } from "../../utils/BridgeToggle.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "toggleeveryone",
+  groupNames: ["guild", "g", "server", "s", "community", "c"],
+  name: "everyone",
+  aliases: ["toggleeveryone"],
   description: "Toggle @\u200beveryone/@\u200bhere ping bridging for this bridge",
   requireElevated: true,
   params: "[on|off]",

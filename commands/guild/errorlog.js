@@ -1,15 +1,15 @@
 import { Channel as FluxerChannel } from "@fluxerjs/core";
 import { ChannelType } from "discord.js";
-import Config from "../utils/ConfigHandler.js";
-import { GuildMap } from "../db/index.js";
+import Config from "../../utils/ConfigHandler.js";
+import { GuildMap } from "../../db/index.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
-  name: "seterrorlogging",
-  aliases: ["errlog", "err"],
+  name: "errorlog",
+  aliases: ["seterrorlogging", "errlog", "err"],
   description: "Set error logging channel",
   requireElevated: true,
   params: "<channelId>",
@@ -26,7 +26,7 @@ const command = {
   async run(params, message, _, _2) {
     if (!params[0]) {
       await message.reply(
-        `Missing parameters. Usage: \`${Config.BotPrefix}guild seterrorlogging <channelId>\``,
+        `Missing parameters. Usage: \`${Config.BotPrefix}guild errorlog <channelId>\``,
       );
       return;
     }

@@ -1,14 +1,15 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { applyBridgeToggle } from "../utils/BridgeToggle.js";
+import { applyBridgeToggle } from "../../utils/BridgeToggle.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "toggleinvite",
-  aliases: ["toggleinv"],
-  description: "Toggle the invite command for this bridge",
+  groupNames: ["guild", "g", "server", "s", "community", "c"],
+  name: "autopublish",
+  aliases: ["toggleautopublish"],
   requireElevated: true,
+  description: "Toggle auto publishing on bridged announcement channels",
   params: "[on|off]",
   slashOptions: [
     {
@@ -42,18 +43,20 @@ const command = {
     const { enabled, changed } = await applyBridgeToggle(
       message.guildId,
       isFluxer ? "fluxer" : "discord",
-      "inviteEnabled",
+      "autoPublishEnabled",
       requested,
     );
 
     if (!changed) {
       await message.reply(
-        `Invite command is already ${enabled ? "enabled" : "disabled"}.`,
+        `Auto publishing (on bridged announcement channels) is already ${enabled ? "enabled" : "disabled"}.`,
       );
       return;
     }
 
-    await message.reply(`Invite command ${enabled ? "enabled" : "disabled"}.`);
+    await message.reply(
+      `Auto publishing (on bridged announcement channels) ${enabled ? "enabled" : "disabled"}.`,
+    );
   },
 };
 

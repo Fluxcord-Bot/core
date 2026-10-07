@@ -2,14 +2,16 @@ import {
   ChannelMap,
   MessageMap,
   VoiceChannelMap,
-} from "../db/index.js";
+} from "../../db/index.js";
 import { Op } from "sequelize";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "unbridgeall",
+  groupNames: ["bridge", "b"],
+  name: "remove-all",
+  aliases: ["unbridgeall"],
   description: "Unbridge all channels on this server/community",
   requireElevated: true,
   params: "[channelId...]",

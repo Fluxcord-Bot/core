@@ -1,10 +1,26 @@
 import { Guild } from "@fluxerjs/core";
+import { GuildMap } from "../db/index.js";
 import DefaultConfig from "./ConfigHandler.js";
 
 /**
  * @param {import("@fluxerjs/core").Guild | import("discord.js").Guild} guild
  */
 export default async function changeBotBio(guild) {
+  try {
+    const guildMap = await GuildMap.findOne({
+      where: { guildId: guild.id },
+    });
+    if (guildMap?.customBio) {
+      if (guild instanceof Guild) {
+        await guild.members.me.edit({ bio: guildMap.customBio });
+      } else {
+        await guild.members.editMe({ bio: guildMap.customBio });
+      }
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+  }
   if (guild instanceof Guild) {
     try {
       await guild.members.me.edit({

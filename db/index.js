@@ -94,6 +94,7 @@ GuildMap.init(
       allowNull: false,
       defaultValue: "off",
     },
+    customBio: { type: DataTypes.STRING, allowNull: true },
   },
   { sequelize, modelName: "GuildMap" },
 );

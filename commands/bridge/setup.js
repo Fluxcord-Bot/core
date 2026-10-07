@@ -3,29 +3,31 @@ import {
   Message as FluxerMessage,
   GuildChannel as FluxerGuildChannel,
 } from "@fluxerjs/core";
-import RandomString from "../utils/RandomString.js";
-import { PendingSetup } from "../utils/CommandHandler.js";
-import Config from "../utils/ConfigHandler.js";
-import { genAuthLink } from "../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
+import RandomString from "../../utils/RandomString.js";
+import { PendingSetup } from "../../utils/CommandHandler.js";
+import Config from "../../utils/ConfigHandler.js";
+import { genAuthLink } from "../../utils/GenAuthLink.js";
+import { ChannelMap, GuildMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
-import changeBotBio from "../utils/ChangeBotBio.js";
-import { checkBotPermissions } from "../utils/CheckBotPerms.js";
-import { resolveDiscordParentChannel } from "../utils/DiscordThreadResolver.js";
+import changeBotBio from "../../utils/ChangeBotBio.js";
+import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
+import { resolveDiscordParentChannel } from "../../utils/DiscordThreadResolver.js";
 import {
   isAnnouncementPairAllowed,
   isDiscordAnnouncementChannel,
   isFluxerAnnouncementChannel,
   resolveChannelVoiceText,
-} from "../utils/AnnouncementPublish.js";
-import { hasSilentFlag, stripSilentFlag } from "../utils/SilentFlag.js";
+} from "../../utils/AnnouncementPublish.js";
+import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
+  groupNames: ["bridge", "b"],
   name: "setup",
+  topLevelAliases: ["setup"],
   description: "Set up bridging",
   requireElevated: true,
   params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both] [silent]",
@@ -77,7 +79,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
         await message.reply(
           "This channel is already bridged. Run `" +
             Config.BotPrefix +
-            "unbridge` to unbridge, then run setup again.",
+            "bridge remove` to unbridge, then run bridge setup again.",
         );
         return;
       }
@@ -129,7 +131,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
           new EmbedBuilder()
             .setTitle("Set up Fluxcord")
             .setDescription(
-              `# \`${Config.BotPrefix}setup ${code}\`
+              `# \`${Config.BotPrefix}bridge setup ${code}\`
 Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.${vcBridgeWarning}${optionalWarning}
 
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`,
@@ -146,7 +148,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
     } else {
       if (!PendingSetup.has(directionOrCode)) {
         await message.reply(
-          `Code can't be found or is expired already. Run \`${Config.BotPrefix}setup\` again on the other side.`,
+          `Code can't be found or is expired already. Run \`${Config.BotPrefix}bridge setup\` again on the other side.`,
         );
         return;
       }
@@ -155,7 +157,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       if (!setup) {
         await message.reply(
-          `Code can't be found or is expired already. Run \`${Config.BotPrefix}setup\` again on the other side.`,
+          `Code can't be found or is expired already. Run \`${Config.BotPrefix}bridge setup\` again on the other side.`,
         );
         return;
       }
@@ -192,7 +194,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         await message.reply(
           "This channel is already bridged. Run `" +
             Config.BotPrefix +
-            "unbridge` to unbridge, then run this command again.",
+            "bridge remove` to unbridge, then run this command again.",
         );
         return;
       }
@@ -242,7 +244,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         isDiscordAnnouncementChannel(discordSideChannel) ||
         isFluxerAnnouncementChannel(fluxerSideChannel);
       const announcementNote = bridgesAnnouncement
-        ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}toggleautopublish on|off\`.`
+        ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}guild autopublish on|off\`.`
         : "";
 
       if (

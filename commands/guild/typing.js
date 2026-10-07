@@ -1,14 +1,15 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { applyBridgeToggle } from "../utils/BridgeToggle.js";
+import { applyBridgeToggle } from "../../utils/BridgeToggle.js";
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "toggleautopublish",
-  aliases: ["autopublish"],
+  groupNames: ["guild", "g", "server", "s", "community", "c"],
+  name: "typing",
+  aliases: ["toggletyping"],
+  description: "Toggle typing indicator relaying",
   requireElevated: true,
-  description: "Toggle auto publishing on bridged announcement channels",
   params: "[on|off]",
   slashOptions: [
     {
@@ -42,19 +43,19 @@ const command = {
     const { enabled, changed } = await applyBridgeToggle(
       message.guildId,
       isFluxer ? "fluxer" : "discord",
-      "autoPublishEnabled",
+      "typingEnabled",
       requested,
     );
 
     if (!changed) {
       await message.reply(
-        `Auto publishing (on bridged announcement channels) is already ${enabled ? "enabled" : "disabled"}.`,
+        `Typing indicator relaying is already ${enabled ? "enabled" : "disabled"}.`,
       );
       return;
     }
 
     await message.reply(
-      `Auto publishing (on bridged announcement channels) ${enabled ? "enabled" : "disabled"}.`,
+      `Typing indicator relaying ${enabled ? "enabled" : "disabled"}.`,
     );
   },
 };

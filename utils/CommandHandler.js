@@ -37,7 +37,7 @@ export async function getCommands() {
   });
   return Promise.all(
     entries
-      .filter((x) => fs.statSync("./commands/" + x).isFile)
+      .filter((x) => fs.statSync("./commands/" + x).isFile())
       .flatMap(async (x) => (await import("../commands/" + x)).default),
   );
 }
@@ -56,8 +56,10 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
     ? cmdList[0].slice(guildPrefix.length)
     : cmdList[0]?.replace(Config.BotPrefix, "");
   const commands = await getCommands();
-  let commandToRun = commands.find(
-    (x) => x.name === command || x.aliases?.find((y) => y === command),
+  let commandToRun = commands.find((x) =>
+    x.groupNames && x.groupNames.length > 0
+      ? x.topLevelAliases?.find((y) => y === command)
+      : x.name === command || x.aliases?.find((y) => y === command),
   );
 
   let isGrouped = false;

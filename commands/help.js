@@ -5,25 +5,31 @@ import { getGuildPrefix } from "../utils/GetGuildPrefix.js";
 import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
 
 /**
- *
- * @param {string} cmd
- * @param {string[]?} aliases
- * @param {string[]?} grp
+ * @param {import('../utils/CommandSchema.d.ts').CommandSchema} cmd
  * @param {string} prefix
  */
-function genAliases(cmd, aliases, grp, prefix) {
-  const cmds = [];
-  if (grp && grp.length > 0) {
-    grp.forEach((x) => {
-      cmds.push(`\`${prefix}${x} ${cmd}\``);
-      if (aliases && aliases.length > 0) {
-        aliases.forEach((y) => cmds.push(`\`${prefix}${x} ${y}\``));
-      }
-    });
-  } else if (aliases && aliases.length > 0) {
-    aliases.forEach((x) => cmds.push(`\`${prefix}${x}\``));
+function usage(cmd, prefix) {
+  const grp =
+    cmd.groupNames && cmd.groupNames.length > 0 ? cmd.groupNames[0] + " " : "";
+  return `${prefix}${grp}${cmd.name}${cmd.params ? " " + cmd.params : ""}`;
+}
+
+/**
+ * @param {import('../utils/CommandSchema.d.ts').CommandSchema} cmd
+ * @param {string} prefix
+ */
+function genAliases(cmd, prefix) {
+  const forms = [];
+  if (cmd.groupNames && cmd.groupNames.length > 0) {
+    forms.push(`\`${prefix}${cmd.groupNames[0]} ${cmd.name}\``);
+    cmd.aliases?.forEach((x) =>
+      forms.push(`\`${prefix}${cmd.groupNames[0]} ${x}\``),
+    );
+    cmd.topLevelAliases?.forEach((x) => forms.push(`\`${prefix}${x}\``));
+  } else if (cmd.aliases && cmd.aliases.length > 0) {
+    cmd.aliases.forEach((x) => forms.push(`\`${prefix}${x}\``));
   }
-  return cmds.join(", ");
+  return forms.join(", ");
 }
 
 /**
@@ -43,23 +49,17 @@ const command = {
         (x) =>
           x.name === params[0] ||
           x.aliases?.includes(params[0]) ||
+          x.topLevelAliases?.includes(params[0]) ||
           (x.groupNames?.includes(params[0]) &&
             (x.name === params[1] || x.aliases?.includes(params[1]))),
       );
       if (command && !command.hideFromHelp) {
-        const aliases = genAliases(
-          command.name,
-          command.aliases,
-          command.groupNames,
-          prefix,
-        );
+        const aliases = genAliases(command, prefix);
         await message.reply({
           //@ts-expect-error
           embeds: [
             new EmbedBuilder()
-              .setTitle(
-                `${prefix}${command.groupNames ? command.groupNames[0] + " " : ""}${command.name}${command.params ? " " + command.params : ""}`,
-              )
+              .setTitle(usage(command, prefix))
               .setDescription(
                 (aliases ? `Aliases: ${aliases}\n` : "") +
                   command.description +
@@ -101,6 +101,57 @@ const command = {
         cmds = cmds.filter((x) => !x.requireElevated);
       }
 
+      cmds = [...cmds].sort((a, b) => a.name.localeCompare(b.name));
+
+      /** @type {Map<string, import('../utils/CommandSchema.d.ts').CommandSchema[]>} */
+      const grouped = new Map();
+      /** @type {import('../utils/CommandSchema.d.ts').CommandSchema[]} */
+      const ungrouped = [];
+      for (const cmd of cmds) {
+        const grp =
+          cmd.groupNames && cmd.groupNames.length > 0
+            ? cmd.groupNames[0]
+            : undefined;
+        if (grp) {
+          if (!grouped.has(grp)) grouped.set(grp, []);
+          grouped.get(grp).push(cmd);
+        } else {
+          ungrouped.push(cmd);
+        }
+      }
+
+      /** @type {{ name: string, value: string, inline: boolean }[]} */
+      const fields = [];
+      for (const [grp, list] of [...grouped.entries()].sort((a, b) =>
+        a[0].localeCompare(b[0]),
+      )) {
+        fields.push({
+          name: `${prefix}${grp}`,
+          value: list
+            .map((x) => {
+              const bare =
+                x.topLevelAliases && x.topLevelAliases.length > 0
+                  ? ` (or \`${prefix}${x.topLevelAliases[0]}\`)`
+                  : "";
+              return `\`${prefix}${grp} ${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}${bare}`;
+            })
+            .join("\n"),
+          inline: false,
+        });
+      }
+      if (ungrouped.length > 0) {
+        fields.push({
+          name: "general",
+          value: ungrouped
+            .map(
+              (x) =>
+                `\`${prefix}${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}`,
+            )
+            .join("\n"),
+          inline: false,
+        });
+      }
+
       await message.reply({
         //@ts-expect-error
         embeds: [
@@ -109,13 +160,7 @@ const command = {
             .setDescription(
               `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
             )
-            .addFields(
-              ...cmds.map((x) => ({
-                name: `${prefix}${x.groupNames ? x.groupNames[0] + " " : ""}${x.name}${x.params ? " " + x.params : ""}`,
-                value: x.description,
-                inline: true,
-              })),
-            )
+            .addFields(...fields)
             .setFooter(
               Config.EmbedFooterContent
                 ? {

@@ -1,10 +1,9 @@
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   groupNames: ["admin", "a"],
   name: "restart",
-  aliases: ["r"],
   description: "Restart bot",
   requireElevated: false,
   allowDM: true,

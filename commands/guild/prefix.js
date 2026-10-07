@@ -1,11 +1,11 @@
 import { Message } from "@fluxerjs/core";
-import { GuildMap } from "../db/index.js";
-import Config from "../utils/ConfigHandler.js";
+import { GuildMap } from "../../db/index.js";
+import Config from "../../utils/ConfigHandler.js";
 
 const MAX_PREFIX_LENGTH = 10;
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
@@ -13,6 +13,7 @@ const command = {
   description:
     "View or change this server's command prefix. Once a custom prefix is set, the bot will only respond to that prefix here.",
   aliases: ["setprefix"],
+  topLevelAliases: ["prefix", "setprefix"],
   params: "[newPrefix|reset]",
   slashOptions: [{ name: "value", type: "string" }],
   requireElevated: true,
@@ -30,7 +31,7 @@ const command = {
 
     if (!params[0]) {
       await message.reply(
-        `The prefix for this server is \`${currentPrefix}\`. Run \`${currentPrefix}prefix <newPrefix>\` to change it, or \`${currentPrefix}prefix reset\` to go back to the default (\`${Config.BotPrefix}\`).`,
+        `The prefix for this server is \`${currentPrefix}\`. Run \`${currentPrefix}guild prefix <newPrefix>\` to change it, or \`${currentPrefix}guild prefix reset\` to go back to the default (\`${Config.BotPrefix}\`).`,
       );
       return;
     }

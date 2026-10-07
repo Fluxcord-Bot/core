@@ -6,7 +6,7 @@ import { botStartingTime } from "../index.js";
 import Config from "../utils/ConfigHandler.js";
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   name: "ping",

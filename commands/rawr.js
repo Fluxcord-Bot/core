@@ -1,7 +1,7 @@
 const rawr = ["rawr"];
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   name: "rawr",

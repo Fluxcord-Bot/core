@@ -1,5 +1,5 @@
-import Config from "../utils/ConfigHandler.js";
-import { BridgeMap } from "../utils/CommandHandler.js";
+import Config from "../../utils/ConfigHandler.js";
+import { BridgeMap } from "../../utils/CommandHandler.js";
 import {
   Collection,
   GuildChannel as DiscordGuildChannel,
@@ -9,19 +9,20 @@ import {
   Message as FluxerMessage,
   Channel as FluxerChannel,
 } from "@fluxerjs/core";
-import { ChannelMap, MessageMap } from "../db/index.js";
+import { ChannelMap, MessageMap } from "../../db/index.js";
 import { Op } from "sequelize";
-import { FluxerCreateMessageHandler } from "../utils/FluxerHandler.js";
-import { DiscordCreateMessageHandler } from "../utils/DiscordHandler.js";
+import { FluxerCreateMessageHandler } from "../../utils/FluxerHandler.js";
+import { DiscordCreateMessageHandler } from "../../utils/DiscordHandler.js";
 
 const activeBackfills = new Map();
 const fetchPageSize = 100;
 const maxBackfillMessages = 1000;
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
+  groupNames: ["bridge", "b"],
   name: "backfill",
   description: "Bridge existing messages in a channel",
   requireElevated: true,
@@ -33,7 +34,7 @@ const command = {
   additionalInfo: `numOfMessages = message count starting from the last message sent, up to ${maxBackfillMessages}
 cancel = interrupt the backfill currently running in this channel
 
-Run \`backfill cancel\` while a backfill is running to stop it after the current message.`,
+Run \`bridge backfill cancel\` while a backfill is running to stop it after the current message.`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
     const sub = (params[0] ?? "").toLowerCase();
@@ -54,7 +55,7 @@ Run \`backfill cancel\` while a backfill is running to stop it after the current
     if (Number.isNaN(numOfMessages) || numOfMessages < 1) {
       await message.reply(`Invalid message count. Usage:
 \`\`\`
-${Config.BotPrefix}backfill [NUMBER] [cancel]
+${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
 \`\`\``);
       return;
     }
@@ -67,7 +68,7 @@ ${Config.BotPrefix}backfill [NUMBER] [cancel]
 
     if (activeBackfills.has(message.channelId)) {
       await message.reply(
-        `A backfill is already running in this channel. Run \`${Config.BotPrefix}backfill cancel\` to stop it first.`,
+        `A backfill is already running in this channel. Run \`${Config.BotPrefix}bridge backfill cancel\` to stop it first.`,
       );
       return;
     }
@@ -85,7 +86,7 @@ ${Config.BotPrefix}backfill [NUMBER] [cancel]
       await message.reply(
         "This channel is not bridged. Run `" +
           Config.BotPrefix +
-          "bridge` to setup bridging, then run backfill again.",
+          "bridge setup` to setup bridging, then run bridge backfill again.",
       );
       return;
     }

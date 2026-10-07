@@ -7,12 +7,13 @@ import {
   AttachmentBuilder,
   ChannelType,
 } from "discord.js";
-import { cloudUploadAttachments } from "../utils/CloudUpload.js";
+import { cloudUploadAttachments } from "../../utils/CloudUpload.js";
 
 /**
- * @type {import('../utils/CommandSchema.js').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
+  groupNames: ["bridge", "b"],
   name: "probe",
   description: "Probe all channels",
   requireElevated: true,

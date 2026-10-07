@@ -1,7 +1,7 @@
-import { GuildMap } from "../db/index.js";
+import { GuildMap } from "../../db/index.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
   groupNames: ["dbg", "debug"],

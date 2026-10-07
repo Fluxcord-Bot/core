@@ -1,13 +1,15 @@
 //@ts-check
-import Config from "../utils/ConfigHandler.js";
-import { VoiceChannelMap } from "../db/index.js";
+import Config from "../../utils/ConfigHandler.js";
+import { VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "voiceunbridge",
+  groupNames: ["voice", "v"],
+  name: "unbridge",
+  aliases: ["voiceunbridge"],
   description: "Remove a voice bridge by Discord or Fluxer channel ID",
   requireElevated: true,
   params: "<channelId>",
@@ -18,7 +20,7 @@ const command = {
     if (!channelId) {
       await message.reply(`Missing parameters. Usage:
 \`\`\`
-${Config.BotPrefix}voiceunbridge <channelId>
+${Config.BotPrefix}voice unbridge <channelId>
 \`\`\``);
       return;
     }

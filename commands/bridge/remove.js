@@ -1,12 +1,14 @@
-import { ChannelMap, MessageMap, sequelize } from "../db/index.js";
+import { ChannelMap, MessageMap, sequelize } from "../../db/index.js";
 import { Op } from "sequelize";
-import { BridgeMap } from "../utils/CommandHandler.js";
+import { BridgeMap } from "../../utils/CommandHandler.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "unbridge",
+  groupNames: ["bridge", "b"],
+  name: "remove",
+  aliases: ["unbridge"],
   description: "Unbridge the current channel",
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {

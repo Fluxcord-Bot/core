@@ -1,13 +1,14 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { applyBridgeValue } from "../utils/BridgeToggle.js";
+import { applyBridgeValue } from "../../utils/BridgeToggle.js";
 
 const USAGE =
   "Usage: `off`, `full` (`[Discord]`/`[Fluxer]`) or `short` (`[D]`/`[F]`).";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
+  groupNames: ["guild", "g", "server", "s", "community", "c"],
   name: "nameindicator",
   aliases: ["indicator"],
   description: "Show where a bridged name came from",

@@ -3,22 +3,22 @@ import {
   Message as FluxerMessage,
   GuildChannel as FluxerGuildChannel,
 } from "@fluxerjs/core";
-import RandomString from "../utils/RandomString.js";
-import { PendingSetup } from "../utils/CommandHandler.js";
-import Config from "../utils/ConfigHandler.js";
-import { genAuthLink } from "../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap, VoiceChannelMap } from "../db/index.js";
+import RandomString from "../../utils/RandomString.js";
+import { PendingSetup } from "../../utils/CommandHandler.js";
+import Config from "../../utils/ConfigHandler.js";
+import { genAuthLink } from "../../utils/GenAuthLink.js";
+import { ChannelMap, GuildMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
-import changeBotBio from "../utils/ChangeBotBio.js";
-import { checkBotPermissions } from "../utils/CheckBotPerms.js";
+import changeBotBio from "../../utils/ChangeBotBio.js";
+import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
 import {
   isAnnouncementPairAllowed,
   isDiscordAnnouncementChannel,
   isFluxerAnnouncementChannel,
   resolveChannelVoiceText,
-} from "../utils/AnnouncementPublish.js";
-import { hasSilentFlag, stripSilentFlag } from "../utils/SilentFlag.js";
+} from "../../utils/AnnouncementPublish.js";
+import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 
 function normalizeChannelName(name) {
   return name
@@ -61,7 +61,10 @@ function findMatchingChannel(fluxerChannels, discordChannel) {
 }
 
 const command = {
-  name: "setupall",
+  groupNames: ["bridge", "b"],
+  name: "setup-all",
+  aliases: ["setupall"],
+  topLevelAliases: ["setupall", "setup-all"],
   description: "Set up bridging for all channels",
   requireElevated: true,
   params: "[(code)|both|discord2fluxer|fluxer2discord|d2f|f2d=both] [silent]",
@@ -116,7 +119,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
           new EmbedBuilder()
             .setTitle("Bridge all channels")
             .setDescription(
-              `# \`${Config.BotPrefix}setupall ${code}\`
+              `# \`${Config.BotPrefix}bridge setup-all ${code}\`
 Execute that to the other side to continue setting up bridging for all channels! Code will expire after 5 minutes.
 
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!${optionalWarning}`,
@@ -133,7 +136,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
     } else {
       if (!PendingSetup.has(directionOrCode)) {
         await message.reply(
-          `Code can't be found or is expired already. Run \`${Config.BotPrefix}setup\` again on the other side.`,
+          `Code can't be found or is expired already. Run \`${Config.BotPrefix}bridge setup-all\` again on the other side.`,
         );
         return;
       }
@@ -142,7 +145,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       if (!setup) {
         await message.reply(
-          `Code can't be found or is expired already. Run \`${Config.BotPrefix}setup\` again on the other side.`,
+          `Code can't be found or is expired already. Run \`${Config.BotPrefix}bridge setup-all\` again on the other side.`,
         );
         return;
       }

@@ -1,13 +1,15 @@
-import { ChannelMap } from "../db/index.js";
+import { ChannelMap } from "../../db/index.js";
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { Op } from "sequelize";
 import { AttachmentBuilder } from "discord.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "bridgelist",
+  groupNames: ["bridge", "b"],
+  name: "list",
+  aliases: ["bridgelist"],
   description: "List of bridged channels on this server/community",
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {

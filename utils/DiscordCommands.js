@@ -93,6 +93,7 @@ const slashTypeMap = {
   integer: ApplicationCommandOptionType.Integer,
   boolean: ApplicationCommandOptionType.Boolean,
   channel: ApplicationCommandOptionType.Channel,
+  attachment: ApplicationCommandOptionType.Attachment,
 };
 
 /**
@@ -245,6 +246,14 @@ function buildParams(defs, interaction) {
         continue;
       }
       params.push(value.id);
+      continue;
+    }
+    if (def.type === ApplicationCommandOptionType.Attachment) {
+      const value = interaction.options.getAttachment(def.name);
+      if (!value) {
+        continue;
+      }
+      params.push(value.url);
       continue;
     }
     const value = interaction.options.getString(def.name);

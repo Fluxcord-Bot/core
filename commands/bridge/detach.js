@@ -1,14 +1,15 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { MessageMap } from "../db/index.js";
-import Config from "../utils/ConfigHandler.js";
+import { MessageMap } from "../../db/index.js";
+import Config from "../../utils/ConfigHandler.js";
 import { Op } from "sequelize";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "detachmessage",
-  aliases: ["detach"],
+  groupNames: ["bridge", "b"],
+  name: "detach",
+  aliases: ["detachmessage"],
   description: "Detach a bridged message without deleting it",
   requireElevated: true,
   params: "[messageId]",
@@ -25,7 +26,7 @@ Detaching removes the bridge link for that message only. Both copies stay, but e
     if (!messageId) {
       await message.reply(`Missing message. Usage:
 \`\`\`
-${Config.BotPrefix}detach [MESSAGE_ID]
+${Config.BotPrefix}bridge detach [MESSAGE_ID]
 \`\`\`
 Or reply to the bridged message and run \`${Config.BotPrefix}detach\`.`);
       return;

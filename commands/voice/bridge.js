@@ -1,13 +1,15 @@
 //@ts-check
-import Config from "../utils/ConfigHandler.js";
-import { VoiceChannelMap, ChannelMap } from "../db/index.js";
+import Config from "../../utils/ConfigHandler.js";
+import { VoiceChannelMap, ChannelMap } from "../../db/index.js";
 import { ChannelType } from "discord.js";
 
 /**
- * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
+ * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
  */
 const command = {
-  name: "voicebridge",
+  groupNames: ["voice", "v"],
+  name: "bridge",
+  aliases: ["voicebridge"],
   description: "Bridge a Discord voice channel to a Fluxer voice channel",
   requireElevated: true,
   params: "<discordVoiceChannelId> <fluxerVoiceChannelId>",
@@ -27,7 +29,7 @@ const command = {
     if (!discordChannelId || !fluxerChannelId) {
       await message.reply(`Missing parameters. Usage:
 \`\`\`
-${Config.BotPrefix}voicebridge <discordVoiceChannelId> <fluxerVoiceChannelId>
+${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
 \`\`\``);
       return;
     }
