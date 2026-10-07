@@ -1,8 +1,7 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { applyBridgeValue } from "../../utils/BridgeToggle.js";
 
-const USAGE =
-  "Usage: `off`, `full` (`[Discord]`/`[Fluxer]`) or `short` (`[D]`/`[F]`).";
+const USAGE = "Usage: `off`, `full` (`[Discord]`/`[Fluxer]`) or `short` (`[D]`/`[F]`).";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -44,13 +43,11 @@ const command = {
       isFluxer ? "fluxer" : "discord",
       "nameIndicator",
       arg,
-      "off",
+      "off"
     );
 
     if (!arg) {
-      await message.reply(
-        `Name indicator is currently set to \`${current}\`.\n${USAGE}`,
-      );
+      await message.reply(`Name indicator is currently set to \`${current}\`.\n${USAGE}`);
       return;
     }
 

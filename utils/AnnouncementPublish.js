@@ -28,27 +28,16 @@ export function isFluxerAnnouncementChannel(channel) {
 }
 
 export function resolveChannelVoiceText(discordChannel, fluxerChannel) {
-  if (isVoiceChannel(discordChannel) || isVoiceChannel(fluxerChannel))
-    return "voice";
-  if (
-    isDiscordAnnouncementChannel(discordChannel) ||
-    isFluxerAnnouncementChannel(fluxerChannel)
-  )
-    return "announcement";
+  if (isVoiceChannel(discordChannel) || isVoiceChannel(fluxerChannel)) return "voice";
+  if (isDiscordAnnouncementChannel(discordChannel) || isFluxerAnnouncementChannel(fluxerChannel)) return "announcement";
   return "text";
 }
 
 export function isAnnouncementPairAllowed(discordChannel, fluxerChannel) {
-  return (
-    isVoiceChannel(discordChannel) === isVoiceChannel(fluxerChannel)
-  );
+  return isVoiceChannel(discordChannel) === isVoiceChannel(fluxerChannel);
 }
 
-export async function maybePublishDiscordMessage(
-  discordClient,
-  channelMap,
-  messageId,
-) {
+export async function maybePublishDiscordMessage(discordClient, channelMap, messageId) {
   let enabled = true;
   try {
     enabled = await isBridgeToggleEnabled(channelMap, "autoPublishEnabled");
@@ -68,20 +57,12 @@ export async function maybePublishDiscordMessage(
     await message.crosspost();
     return true;
   } catch (e) {
-    log(
-      "DISCORD",
-      `Failed to auto publish announcement message ${messageId}`,
-      e,
-    );
+    log("DISCORD", `Failed to auto publish announcement message ${messageId}`, e);
     return false;
   }
 }
 
-export async function maybePublishFluxerMessage(
-  fluxerClient,
-  channelMap,
-  messageId,
-) {
+export async function maybePublishFluxerMessage(fluxerClient, channelMap, messageId) {
   let enabled = true;
   try {
     enabled = await isBridgeToggleEnabled(channelMap, "autoPublishEnabled");
@@ -105,11 +86,7 @@ export async function maybePublishFluxerMessage(
     } catch (e) {
       const status = e?.status ?? e?.statusCode ?? e?.cause?.statusCode;
       if (status === 404) continue;
-      log(
-        "FLUXER",
-        `Failed to auto publish announcement message ${messageId}`,
-        e,
-      );
+      log("FLUXER", `Failed to auto publish announcement message ${messageId}`, e);
       return false;
     }
   }

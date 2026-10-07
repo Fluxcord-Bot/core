@@ -4,16 +4,12 @@ import Config from "./utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
 if (Config.PostgresConnectionString) {
-  console.log(
-    "PostgresConnectionString is set. SQLite encryption does not apply in Postgres mode.",
-  );
+  console.log("PostgresConnectionString is set. SQLite encryption does not apply in Postgres mode.");
   process.exit(1);
 }
 
 if (!Config.DatabaseEncryptionToken) {
-  console.log(
-    "DatabaseEncryptionToken is not set. Set it in config.js before running this script.",
-  );
+  console.log("DatabaseEncryptionToken is not set. Set it in config.js before running this script.");
   process.exit(1);
 }
 
@@ -30,9 +26,7 @@ try {
   });
 
   try {
-    await check.query(
-      `PRAGMA key = ${check.escape(Config.DatabaseEncryptionToken)};`,
-    );
+    await check.query(`PRAGMA key = ${check.escape(Config.DatabaseEncryptionToken)};`);
     await check.query("PRAGMA cipher_compatibility = 4;");
     await check.query("SELECT count(*) FROM sqlite_master;");
     await check.close();
@@ -75,9 +69,7 @@ try {
     logging: false,
   });
 
-  await verify.query(
-    `PRAGMA key = ${verify.escape(Config.DatabaseEncryptionToken)};`,
-  );
+  await verify.query(`PRAGMA key = ${verify.escape(Config.DatabaseEncryptionToken)};`);
   await verify.query("PRAGMA cipher_compatibility = 4;");
   await verify.query("SELECT count(*) FROM sqlite_master;");
   await verify.close();
@@ -89,9 +81,7 @@ try {
 
   console.log("Done!");
   console.log(`Backup saved as: ${backupPath}`);
-  console.log(
-    "Once you've confirmed the bot works, you can delete the backup.",
-  );
+  console.log("Once you've confirmed the bot works, you can delete the backup.");
 } catch (err) {
   if (fs.existsSync(tmpPath)) {
     fs.unlinkSync(tmpPath);

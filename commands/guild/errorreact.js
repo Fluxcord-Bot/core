@@ -17,14 +17,9 @@ const command = {
     if (params[0] && params[0].startsWith("<")) {
       try {
         if (message instanceof Message) {
-          await fluxerClient.resolveEmoji(
-            params[0].replace("<", "").replace(">", ""),
-            message.guildId,
-          );
+          await fluxerClient.resolveEmoji(params[0].replace("<", "").replace(">", ""), message.guildId);
         } else {
-          await message.guild.emojis.fetch(
-            params[0].replace("<", "").replace(">", "").split(":")[2],
-          );
+          await message.guild.emojis.fetch(params[0].replace("<", "").replace(">", "").split(":")[2]);
         }
       } catch (e) {
         log("DEBUG", e);
@@ -46,9 +41,7 @@ const command = {
     await guildMap[0].save();
 
     if (params[0]) {
-      message.reply(
-        `Successfully set ${guildMap[0].errorReaction} as error reaction!`,
-      );
+      message.reply(`Successfully set ${guildMap[0].errorReaction} as error reaction!`);
     } else {
       message.reply(`Successfully disabled error reaction!`);
     }

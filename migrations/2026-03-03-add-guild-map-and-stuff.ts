@@ -1,11 +1,7 @@
 import { DataTypes, QueryInterface } from "sequelize";
 import DefaultConfig from "../utils/ConfigHandler.js";
 
-export async function up({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function up({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.createTable("GuildMaps", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     guildId: { type: DataTypes.STRING, allowNull: false },
@@ -28,21 +24,13 @@ export async function up({
     updatedAt: { type: DataTypes.DATE, allowNull: false },
   });
   const isPostgres = queryInterface.sequelize.getDialect() === "postgres";
-  const discordGuildType = isPostgres
-    ? `'discord'::"enum_GuildMaps_guildType"`
-    : `'discord'`;
-  const fluxerGuildType = isPostgres
-    ? `'fluxer'::"enum_GuildMaps_guildType"`
-    : `'fluxer'`;
+  const discordGuildType = isPostgres ? `'discord'::"enum_GuildMaps_guildType"` : `'discord'`;
+  const fluxerGuildType = isPostgres ? `'fluxer'::"enum_GuildMaps_guildType"` : `'fluxer'`;
   const errorLoggingPlatform = isPostgres
     ? `"errorLoggingPlatform"::text::"enum_GuildMaps_errorLoggingPlatform"`
     : `"errorLoggingPlatform"`;
-  const discordComparison = isPostgres
-    ? `"guildType" = 'discord'::"enum_GuildMaps_guildType"`
-    : `"guildType" = 'discord'`;
-  const fluxerComparison = isPostgres
-    ? `"guildType" = 'fluxer'::"enum_GuildMaps_guildType"`
-    : `"guildType" = 'fluxer'`;
+  const discordComparison = isPostgres ? `"guildType" = 'discord'::"enum_GuildMaps_guildType"` : `"guildType" = 'discord'`;
+  const fluxerComparison = isPostgres ? `"guildType" = 'fluxer'::"enum_GuildMaps_guildType"` : `"guildType" = 'fluxer'`;
   await queryInterface.sequelize.query(`
     INSERT INTO "GuildMaps" ("guildId", "guildType", "errorLoggingChannelId", "errorLoggingPlatform", "createdAt", "updatedAt")
     SELECT DISTINCT
@@ -97,11 +85,7 @@ export async function up({
   await queryInterface.removeColumn("ChannelMaps", "errorLoggingPlatform");
 }
 
-export async function down({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function down({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.addColumn("ChannelMaps", "errorLoggingChannelId", {
     type: DataTypes.STRING,
     allowNull: true,

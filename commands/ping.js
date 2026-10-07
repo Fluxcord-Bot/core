@@ -31,24 +31,13 @@ const command = {
     const channelsBridged = await ChannelMap.count();
     const discordGuildCount = discordClient.guilds.cache.size;
     const fluxerGuildCount = fluxerClient.guilds.size;
-    const discordMemberCount = discordClient.guilds.cache.reduce(
-      (acc, guild) => acc + guild.memberCount,
-      0,
-    );
-    const fluxerMemberCount = fluxerClient.guilds.reduce(
-      (acc, guild) => acc + (guild.memberCount ?? guild.members.size),
-      0,
-    );
-    const heapMb =
-      Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 10) / 10;
+    const discordMemberCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+    const fluxerMemberCount = fluxerClient.guilds.reduce((acc, guild) => acc + (guild.memberCount ?? guild.members.size), 0);
+    const heapMb = Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 10) / 10;
     const discordPing =
-      typeof discordClient.ws.ping === "number" && discordClient.ws.ping >= 0
-        ? `${Math.round(discordClient.ws.ping)}ms`
-        : "n/a";
+      typeof discordClient.ws.ping === "number" && discordClient.ws.ping >= 0 ? `${Math.round(discordClient.ws.ping)}ms` : "n/a";
     const fluxerPing =
-      fluxerClient.isReady() &&
-      typeof fluxerClient.ws.ping === "number" &&
-      fluxerClient.ws.ping >= 0
+      fluxerClient.isReady() && typeof fluxerClient.ws.ping === "number" && fluxerClient.ws.ping >= 0
         ? `${Math.round(fluxerClient.ws.ping)}ms`
         : "n/a";
     await msg.edit({
@@ -58,7 +47,7 @@ const command = {
         new EmbedBuilder()
           .setTitle("Pong!")
           .setDescription(
-            `Bridging ${channelsBridged} channel${channelsBridged === 1 ? "" : "s"} (${messagesBridged} messages) for ${getDuration(botStartingTime, now)}`,
+            `Bridging ${channelsBridged} channel${channelsBridged === 1 ? "" : "s"} (${messagesBridged} messages) for ${getDuration(botStartingTime, now)}`
           )
           .addFields(
             {
@@ -135,13 +124,9 @@ const command = {
               name: "\u200b",
               value: "\u200b",
               inline: true,
-            },
+            }
           )
-          .setFooter(
-            Config.EmbedFooterContent
-              ? { text: Config.EmbedFooterContent }
-              : null,
-          ),
+          .setFooter(Config.EmbedFooterContent ? { text: Config.EmbedFooterContent } : null),
       ],
     });
   },

@@ -25,9 +25,7 @@ const command = {
     "Can take either a Discord channel or a Fluxer channel depends on where you ran it (if you run it on Discord, it needs a Discord channel ID)",
   async run(params, message, _, _2) {
     if (!params[0]) {
-      await message.reply(
-        `Missing parameters. Usage: \`${Config.BotPrefix}guild errorlog <channelId>\``,
-      );
+      await message.reply(`Missing parameters. Usage: \`${Config.BotPrefix}guild errorlog <channelId>\``);
       return;
     }
 

@@ -37,33 +37,25 @@ const command = {
               .setContent(`## ${ForkDetails.isFork ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}` : `Fluxcord ${Package.version}`}
 Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isFork && !!ForkDetails.forkDescription ? "\n" + ForkDetails.forkDescription : ""}
 
--# Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`),
+-# Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`)
           )
           .setThumbnailAccessory(
-            new ThumbnailBuilder()
-              .setDescription("Fluxcord logo")
-              .setURL("https://party.jbc.lol/fluxcord.png"),
-          ),
+            new ThumbnailBuilder().setDescription("Fluxcord logo").setURL("https://party.jbc.lol/fluxcord.png")
+          )
       )
-      .addSeparatorComponents((seperator) => seperator)
+      .addSeparatorComponents(seperator => seperator)
       .addActionRowComponents(
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setStyle(ButtonStyle.Link)
             .setLabel("Source code")
-            .setURL(
-              ForkDetails.isFork
-                ? ForkDetails.forkRepo
-                : "https://git.gay/Fluxcord/core",
-            ),
+            .setURL(ForkDetails.isFork ? ForkDetails.forkRepo : "https://git.gay/Fluxcord/core"),
           new ButtonBuilder()
             .setStyle(ButtonStyle.Link)
             .setLabel("Voice bridge source")
             .setURL(
-              ForkDetails.isFork && ForkDetails.forkVoiceRepo
-                ? ForkDetails.forkVoiceRepo
-                : "https://git.gay/Fluxcord/voice",
-            ),
+              ForkDetails.isFork && ForkDetails.forkVoiceRepo ? ForkDetails.forkVoiceRepo : "https://git.gay/Fluxcord/voice"
+            )
         ),
         ...(!ForkDetails.isFork || ForkDetails.forkEnableSupport
           ? [
@@ -72,30 +64,21 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
                   .setStyle(ButtonStyle.Link)
                   .setLabel("Support Fluxer community")
                   .setURL("https://fluxer.gg/jbcrn"),
-                new ButtonBuilder()
-                  .setStyle(ButtonStyle.Link)
-                  .setLabel("Discord server")
-                  .setURL("https://discord.gg/NXA2Ffc3Am"),
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Discord server").setURL("https://discord.gg/NXA2Ffc3Am")
               ),
             ]
           : []),
         new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setStyle(ButtonStyle.Link)
-            .setLabel("Terms of Service")
-            .setURL("https://fluxcord.jbcrn.dev/terms"),
-          new ButtonBuilder()
-            .setStyle(ButtonStyle.Link)
-            .setLabel("Privacy policy")
-            .setURL("https://fluxcord.jbcrn.dev/privacy"),
-        ),
+          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Terms of Service").setURL("https://fluxcord.jbcrn.dev/terms"),
+          new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Privacy policy").setURL("https://fluxcord.jbcrn.dev/privacy")
+        )
       )
       .addTextDisplayComponents(
         new TextDisplayBuilder({
           content:
             "-# " +
             `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""}${DefaultConfig.EmbedFooterContent ? " - " + DefaultConfig.EmbedFooterContent : ""}`,
-        }),
+        })
       );
     await message.reply({
       //@ts-expect-error
@@ -109,18 +92,14 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
             embeds: [
               new EmbedBuilder()
                 .setTitle(
-                  ForkDetails.isFork
-                    ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}`
-                    : `Fluxcord ${Package.version}`,
+                  ForkDetails.isFork ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}` : `Fluxcord ${Package.version}`
                 )
                 .setThumbnail("https://party.jbc.lol/fluxcord.png")
                 .setDescription(
                   `Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isFork && !!ForkDetails.forkDescription ? "\n" + ForkDetails.forkDescription : ""}` +
                     (message.client instanceof Client
                       ? `\n\n[Source code](${
-                          ForkDetails.isFork
-                            ? ForkDetails.forkRepo
-                            : "https://git.gay/Fluxcord/core"
+                          ForkDetails.isFork ? ForkDetails.forkRepo : "https://git.gay/Fluxcord/core"
                         }) - [Voice bridge source code](${
                           ForkDetails.isFork && ForkDetails.forkVoiceRepo
                             ? ForkDetails.forkVoiceRepo
@@ -130,7 +109,7 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
                           ? "[Support Fluxer community](https://fluxer.gg/jbcrn) - [Support Discord server](https://discord.gg/NXA2Ffc3Am)\n"
                           : "") +
                         "[Terms of Service](https://fluxcord.jbcrn.dev/terms) - [Privacy policy](https://fluxcord.jbcrn.dev/privacy)\n"
-                      : ""),
+                      : "")
                 )
                 .setFooter(
                   Config.EmbedFooterContent
@@ -141,7 +120,7 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
                       }
                     : {
                         text: `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
-                      },
+                      }
                 ),
             ],
           }),

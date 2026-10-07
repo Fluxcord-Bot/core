@@ -56,14 +56,17 @@ function defsFromParams(params) {
       });
       return;
     }
-    const parts = stripped.split("|").map((x) => x.replace(/^[(\[]+|[)\]]+$/g, "")).filter(Boolean);
-    if (parts.length > 1 && !parts.some((x) => x.includes("="))) {
-      const base = parts.find((x) => !isFlagToken(x) && /[a-zA-Z]/.test(x) && !/^(code|d2f|f2d|both|on|off)$/i.test(x));
+    const parts = stripped
+      .split("|")
+      .map(x => x.replace(/^[(\[]+|[)\]]+$/g, ""))
+      .filter(Boolean);
+    if (parts.length > 1 && !parts.some(x => x.includes("="))) {
+      const base = parts.find(x => !isFlagToken(x) && /[a-zA-Z]/.test(x) && !/^(code|d2f|f2d|both|on|off)$/i.test(x));
       defs.push({
         name: sanitizeName(base || `option${i + 1}`),
         type: ApplicationCommandOptionType.String,
         required,
-        choices: parts.map((v) => ({ name: v.slice(0, 100), value: v })),
+        choices: parts.map(v => ({ name: v.slice(0, 100), value: v })),
       });
       return;
     }
@@ -83,7 +86,7 @@ function defsFromParams(params) {
     });
   });
   /** @type {any[]} */
-  const requiredFirst = [...defs.filter((d) => d.required), ...defs.filter((d) => !d.required)];
+  const requiredFirst = [...defs.filter(d => d.required), ...defs.filter(d => !d.required)];
   return requiredFirst;
 }
 
@@ -102,7 +105,7 @@ const slashTypeMap = {
 function resolveDefs(cmd) {
   if (cmd.slashOptions && cmd.slashOptions.length > 0) {
     /** @type {any[]} */
-    const mapped = cmd.slashOptions.map((d) => ({
+    const mapped = cmd.slashOptions.map(d => ({
       name: sanitizeName(d.name),
       type: slashTypeMap[d.type ?? "string"] ?? ApplicationCommandOptionType.String,
       required: d.type === "boolean" ? false : !!d.required,
@@ -111,7 +114,7 @@ function resolveDefs(cmd) {
       rest: d.rest,
       channelTypes: d.channelTypes,
     }));
-    return [...mapped.filter((d) => d.required), ...mapped.filter((d) => !d.required)];
+    return [...mapped.filter(d => d.required), ...mapped.filter(d => !d.required)];
   }
   return defsFromParams(cmd.params);
 }
@@ -281,12 +284,15 @@ export function toSlashCommandJson(commands) {
   const topLevel = [];
   for (const cmd of commands) {
     if (cmd.hideFromHelp || cmd.excludeFromSlash) {
-      log("DEBUG", `SlashCommands skip ${cmd.name} hideFromHelp=${!!cmd.hideFromHelp} excludeFromSlash=${!!cmd.excludeFromSlash}`);
+      log(
+        "DEBUG",
+        `SlashCommands skip ${cmd.name} hideFromHelp=${!!cmd.hideFromHelp} excludeFromSlash=${!!cmd.excludeFromSlash}`
+      );
       continue;
     }
     const defs = resolveDefs(cmd);
     /** @type {any[]} */
-    const options = defs.map((d) => {
+    const options = defs.map(d => {
       /** @type {any} */
       const opt = {
         name: d.name,
@@ -309,7 +315,7 @@ export function toSlashCommandJson(commands) {
       type: ApplicationCommandOptionType.Subcommand,
       options,
     };
-    const groupFirst = cmd.groupNames && cmd.groupNames.length > 0 ? cmd.groupNames[0] ?? "" : "";
+    const groupFirst = cmd.groupNames && cmd.groupNames.length > 0 ? (cmd.groupNames[0] ?? "") : "";
     const parent = groupFirst ? sanitizeName(groupFirst) : undefined;
     if (parent) {
       if (!grouped.has(parent)) {
@@ -326,15 +332,13 @@ export function toSlashCommandJson(commands) {
         description: (cmd.description ?? cmd.name).slice(0, 100),
         type: 1,
         options,
-        default_member_permissions: cmd.requireElevated
-          ? PermissionFlagsBits.ManageGuild.toString()
-          : undefined,
+        default_member_permissions: cmd.requireElevated ? PermissionFlagsBits.ManageGuild.toString() : undefined,
         dm_permission: cmd.allowDM ? undefined : false,
       });
     }
   }
   for (const [groupName, subs] of grouped) {
-    log("DEBUG", `SlashCommands group ${groupName} subcommands=${subs.map((s) => s.name).join(",")}`);
+    log("DEBUG", `SlashCommands group ${groupName} subcommands=${subs.map(s => s.name).join(",")}`);
     topLevel.push({
       name: groupName,
       description: groupName,
@@ -343,7 +347,7 @@ export function toSlashCommandJson(commands) {
       dm_permission: groupedAllowDM.get(groupName) ? undefined : false,
     });
   }
-  log("DEBUG", `SlashCommands built count=${topLevel.length} names=${topLevel.map((c) => c.name).join(",")}`);
+  log("DEBUG", `SlashCommands built count=${topLevel.length} names=${topLevel.map(c => c.name).join(",")}`);
   return topLevel;
 }
 
@@ -366,7 +370,7 @@ export async function registerDiscordCommands(discordClient, fluxerClient) {
  * @param {import("@fluxerjs/core").Client} fluxerClient
  */
 export function setupDiscordCommands(discordClient, fluxerClient) {
-  discordClient.on(Events.InteractionCreate, async (interaction) => {
+  discordClient.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) {
       return;
     }
@@ -374,11 +378,9 @@ export function setupDiscordCommands(discordClient, fluxerClient) {
       const commands = await getCommands();
       const sub = interaction.options.getSubcommand(false);
       const targetName = sub ?? interaction.commandName;
-      let commandToRun = commands.find((x) => x.name.toLowerCase() === targetName.toLowerCase());
+      let commandToRun = commands.find(x => x.name.toLowerCase() === targetName.toLowerCase());
       if (!commandToRun && !sub) {
-        commandToRun = commands.find(
-          (x) => x.aliases?.some((a) => a.toLowerCase() === interaction.commandName.toLowerCase()),
-        );
+        commandToRun = commands.find(x => x.aliases?.some(a => a.toLowerCase() === interaction.commandName.toLowerCase()));
       }
       if (!commandToRun) {
         if (interaction.replied || interaction.deferred) {
@@ -390,10 +392,7 @@ export function setupDiscordCommands(discordClient, fluxerClient) {
         });
         return;
       }
-      if (
-        commandToRun.requireOwner &&
-        !Config.AdminAccountIds.includes(interaction.user.id)
-      ) {
+      if (commandToRun.requireOwner && !Config.AdminAccountIds.includes(interaction.user.id)) {
         await interaction.reply({
           content: "Only bot admins can execute this command!",
           ephemeral: true,
@@ -402,11 +401,7 @@ export function setupDiscordCommands(discordClient, fluxerClient) {
       }
       if (
         commandToRun.requireElevated &&
-        !(await checkManageServerPerms(
-          interaction.guildId ?? "",
-          interaction.user.id,
-          discordClient,
-        ))
+        !(await checkManageServerPerms(interaction.guildId ?? "", interaction.user.id, discordClient))
       ) {
         await interaction.reply({
           content: "You need at least **Manage Server** permissions to run this command!",

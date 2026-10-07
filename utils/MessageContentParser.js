@@ -1,10 +1,5 @@
 import { Client as FluxerClient } from "@fluxerjs/core";
-import {
-  ButtonStyle,
-  ComponentType,
-  Message,
-  MessageMentions,
-} from "discord.js";
+import { ButtonStyle, ComponentType, Message, MessageMentions } from "discord.js";
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
@@ -22,25 +17,18 @@ export async function parseMentions(message, content, otherSideGuild) {
     const bridgedChannels = await ChannelMap.findAll({
       where: {
         discordChannelId: {
-          [Op.in]: message.mentions.channels.map((x) => x.id),
+          [Op.in]: message.mentions.channels.map(x => x.id),
         },
       },
     });
 
-    message.mentions.channels.forEach((v) => {
-      const bridgedChannel = bridgedChannels.find(
-        (x) => v.id === x.discordChannelId,
-      );
+    message.mentions.channels.forEach(v => {
+      const bridgedChannel = bridgedChannels.find(x => v.id === x.discordChannelId);
       if (!v.isDMBased())
-        res = res.replaceAll(
-          `<#${v.id}>`,
-          bridgedChannel
-            ? `<#${bridgedChannel.fluxerChannelId}>`
-            : `#${v.name}`,
-        );
+        res = res.replaceAll(`<#${v.id}>`, bridgedChannel ? `<#${bridgedChannel.fluxerChannelId}>` : `#${v.name}`);
     });
 
-    message.mentions.users.forEach((v) => {
+    message.mentions.users.forEach(v => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.tag}`);
     });
 
@@ -48,16 +36,16 @@ export async function parseMentions(message, content, otherSideGuild) {
 
     /** @type {import("@fluxerjs/core").Role[]} */
     const roles = await otherSideGuild.fetchRoles();
-    message.mentions.roles.forEach((v) => {
+    message.mentions.roles.forEach(v => {
       res = res.replaceAll(
         `<@&${v.id}>`,
         (() => {
           if (!roles) return `@${v.name}`;
-          const extRole = roles.find((x) => x.name === v.name);
+          const extRole = roles.find(x => x.name === v.name);
           if (!extRole || !extRole.mentionable) return `@${v.name}`;
           whitelist.push(extRole.id);
           return `<@&${extRole.id}>`;
-        })(),
+        })()
       );
     });
 
@@ -65,14 +53,9 @@ export async function parseMentions(message, content, otherSideGuild) {
       return whitelist.includes(id) ? match : "@unknown-role";
     });
   } else if (message.client instanceof FluxerClient) {
-    res = await parseRolesAndChannels(
-      res,
-      message.guildId ?? "",
-      message.client,
-      otherSideGuild,
-    );
+    res = await parseRolesAndChannels(res, message.guildId ?? "", message.client, otherSideGuild);
 
-    message.mentions.forEach((v) => {
+    message.mentions.forEach(v => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.username}#${v.discriminator}`);
     });
   }
@@ -86,12 +69,7 @@ export async function parseMentions(message, content, otherSideGuild) {
  * @param {FluxerClient} fluxerClient
  * @param {import("discord.js").Guild?} otherSideGuild
  */
-async function parseRolesAndChannels(
-  content,
-  guildId,
-  fluxerClient,
-  otherSideGuild,
-) {
+async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGuild) {
   let guild;
   try {
     guild = await fluxerClient.guilds.fetch(guildId);
@@ -107,16 +85,16 @@ async function parseRolesAndChannels(
     const otherRoles = await otherSideGuild.roles.fetch();
     const whitelist = [];
 
-    roles.forEach((v) => {
+    roles.forEach(v => {
       res = res.replaceAll(
         `<@&${v.id}>`,
         (() => {
           if (!otherRoles) return `@${v.name}`;
-          const extRole = otherRoles.find((x) => x.name === v.name);
+          const extRole = otherRoles.find(x => x.name === v.name);
           if (!extRole || !extRole.mentionable) return `@${v.name}`;
           whitelist.push(extRole.id);
           return `<@&${extRole.id}>`;
-        })(),
+        })()
       );
     });
 
@@ -127,19 +105,14 @@ async function parseRolesAndChannels(
     const bridgedChannels = await ChannelMap.findAll({
       where: {
         fluxerChannelId: {
-          [Op.in]: channels.map((x) => x.id),
+          [Op.in]: channels.map(x => x.id),
         },
       },
     });
 
-    channels.forEach((v) => {
-      const bridgedChannel = bridgedChannels.find(
-        (x) => v.id === x.fluxerChannelId,
-      );
-      res = res.replaceAll(
-        `<#${v.id}>`,
-        bridgedChannel ? `<#${bridgedChannel.discordChannelId}>` : `#${v.name}`,
-      );
+    channels.forEach(v => {
+      const bridgedChannel = bridgedChannels.find(x => v.id === x.fluxerChannelId);
+      res = res.replaceAll(`<#${v.id}>`, bridgedChannel ? `<#${bridgedChannel.discordChannelId}>` : `#${v.name}`);
     });
   }
 
@@ -166,29 +139,25 @@ export async function attemptParseBridgedMessage(message) {
       type: "fluxcord",
       isBridge: true,
       isProxy: false,
-      regex:
-        /-# <:reply_l.*\(<https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)>\)\n?/,
+      regex: /-# <:reply_l.*\(<https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)>\)\n?/,
     },
     {
       type: "ooye",
       isBridge: true,
       isProxy: false,
-      regex:
-        /-# > <:L1.*>https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+).*\n?/,
+      regex: /-# > <:L1.*>https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+).*\n?/,
     },
     {
       type: "tupperbox",
       isBridge: false,
       isProxy: true,
-      regex:
-        /> \[Reply to\]\(<https:\/\/discord\.com\/channels\/((?:\d+|@me))\/(\d+)\/(\d+)>.+?\n>.*\n?/,
+      regex: /> \[Reply to\]\(<https:\/\/discord\.com\/channels\/((?:\d+|@me))\/(\d+)\/(\d+)>.+?\n>.*\n?/,
     },
     {
       type: "kuma",
       isBridge: true,
       isProxy: false,
-      regex:
-        /-# ↩ \[.*\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)\).*\n?/,
+      regex: /-# ↩ \[.*\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)\).*\n?/,
     },
   ];
 
@@ -213,8 +182,7 @@ export async function attemptParseBridgedMessage(message) {
     }
   }
 
-  const pluralkitReplyRegex =
-    /\*\*\[Reply to:\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
+  const pluralkitReplyRegex = /\*\*\[Reply to:\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
 
   if (Array.isArray(message.embeds)) {
     for (const [i, embed] of message.embeds.entries()) {
@@ -241,21 +209,16 @@ export async function attemptParseBridgedMessage(message) {
     }
   }
 
-  const boltReplyRegex =
-    /https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
+  const boltReplyRegex = /https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
 
   if (Array.isArray(message.components)) {
     for (const row of message.components) {
-      const isActionRow =
-        row.type === 1 ||
-        row.type === "ActionRow" ||
-        row.type === ComponentType?.ActionRow;
+      const isActionRow = row.type === 1 || row.type === "ActionRow" || row.type === ComponentType?.ActionRow;
       if (!isActionRow || !row.components?.length) continue;
 
       const firstBtn = row.components[0];
       const isLinkButton =
-        (firstBtn.type === 2 || firstBtn.type === "Button") &&
-        (firstBtn.style === 5 || firstBtn.style === ButtonStyle?.Link);
+        (firstBtn.type === 2 || firstBtn.type === "Button") && (firstBtn.style === 5 || firstBtn.style === ButtonStyle?.Link);
 
       if (isLinkButton && firstBtn.url) {
         const match = boltReplyRegex.exec(firstBtn.url);

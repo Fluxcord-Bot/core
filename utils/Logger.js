@@ -12,6 +12,6 @@ export function log(type, ...msg) {
       minute: "2-digit",
       second: "2-digit",
     })} ${type}]`,
-    ...msg,
+    ...msg
   );
 }

@@ -1,10 +1,6 @@
 import { DataTypes, QueryInterface } from "sequelize";
 
-export async function up({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function up({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.createTable("UserConfigs", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     userType: {
@@ -27,10 +23,6 @@ export async function up({
   });
 }
 
-export async function down({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function down({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.dropTable("UserConfigs");
 }

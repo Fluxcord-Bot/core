@@ -9,9 +9,7 @@ function messageImageUrl(message) {
   const raw = message?.attachments;
   if (!raw) return undefined;
   const list = Array.isArray(raw) ? raw : [...raw.values()];
-  const image =
-    list.find((x) => x?.contentType?.startsWith("image/")) ??
-    list.find((x) => x?.url);
+  const image = list.find(x => x?.contentType?.startsWith("image/")) ?? list.find(x => x?.url);
   return image?.proxyURL ?? image?.proxyUrl ?? image?.url ?? undefined;
 }
 
@@ -90,9 +88,7 @@ Attach an image or pass an image URL. Run \`${Config.BotPrefix}guild avatar rese
           await message.reply("Could not download the image.");
           return;
         }
-        const mime = (res.headers.get("content-type") ?? "")
-          .split(";")[0]
-          .trim();
+        const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
         if (!mime.startsWith("image/")) {
           await message.reply("That URL is not an image.");
           return;

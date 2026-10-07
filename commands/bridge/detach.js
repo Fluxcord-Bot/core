@@ -18,9 +18,7 @@ const command = {
 Detaching removes the bridge link for that message only. Both copies stay, but edits, deletes and pins will no longer sync between them.`,
   async run(params, message) {
     let isFluxer = message instanceof FluxerMessage;
-    const replyId = isFluxer
-      ? message.messageReference?.messageId
-      : message.reference?.messageId;
+    const replyId = isFluxer ? message.messageReference?.messageId : message.reference?.messageId;
     const messageId = params[0] ?? replyId;
 
     if (!messageId) {
@@ -45,11 +43,7 @@ Or reply to the bridged message and run \`${Config.BotPrefix}detach\`.`);
     }
 
     const channelMap = messageMap.channelMap;
-    if (
-      !channelMap ||
-      (channelMap.discordChannelId !== message.channelId &&
-        channelMap.fluxerChannelId !== message.channelId)
-    ) {
+    if (!channelMap || (channelMap.discordChannelId !== message.channelId && channelMap.fluxerChannelId !== message.channelId)) {
       await message.reply("That message is not bridged in this channel.");
       return;
     }
@@ -66,16 +60,10 @@ Or reply to the bridged message and run \`${Config.BotPrefix}detach\`.`);
     });
 
     for (const reply of repliers) {
-      if (
-        reply.fluxerReplyId === messageMap.fluxerMessageId ||
-        reply.fluxerReplyId === messageMap.discordMessageId
-      ) {
+      if (reply.fluxerReplyId === messageMap.fluxerMessageId || reply.fluxerReplyId === messageMap.discordMessageId) {
         reply.fluxerReplyId = null;
       }
-      if (
-        reply.discordReplyId === messageMap.fluxerMessageId ||
-        reply.discordReplyId === messageMap.discordMessageId
-      ) {
+      if (reply.discordReplyId === messageMap.fluxerMessageId || reply.discordReplyId === messageMap.discordMessageId) {
         reply.discordReplyId = null;
       }
       await reply.save();
@@ -83,9 +71,7 @@ Or reply to the bridged message and run \`${Config.BotPrefix}detach\`.`);
 
     await messageMap.destroy();
 
-    await message.reply(
-      "Message detached. It will stay on both sides, but edits, deletes and pins will no longer sync for it.",
-    );
+    await message.reply("Message detached. It will stay on both sides, but edits, deletes and pins will no longer sync for it.");
   },
 };
 

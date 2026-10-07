@@ -42,7 +42,7 @@ const command = {
       },
     });
 
-    if (guildMaps.some((g) => g.get("inviteEnabled") === false)) {
+    if (guildMaps.some(g => g.get("inviteEnabled") === false)) {
       await message.reply("The invite command is disabled in this guild.");
       return;
     }
@@ -59,17 +59,14 @@ const command = {
         let guildInvite = "https://discord.gg/";
         if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
         else {
-          const invite = await guild.invites.create(
-            channelMap.discordChannelId,
-            {
-              maxAge: 172800,
-            },
-          );
+          const invite = await guild.invites.create(channelMap.discordChannelId, {
+            maxAge: 172800,
+          });
           guildInvite += invite.code;
         }
 
         await message.reply(
-          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`,
+          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`
         );
       }
     } else {
@@ -88,9 +85,7 @@ const command = {
           /** @type {import("@fluxerjs/core").GuildChannel} */
           let channel;
           try {
-            channel = await fluxerClient.channels.fetch(
-              channelMap.fluxerChannelId,
-            );
+            channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
           } catch {
             channel = null;
           }
@@ -105,7 +100,7 @@ const command = {
         }
 
         await message.reply(
-          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`,
+          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`
         );
       }
     }

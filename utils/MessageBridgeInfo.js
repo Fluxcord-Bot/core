@@ -10,12 +10,7 @@ import { genMsgLink } from "./GenMsgLink.js";
  * @param {import("discord.js").Client} discordClient
  * @param {import("@fluxerjs/core").Client} fluxerClient
  */
-export async function sendBridgeInfo(
-  message,
-  user,
-  discordClient,
-  fluxerClient,
-) {
+export async function sendBridgeInfo(message, user, discordClient, fluxerClient) {
   const embed = new EmbedBuilder();
   embed.setURL(await genMsgLink(message));
   const messageMap = await MessageMap.findOne({
@@ -32,37 +27,25 @@ export async function sendBridgeInfo(
   try {
     origChannel =
       messageMap.messageSource === "fluxer"
-        ? await fluxerClient.channels.fetch(
-            messageMap.channelMap.fluxerChannelId,
-          )
-        : await discordClient.channels.fetch(
-            messageMap.channelMap.discordChannelId,
-          );
+        ? await fluxerClient.channels.fetch(messageMap.channelMap.fluxerChannelId)
+        : await discordClient.channels.fetch(messageMap.channelMap.discordChannelId);
   } catch {
     return;
   }
   if (!origChannel) return;
   if (origChannel instanceof FluxerTextChannel) {
-    const message = await origChannel.messages.fetch(
-      messageMap.fluxerMessageId,
-    );
+    const message = await origChannel.messages.fetch(messageMap.fluxerMessageId);
     embed.setTitle(`Message ${message.id} on #${origChannel.name}`);
-    embed.setDescription(
-      `[Jump to message on original platform](${await genMsgLink(message)})`,
-    );
+    embed.setDescription(`[Jump to message on original platform](${await genMsgLink(message)})`);
     embed.addFields({
       name: "Author",
       value: `@${message.author.username}#${message.author.discriminator} (${message.author.id})`,
       inline: true,
     });
   } else if (origChannel.isTextBased()) {
-    const message = await origChannel.messages.fetch(
-      messageMap.discordMessageId,
-    );
+    const message = await origChannel.messages.fetch(messageMap.discordMessageId);
     embed.setTitle(`Message ${message.id} on #${origChannel.name}`);
-    embed.setDescription(
-      `[Jump to message on original platform](${await genMsgLink(message)})`,
-    );
+    embed.setDescription(`[Jump to message on original platform](${await genMsgLink(message)})`);
     embed.addFields({
       name: "Author",
       value: `@${message.author.tag} (${message.author.id})`,

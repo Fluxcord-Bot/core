@@ -36,9 +36,7 @@ export async function getCommands() {
     recursive: true,
   });
   return Promise.all(
-    entries
-      .filter((x) => fs.statSync("./commands/" + x).isFile())
-      .flatMap(async (x) => (await import("../commands/" + x)).default),
+    entries.filter(x => fs.statSync("./commands/" + x).isFile()).flatMap(async x => (await import("../commands/" + x)).default)
   );
 }
 
@@ -56,25 +54,21 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
     ? cmdList[0].slice(guildPrefix.length)
     : cmdList[0]?.replace(Config.BotPrefix, "");
   const commands = await getCommands();
-  let commandToRun = commands.find((x) =>
+  let commandToRun = commands.find(x =>
     x.groupNames && x.groupNames.length > 0
-      ? x.topLevelAliases?.find((y) => y === command)
-      : x.name === command || x.aliases?.find((y) => y === command),
+      ? x.topLevelAliases?.find(y => y === command)
+      : x.name === command || x.aliases?.find(y => y === command)
   );
 
   let isGrouped = false;
 
   if (!commandToRun) {
     // check if it's a group command
-    const commandGroup = commands.filter((x) =>
-      x.groupNames?.find((y) => y === command),
-    );
+    const commandGroup = commands.filter(x => x.groupNames?.find(y => y === command));
 
     if (commandGroup.length > 0) {
       const command = cmdList[1];
-      commandToRun = commands.find(
-        (x) => x.name === command || x.aliases?.find((y) => y === command),
-      );
+      commandToRun = commands.find(x => x.name === command || x.aliases?.find(y => y === command));
       isGrouped = true;
     } else {
       await message.reply({
@@ -98,22 +92,15 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
 
   if (
     commandToRun?.requireElevated &&
-    !(await checkManageServerPerms(
-      message.guildId ?? "",
-      message.author.id,
-      message.client,
-    ))
+    !(await checkManageServerPerms(message.guildId ?? "", message.author.id, message.client))
   ) {
     await message.reply(
-      `You need at least **Manage ${message instanceof FluxerMessage ? "Community" : "Server"}** permissions to run this command!`,
+      `You need at least **Manage ${message instanceof FluxerMessage ? "Community" : "Server"}** permissions to run this command!`
     );
     return;
   }
 
-  if (
-    commandToRun?.requireOwner &&
-    !Config.AdminAccountIds.find((x) => x === message.author.id)
-  ) {
+  if (commandToRun?.requireOwner && !Config.AdminAccountIds.find(x => x === message.author.id)) {
     await message.reply(`Only bot admins can execute this command!`);
     return;
   }
@@ -128,9 +115,7 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
         embeds: [
           new EmbedBuilder()
             .setTitle("A error has occurred while executing this command!")
-            .setDescription(
-              "Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.",
-            )
+            .setDescription("Please ping <@1471779547901222947> on https://fluxer.gg/6ULDiF2g showing this error.")
             .addFields({
               name: "Stack trace",
               value: `${e}`,

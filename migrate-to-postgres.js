@@ -4,13 +4,7 @@ import { Umzug, SequelizeStorage } from "umzug";
 import Config from "./utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
-const TABLES = [
-  "GuildMaps",
-  "ChannelMaps",
-  "MessageMaps",
-  "UserConfigs",
-  "VoiceChannelMaps",
-];
+const TABLES = ["GuildMaps", "ChannelMaps", "MessageMaps", "UserConfigs", "VoiceChannelMaps"];
 
 const force = process.argv.includes("--force");
 
@@ -55,9 +49,7 @@ async function openSource() {
       return { sequelize: plain, encrypted: false };
     } catch (err) {
       await plain.close();
-      throw new Error(
-        "Could not open SQLite database with or without the encryption token. Check DatabaseEncryptionToken.",
-      );
+      throw new Error("Could not open SQLite database with or without the encryption token. Check DatabaseEncryptionToken.");
     }
   }
   const plain = new Sequelize({
@@ -116,7 +108,7 @@ if (!force) {
     const n = await countRows(target, table);
     if (n > 0) {
       console.error(
-        `Postgres table "${table}" already has ${n} rows. Re-run with --force to delete Postgres data and copy again.`,
+        `Postgres table "${table}" already has ${n} rows. Re-run with --force to delete Postgres data and copy again.`
       );
       await source.close();
       await target.close();
@@ -124,7 +116,9 @@ if (!force) {
     }
   }
 } else {
-  await target.query('TRUNCATE "MessageMaps", "ChannelMaps", "GuildMaps", "UserConfigs", "VoiceChannelMaps" RESTART IDENTITY CASCADE;');
+  await target.query(
+    'TRUNCATE "MessageMaps", "ChannelMaps", "GuildMaps", "UserConfigs", "VoiceChannelMaps" RESTART IDENTITY CASCADE;'
+  );
 }
 
 for (const table of TABLES) {
@@ -144,7 +138,7 @@ for (const table of TABLES) {
 
 for (const table of TABLES) {
   await target.query(
-    `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX("id") FROM "${table}"), 1));`,
+    `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX("id") FROM "${table}"), 1));`
   );
 }
 

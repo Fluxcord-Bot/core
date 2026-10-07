@@ -1,9 +1,6 @@
 import { EmbedBuilder as FluxerEmbedBuilder } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
-import {
-  parseDiscordEmojiToFluxer,
-  parseFluxerEmojiToDiscord,
-} from "./EmojiStickerParser.js";
+import { parseDiscordEmojiToFluxer, parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 
 /**
  * @param {DiscordEmbed} embed
@@ -18,18 +15,16 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
     .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
     .addFields(
       ...(await Promise.all(
-        embed.fields.map(async (x) => ({
+        embed.fields.map(async x => ({
           name: x.name,
           value: (await parseDiscordEmojiToFluxer(x.value, fluxerClient)) ?? "",
           inline: x.inline,
-        })),
-      )),
+        }))
+      ))
     );
 
   if (embed.description) {
-    outEmbed = outEmbed.setDescription(
-      await parseDiscordEmojiToFluxer(embed.description, fluxerClient),
-    );
+    outEmbed = outEmbed.setDescription(await parseDiscordEmojiToFluxer(embed.description, fluxerClient));
   }
 
   if (embed.author)
@@ -69,36 +64,28 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
  */
 export async function fluxerEmbedToDiscord(message, discordClient) {
   const content = message.content ?? "";
-  const embeds = (message.embeds ?? []).filter(
-    (embed) => !embed.url || !content.includes(embed.url),
-  );
+  const embeds = (message.embeds ?? []).filter(embed => !embed.url || !content.includes(embed.url));
 
   if (!embeds) return undefined;
 
   const embedsOut = await Promise.all(
-    embeds.map(async (embed) => {
+    embeds.map(async embed => {
       let outEmbed = new DiscordEmbedBuilder()
         .setTitle(embed.title ?? null)
         .setURL(embed.url ?? null)
         .setColor(embed.color ?? null)
         .setTimestamp(embed.timestamp ? Date.parse(embed.timestamp) : null)
-        .setDescription(
-          await parseFluxerEmojiToDiscord(
-            embed.description ?? null,
-            discordClient,
-          ),
-        );
+        .setDescription(await parseFluxerEmojiToDiscord(embed.description ?? null, discordClient));
 
       if (embed.fields) {
         outEmbed = outEmbed.addFields(
           ...(await Promise.all(
-            embed.fields.map(async (x) => ({
+            embed.fields.map(async x => ({
               name: x.name,
-              value:
-                (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "",
+              value: (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "",
               inline: x.inline,
-            })),
-          )),
+            }))
+          ))
         );
       }
 
@@ -117,11 +104,10 @@ export async function fluxerEmbedToDiscord(message, discordClient) {
 
       if (embed.image) outEmbed = outEmbed.setImage(embed.image.url);
 
-      if (embed.thumbnail)
-        outEmbed = outEmbed.setThumbnail(embed.thumbnail.url);
+      if (embed.thumbnail) outEmbed = outEmbed.setThumbnail(embed.thumbnail.url);
 
       return outEmbed;
-    }),
+    })
   );
 
   return embedsOut;

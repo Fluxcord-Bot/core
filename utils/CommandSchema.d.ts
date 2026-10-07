@@ -4,10 +4,7 @@ import {
   Client as DiscordClient,
   User as DiscordUser,
 } from "discord.js";
-import {
-  Message as FluxerMessage,
-  Client as FluxerClient,
-} from "@fluxerjs/core";
+import { Message as FluxerMessage, Client as FluxerClient } from "@fluxerjs/core";
 
 export type SlashOptionDef = {
   name: string;
@@ -50,11 +47,8 @@ export type CommandSchema = {
   additionalInfo?: string;
   run: (
     params: string[],
-    message:
-      | OmitPartialGroupDMChannel<DiscordMessage<boolean>>
-      | FluxerMessage
-      | SlashShimMessage,
+    message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | FluxerMessage | SlashShimMessage,
     discordClient: DiscordClient,
-    fluxerClient: FluxerClient,
+    fluxerClient: FluxerClient
   ) => Promise<void>;
 };

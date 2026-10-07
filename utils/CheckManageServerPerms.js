@@ -20,21 +20,14 @@ export async function checkManageServerPerms(guildId, userId, client) {
 
   let member;
   try {
-    member =
-      client instanceof Client
-        ? await guild.fetchMember(userId)
-        : await guild.members.fetch(userId);
+    member = client instanceof Client ? await guild.fetchMember(userId) : await guild.members.fetch(userId);
   } catch {
     return false;
   }
 
   if (!member) return false;
 
-  return member.permissions.has(
-    client instanceof Client
-      ? PermissionFlags.ManageGuild
-      : PermissionFlagsBits.ManageGuild,
-  );
+  return member.permissions.has(client instanceof Client ? PermissionFlags.ManageGuild : PermissionFlagsBits.ManageGuild);
 }
 
 /**
@@ -55,19 +48,12 @@ export async function checkPingPerms(guildId, userId, client) {
 
   let member;
   try {
-    member =
-      client instanceof Client
-        ? await guild.fetchMember(userId)
-        : await guild.members.fetch(userId);
+    member = client instanceof Client ? await guild.fetchMember(userId) : await guild.members.fetch(userId);
   } catch {
     return false;
   }
 
   if (!member) return false;
 
-  return member.permissions.has(
-    client instanceof Client
-      ? PermissionFlags.MentionEveryone
-      : PermissionFlagsBits.MentionEveryone,
-  );
+  return member.permissions.has(client instanceof Client ? PermissionFlags.MentionEveryone : PermissionFlagsBits.MentionEveryone);
 }

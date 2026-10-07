@@ -92,10 +92,7 @@ export async function resolveUsername(guild, username, discriminator) {
       cacheUser(parsed.user, platform);
       return parsed.member;
     }
-    const full = await fetchMember(
-      guild,
-      parsed.user.userId ?? parsed.user.id,
-    );
+    const full = await fetchMember(guild, parsed.user.userId ?? parsed.user.id);
     if (!full) continue;
     cacheUser(full.user ?? full, platform);
     return full;
@@ -127,7 +124,7 @@ export async function resolveMentions(guild, content) {
     [...wanted].map(async ([key, { username, discriminator }]) => {
       const member = await resolveUsername(guild, username, discriminator);
       return [key, (member?.user ?? member)?.id];
-    }),
+    })
   );
   const resolved = new Map(ids.filter(([, id]) => id));
   if (resolved.size === 0) return content;
@@ -143,16 +140,14 @@ export async function reverseMentions(guild, content) {
   if (!content) return content;
   const platform = platformOf(guild);
   const snowflakeRegex = /<@!?(\d{17,20})>/g;
-  const ids = [
-    ...new Set([...content.matchAll(snowflakeRegex)].map((m) => m[1])),
-  ];
+  const ids = [...new Set([...content.matchAll(snowflakeRegex)].map(m => m[1]))];
   if (ids.length === 0) return content;
 
   const users = await Promise.all(
-    ids.map(async (id) => {
+    ids.map(async id => {
       const member = await resolveId(guild, id);
       return [id, member ? (member.user ?? member) : null];
-    }),
+    })
   );
   const resolved = new Map(users.filter(([, user]) => user));
   if (resolved.size === 0) return content;

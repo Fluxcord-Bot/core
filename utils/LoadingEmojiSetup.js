@@ -17,23 +17,18 @@ export async function ensureLoadingEmojis(discordClient, fluxerClient) {
 
   log("META", "Setting up loading emoji...");
 
-  const loadingRes = await fetch(
-    Config.InternalAssetsPrefixUrl + "/loading.gif",
-    {
-      headers: {
-        "User-Agent": buildExtHttpUserAgent(),
-      },
+  const loadingRes = await fetch(Config.InternalAssetsPrefixUrl + "/loading.gif", {
+    headers: {
+      "User-Agent": buildExtHttpUserAgent(),
     },
-  );
+  });
   if (!loadingRes.ok) {
     throw new Error(`Failed to fetch loading.gif: ${loadingRes.status}`);
   }
   const loadingBuf = Buffer.from(await loadingRes.arrayBuffer());
 
   if (!current.fluxerLoadingEmoji) {
-    const fluxerGuild = await fluxerClient.guilds.fetch(
-      Config.FluxerTempEmojiGuildId,
-    );
+    const fluxerGuild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
     try {
       await fluxerGuild?.createEmojisBulk([
         {
@@ -44,10 +39,7 @@ export async function ensureLoadingEmojis(discordClient, fluxerClient) {
       ]);
     } catch {}
 
-    const fluxerLoadingEmoji = await fluxerClient.resolveEmoji(
-      ":loading:",
-      Config.FluxerTempEmojiGuildId,
-    );
+    const fluxerLoadingEmoji = await fluxerClient.resolveEmoji(":loading:", Config.FluxerTempEmojiGuildId);
     if (fluxerLoadingEmoji) {
       current.fluxerLoadingEmoji = fluxerLoadingEmoji;
     }
@@ -64,7 +56,7 @@ export async function ensureLoadingEmojis(discordClient, fluxerClient) {
 
     if (!discordLoadingEmoji) {
       const existing = await discordClient.application?.emojis.fetch();
-      discordLoadingEmoji ??= existing?.find((e) => e.name === "loading");
+      discordLoadingEmoji ??= existing?.find(e => e.name === "loading");
     }
 
     if (discordLoadingEmoji?.id) {

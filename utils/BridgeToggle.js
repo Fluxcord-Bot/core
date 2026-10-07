@@ -2,10 +2,7 @@ import { ChannelMap, GuildMap } from "../db/index.js";
 
 export async function getBridgeGuildMaps(guildId, guildType) {
   const channelMaps = await ChannelMap.findAll({
-    where:
-      guildType === "discord"
-        ? { discordGuildId: guildId }
-        : { fluxerGuildId: guildId },
+    where: guildType === "discord" ? { discordGuildId: guildId } : { fluxerGuildId: guildId },
     attributes: ["discordGuildId", "fluxerGuildId"],
   });
 
@@ -29,18 +26,16 @@ export async function getBridgeGuildMaps(guildId, guildType) {
 }
 
 export async function isBridgeToggleEnabled(channelMap, field) {
-  const guildIds = [channelMap.discordGuildId, channelMap.fluxerGuildId].filter(
-    Boolean,
-  );
+  const guildIds = [channelMap.discordGuildId, channelMap.fluxerGuildId].filter(Boolean);
   if (guildIds.length === 0) return true;
 
   const guildMaps = await GuildMap.findAll({ where: { guildId: guildIds } });
-  return !guildMaps.some((g) => g.get(field) === false);
+  return !guildMaps.some(g => g.get(field) === false);
 }
 
 export async function applyBridgeToggle(guildId, guildType, field, requested) {
   const guildMaps = await getBridgeGuildMaps(guildId, guildType);
-  const current = !guildMaps.some((g) => g.get(field) === false);
+  const current = !guildMaps.some(g => g.get(field) === false);
   const enabled = requested ?? !current;
 
   if (enabled !== current) {
@@ -53,17 +48,9 @@ export async function applyBridgeToggle(guildId, guildType, field, requested) {
   return { current, enabled, changed: enabled !== current };
 }
 
-export async function applyBridgeValue(
-  guildId,
-  guildType,
-  field,
-  value,
-  neutral,
-) {
+export async function applyBridgeValue(guildId, guildType, field, value, neutral) {
   const guildMaps = await getBridgeGuildMaps(guildId, guildType);
-  const current =
-    guildMaps.find((guildMap) => guildMap.get(field) !== neutral)?.get(field) ??
-    neutral;
+  const current = guildMaps.find(guildMap => guildMap.get(field) !== neutral)?.get(field) ?? neutral;
 
   const changed = value !== undefined && value !== current;
   if (changed) {

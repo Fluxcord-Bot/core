@@ -6,7 +6,7 @@ const failuresByGuild = new Map();
 
 function pruneFailures(guildId) {
   const cutoff = Date.now() - FAILURE_WINDOW_MS;
-  const times = (failuresByGuild.get(guildId) ?? []).filter((t) => t > cutoff);
+  const times = (failuresByGuild.get(guildId) ?? []).filter(t => t > cutoff);
   if (times.length > 0) {
     failuresByGuild.set(guildId, times);
   } else {
@@ -16,10 +16,7 @@ function pruneFailures(guildId) {
 
 export function recordBridgeFailure(guildId) {
   pruneFailures(guildId);
-  failuresByGuild.set(guildId, [
-    ...(failuresByGuild.get(guildId) ?? []),
-    Date.now(),
-  ]);
+  failuresByGuild.set(guildId, [...(failuresByGuild.get(guildId) ?? []), Date.now()]);
 }
 
 export function resetBridgeHealth(guildId) {

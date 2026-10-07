@@ -1,10 +1,6 @@
 import { DataTypes, QueryInterface } from "sequelize";
 
-export async function up({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function up({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.addIndex("ChannelMaps", ["discordChannelId"]);
   await queryInterface.addIndex("ChannelMaps", ["fluxerChannelId"]);
 
@@ -23,11 +19,7 @@ export async function up({
   await queryInterface.sequelize.query("ANALYZE;");
 }
 
-export async function down({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function down({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.removeIndex("ChannelMaps", ["discordChannelId"]);
   await queryInterface.removeIndex("ChannelMaps", ["fluxerChannelId"]);
   await queryInterface.removeIndex("MessageMaps", ["discordMessageId"]);

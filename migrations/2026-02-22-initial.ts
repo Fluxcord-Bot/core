@@ -1,10 +1,6 @@
 import { DataTypes, QueryInterface } from "sequelize";
 
-export async function up({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function up({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.createTable("ChannelMaps", {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     discordGuildId: { type: DataTypes.STRING, allowNull: false },
@@ -46,11 +42,7 @@ export async function up({
   });
 }
 
-export async function down({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function down({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.dropTable("MessageMaps");
   await queryInterface.dropTable("ChannelMaps");
 }

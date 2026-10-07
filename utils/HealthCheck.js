@@ -17,10 +17,7 @@ export function setupHealthcheck(discordClient, fluxerClient) {
   const server = http.createServer((req, res) => {
     const url = (req.url || "/").split("?")[0];
 
-    if (
-      req.method !== "GET" ||
-      (url !== "/health" && url !== "/live" && url !== "/ready")
-    ) {
+    if (req.method !== "GET" || (url !== "/health" && url !== "/live" && url !== "/ready")) {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "not_found" }));
       return;
@@ -39,11 +36,11 @@ export function setupHealthcheck(discordClient, fluxerClient) {
         fluxer: fluxerOnline ? "online" : "offline",
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
-      }),
+      })
     );
   });
 
-  server.on("error", (err) => {
+  server.on("error", err => {
     log("META", `Healthcheck server failed on ${host}:${port}:`, err);
   });
 

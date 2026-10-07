@@ -8,10 +8,7 @@
 export function sanitizePings(content, userHasPingPerms = false) {
   let res = content;
 
-  if (!userHasPingPerms)
-    res = content
-      .replaceAll("@everyone", "@\u200beveryone")
-      .replaceAll("@here", "@\u200bhere");
+  if (!userHasPingPerms) res = content.replaceAll("@everyone", "@\u200beveryone").replaceAll("@here", "@\u200bhere");
 
   return res;
 }

@@ -23,44 +23,34 @@ const command = {
     });
 
     const mappedChannels = await Promise.all(
-      allBridgedChannels.map(async (x) => {
+      allBridgedChannels.map(async x => {
         const data = x.dataValues;
 
-        const [discordGuild, discordChannel, fluxerChannel, fluxerGuild] =
-          await Promise.allSettled([
-            discordClient.guilds.fetch(data.discordGuildId),
-            discordClient.channels.fetch(data.discordChannelId),
-            fluxerClient.channels.fetch(data.fluxerChannelId),
-            fluxerClient.guilds.fetch(data.fluxerGuildId),
-          ]);
+        const [discordGuild, discordChannel, fluxerChannel, fluxerGuild] = await Promise.allSettled([
+          discordClient.guilds.fetch(data.discordGuildId),
+          discordClient.channels.fetch(data.discordChannelId),
+          fluxerClient.channels.fetch(data.fluxerChannelId),
+          fluxerClient.guilds.fetch(data.fluxerGuildId),
+        ]);
 
         return {
           ...data,
-          discordGuild:
-            discordGuild.status === "fulfilled"
-              ? discordGuild.value
-              : undefined,
-          discordChannel:
-            discordChannel.status === "fulfilled"
-              ? discordChannel.value
-              : undefined,
-          fluxerChannel:
-            fluxerChannel.status === "fulfilled" ? fluxerChannel.value : null,
-          fluxerGuild:
-            fluxerGuild.status === "fulfilled" ? fluxerGuild.value : null,
+          discordGuild: discordGuild.status === "fulfilled" ? discordGuild.value : undefined,
+          discordChannel: discordChannel.status === "fulfilled" ? discordChannel.value : undefined,
+          fluxerChannel: fluxerChannel.status === "fulfilled" ? fluxerChannel.value : null,
+          fluxerGuild: fluxerGuild.status === "fulfilled" ? fluxerGuild.value : null,
         };
-      }),
+      })
     );
 
-    const bridgeArrow = (type) =>
-      type === "both" ? "<->" : type === "fluxer2discord" ? "-->" : "<--";
+    const bridgeArrow = type => (type === "both" ? "<->" : type === "fluxer2discord" ? "-->" : "<--");
 
     const str = mappedChannels
       .map(
-        (x) =>
+        x =>
           `${x.fluxerChannel?.name ?? "unknown"} (${x.fluxerChannelId}) on ${x.fluxerGuild?.name ?? "unknown"} (${x.fluxerGuildId}) ` +
           `${bridgeArrow(x.bridgeType)} ` +
-          `${x.discordChannel?.name ?? "unknown"} (${x.discordChannelId}) on ${x.discordGuild?.name ?? "unknown"} (${x.discordGuildId})`,
+          `${x.discordChannel?.name ?? "unknown"} (${x.discordChannelId}) on ${x.discordGuild?.name ?? "unknown"} (${x.discordGuildId})`
       )
       .join("\n");
 

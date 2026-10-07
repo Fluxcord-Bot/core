@@ -1,7 +1,9 @@
 # Fluxcord
+
 A set-and-forget Discord <-> Fluxer bridge.
 
 ## Features
+
 - Basic message bridging
 - Voice bridging (in very alpha)
 - Edit/Delete bridging
@@ -11,20 +13,24 @@ A set-and-forget Discord <-> Fluxer bridge.
 - Attachment bridging
 - Pins bridging
 - Bulk deletion bridging
-- *others soon*
+- _others soon_
 
-## Self hosted setup 
+## Self hosted setup
+
 Check https://fluxcord.jbcrn.dev/self-hosting for self hosting docs
 
 ## Development
+
 Firstly, this requires both Node.js and PNPM installed.
 
 **Do not pull this repo directly.** Instead, pull the Fluxcord Dev repository:
+
 ```
 git pull https://git.gay/Fluxcord/dev Fluxcord
 ```
 
 then initialize it:
+
 ```bash
 cd Fluxcord
 pnpm run init

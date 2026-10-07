@@ -25,9 +25,13 @@ wss.on("connection", (ws, req) => {
     return;
   }
   runners.set(ws, { region: "" });
-  ws.on("message", (data) => {
+  ws.on("message", data => {
     let msg;
-    try { msg = JSON.parse(data.toString()); } catch { return; }
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
     if (msg.type === "hello") {
       const meta = runners.get(ws);
       if (meta) meta.region = msg.region ?? "";
@@ -45,8 +49,7 @@ wss.on("connection", (ws, req) => {
       channelRunner.delete(msg.channelId);
       pendingSpawns.delete(msg.channelId);
       h.onExit(msg.code);
-    }
-    else if (msg.type === "error") h.onError(msg.message);
+    } else if (msg.type === "error") h.onError(msg.message);
     else if (msg.type === "busy") {
       const req = pendingSpawns.get(msg.channelId);
       channelRunner.delete(msg.channelId);

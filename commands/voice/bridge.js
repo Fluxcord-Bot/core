@@ -62,9 +62,7 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
       where: { discordGuildId: discordChannel.guildId, fluxerGuildId: fluxerChannel.guildId },
     });
     if (!guildBridge) {
-      await message.reply(
-        "These guilds are not bridged. Set up a text channel bridge between them first.",
-      );
+      await message.reply("These guilds are not bridged. Set up a text channel bridge between them first.");
       return;
     }
 
@@ -81,9 +79,7 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
       fluxerChannelId,
     });
 
-    await message.reply(
-      `Voice bridge created: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``,
-    );
+    await message.reply(`Voice bridge created: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``);
   },
 };
 

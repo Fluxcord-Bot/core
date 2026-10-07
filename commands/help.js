@@ -9,8 +9,7 @@ import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
  * @param {string} prefix
  */
 function usage(cmd, prefix) {
-  const grp =
-    cmd.groupNames && cmd.groupNames.length > 0 ? cmd.groupNames[0] + " " : "";
+  const grp = cmd.groupNames && cmd.groupNames.length > 0 ? cmd.groupNames[0] + " " : "";
   return `${prefix}${grp}${cmd.name}${cmd.params ? " " + cmd.params : ""}`;
 }
 
@@ -22,12 +21,10 @@ function genAliases(cmd, prefix) {
   const forms = [];
   if (cmd.groupNames && cmd.groupNames.length > 0) {
     forms.push(`\`${prefix}${cmd.groupNames[0]} ${cmd.name}\``);
-    cmd.aliases?.forEach((x) =>
-      forms.push(`\`${prefix}${cmd.groupNames[0]} ${x}\``),
-    );
-    cmd.topLevelAliases?.forEach((x) => forms.push(`\`${prefix}${x}\``));
+    cmd.aliases?.forEach(x => forms.push(`\`${prefix}${cmd.groupNames[0]} ${x}\``));
+    cmd.topLevelAliases?.forEach(x => forms.push(`\`${prefix}${x}\``));
   } else if (cmd.aliases && cmd.aliases.length > 0) {
-    cmd.aliases.forEach((x) => forms.push(`\`${prefix}${x}\``));
+    cmd.aliases.forEach(x => forms.push(`\`${prefix}${x}\``));
   }
   return forms.join(", ");
 }
@@ -46,12 +43,11 @@ const command = {
     const prefix = await getGuildPrefix(message.guildId ?? "");
     if (params[0]) {
       const command = (await getCommands()).find(
-        (x) =>
+        x =>
           x.name === params[0] ||
           x.aliases?.includes(params[0]) ||
           x.topLevelAliases?.includes(params[0]) ||
-          (x.groupNames?.includes(params[0]) &&
-            (x.name === params[1] || x.aliases?.includes(params[1]))),
+          (x.groupNames?.includes(params[0]) && (x.name === params[1] || x.aliases?.includes(params[1])))
       );
       if (command && !command.hideFromHelp) {
         const aliases = genAliases(command, prefix);
@@ -63,16 +59,14 @@ const command = {
               .setDescription(
                 (aliases ? `Aliases: ${aliases}\n` : "") +
                   command.description +
-                  (command.additionalInfo
-                    ? `\n\n` + command.additionalInfo
-                    : ""),
+                  (command.additionalInfo ? `\n\n` + command.additionalInfo : "")
               )
               .setFooter(
                 Config.EmbedFooterContent
                   ? {
                       text: Config.EmbedFooterContent,
                     }
-                  : null,
+                  : null
               ),
           ],
         });
@@ -82,23 +76,17 @@ const command = {
         });
       }
     } else {
-      const isUserBotAdmin = Config.AdminAccountIds.find(
-        (x) => x === message.author.id,
-      );
-      const isUserGuildAdmin = await checkManageServerPerms(
-        message.guildId ?? "",
-        message.author.id,
-        message.client,
-      );
+      const isUserBotAdmin = Config.AdminAccountIds.find(x => x === message.author.id);
+      const isUserGuildAdmin = await checkManageServerPerms(message.guildId ?? "", message.author.id, message.client);
 
-      let cmds = (await getCommands()).filter((x) => !x.hideFromHelp);
+      let cmds = (await getCommands()).filter(x => !x.hideFromHelp);
 
       if (!isUserBotAdmin) {
-        cmds = cmds.filter((x) => !x.requireOwner);
+        cmds = cmds.filter(x => !x.requireOwner);
       }
 
       if (!isUserGuildAdmin) {
-        cmds = cmds.filter((x) => !x.requireElevated);
+        cmds = cmds.filter(x => !x.requireElevated);
       }
 
       cmds = [...cmds].sort((a, b) => a.name.localeCompare(b.name));
@@ -108,10 +96,7 @@ const command = {
       /** @type {import('../utils/CommandSchema.d.ts').CommandSchema[]} */
       const ungrouped = [];
       for (const cmd of cmds) {
-        const grp =
-          cmd.groupNames && cmd.groupNames.length > 0
-            ? cmd.groupNames[0]
-            : undefined;
+        const grp = cmd.groupNames && cmd.groupNames.length > 0 ? cmd.groupNames[0] : undefined;
         if (grp) {
           if (!grouped.has(grp)) grouped.set(grp, []);
           grouped.get(grp).push(cmd);
@@ -122,17 +107,12 @@ const command = {
 
       /** @type {{ name: string, value: string, inline: boolean }[]} */
       const fields = [];
-      for (const [grp, list] of [...grouped.entries()].sort((a, b) =>
-        a[0].localeCompare(b[0]),
-      )) {
+      for (const [grp, list] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
         fields.push({
           name: `${prefix}${grp}`,
           value: list
-            .map((x) => {
-              const bare =
-                x.topLevelAliases && x.topLevelAliases.length > 0
-                  ? ` (or \`${prefix}${x.topLevelAliases[0]}\`)`
-                  : "";
+            .map(x => {
+              const bare = x.topLevelAliases && x.topLevelAliases.length > 0 ? ` (or \`${prefix}${x.topLevelAliases[0]}\`)` : "";
               return `\`${prefix}${grp} ${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}${bare}`;
             })
             .join("\n"),
@@ -142,12 +122,7 @@ const command = {
       if (ungrouped.length > 0) {
         fields.push({
           name: "general",
-          value: ungrouped
-            .map(
-              (x) =>
-                `\`${prefix}${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}`,
-            )
-            .join("\n"),
+          value: ungrouped.map(x => `\`${prefix}${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}`).join("\n"),
           inline: false,
         });
       }
@@ -158,7 +133,7 @@ const command = {
           new EmbedBuilder()
             .setTitle("Fluxcord")
             .setDescription(
-              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`,
+              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`
             )
             .addFields(...fields)
             .setFooter(
@@ -166,7 +141,7 @@ const command = {
                 ? {
                     text: Config.EmbedFooterContent,
                   }
-                : null,
+                : null
             ),
         ],
       });

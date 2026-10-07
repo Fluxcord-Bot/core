@@ -1,11 +1,6 @@
 //@ts-check
 import { Events as FluxerEvents, Client as FluxerClient } from "@fluxerjs/core";
-import {
-  Client as DiscordClient,
-  Events as DiscordEvents,
-  GatewayIntentBits,
-  Partials,
-} from "discord.js";
+import { Client as DiscordClient, Events as DiscordEvents, GatewayIntentBits, Partials } from "discord.js";
 import Config from "./utils/ConfigHandler.js";
 import {
   FluxerBulkDeleteMessageHandler,
@@ -30,15 +25,8 @@ import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
 import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
-import {
-  registerDiscordCommands,
-  setupDiscordCommands,
-} from "./utils/DiscordCommands.js";
-import {
-  buildDiscordUserAgentSuffix,
-  buildExtHttpUserAgent,
-  buildFluxerUserAgent,
-} from "./utils/UserAgent.js";
+import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
+import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
 
 const discordClient = new DiscordClient({
   rest: {
@@ -77,7 +65,7 @@ const fluxerClient = new FluxerClient({
   },
 });
 
-fluxerClient.on(FluxerEvents.Error, (error) => {
+fluxerClient.on(FluxerEvents.Error, error => {
   log("FLUXER", error);
 });
 
@@ -92,14 +80,14 @@ async function destroyChannelMaps(where) {
   if (channelMaps.length > 0) {
     await MessageMap.destroy({
       where: {
-        channelMapId: channelMaps.map((c) => c.get("id")),
+        channelMapId: channelMaps.map(c => c.get("id")),
       },
     });
   }
   await ChannelMap.destroy({ where });
 }
 
-discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
+discordClient.on(DiscordEvents.GuildDelete, async guild => {
   if (!guild.available) return;
 
   try {
@@ -114,7 +102,7 @@ discordClient.on(DiscordEvents.GuildDelete, async (guild) => {
   }
 });
 
-discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
+discordClient.on(DiscordEvents.ChannelDelete, async chnl => {
   try {
     await destroyChannelMaps({ discordChannelId: chnl.id });
   } catch (e) {
@@ -122,7 +110,7 @@ discordClient.on(DiscordEvents.ChannelDelete, async (chnl) => {
   }
 });
 
-discordClient.on(DiscordEvents.ThreadDelete, async (thread) => {
+discordClient.on(DiscordEvents.ThreadDelete, async thread => {
   try {
     await destroyChannelMaps({ discordChannelId: thread.id });
   } catch (e) {
@@ -130,7 +118,7 @@ discordClient.on(DiscordEvents.ThreadDelete, async (thread) => {
   }
 });
 
-discordClient.on(DiscordEvents.TypingStart, async (type) => {
+discordClient.on(DiscordEvents.TypingStart, async type => {
   if (type.user.id === discordClient.user?.id) return;
 
   try {
@@ -140,15 +128,11 @@ discordClient.on(DiscordEvents.TypingStart, async (type) => {
       },
     });
 
-    if (
-      !channelMap ||
-      !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))
-    )
-      return;
+    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
     const channel = await fluxerClient.channels.fetch(
       //@ts-expect-error
-      channelMap.fluxerChannelId,
+      channelMap.fluxerChannelId
     );
     await channel.sendTyping();
   } catch (e) {
@@ -156,7 +140,7 @@ discordClient.on(DiscordEvents.TypingStart, async (type) => {
   }
 });
 
-discordClient.on(DiscordEvents.MessageCreate, async (msg) => {
+discordClient.on(DiscordEvents.MessageCreate, async msg => {
   if (msg.author.id === discordClient.user?.id) return;
   try {
     await DiscordCreateMessageHandler(msg, discordClient, fluxerClient);
@@ -173,7 +157,7 @@ discordClient.on(DiscordEvents.MessageUpdate, async (oldMsg, newMsg) => {
   }
 });
 
-discordClient.on(DiscordEvents.MessageDelete, async (msg) => {
+discordClient.on(DiscordEvents.MessageDelete, async msg => {
   try {
     await DiscordDeleteMessageHandler(msg, fluxerClient);
   } catch (e) {
@@ -181,7 +165,7 @@ discordClient.on(DiscordEvents.MessageDelete, async (msg) => {
   }
 });
 
-discordClient.on(DiscordEvents.MessageBulkDelete, async (msgs) => {
+discordClient.on(DiscordEvents.MessageBulkDelete, async msgs => {
   try {
     await DiscordBulkDeleteMessageHandler(msgs, fluxerClient);
   } catch (e) {
@@ -189,7 +173,7 @@ discordClient.on(DiscordEvents.MessageBulkDelete, async (msgs) => {
   }
 });
 
-discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
+discordClient.on(DiscordEvents.ChannelPinsUpdate, async channel => {
   try {
     await DiscordPinsUpdateHandler(channel, fluxerClient);
   } catch (e) {
@@ -208,7 +192,7 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async (channel) => {
 //   })
 // })
 
-fluxerClient.on(FluxerEvents.ChannelDelete, async (chnl) => {
+fluxerClient.on(FluxerEvents.ChannelDelete, async chnl => {
   try {
     await destroyChannelMaps({ fluxerChannelId: chnl.id });
   } catch (e) {
@@ -216,7 +200,7 @@ fluxerClient.on(FluxerEvents.ChannelDelete, async (chnl) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.MessageCreate, async (msg) => {
+fluxerClient.on(FluxerEvents.MessageCreate, async msg => {
   try {
     if (msg.author.id === fluxerClient.user?.id) return;
     await FluxerCreateMessageHandler(msg, fluxerClient, discordClient);
@@ -235,7 +219,7 @@ fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
     }
   }
 });
-fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
+fluxerClient.on(FluxerEvents.MessageDelete, async msg => {
   try {
     await FluxerDeleteMessageHandler(msg, discordClient, fluxerClient);
   } catch (e) {
@@ -243,7 +227,7 @@ fluxerClient.on(FluxerEvents.MessageDelete, async (msg) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.MessageDeleteBulk, async (msgs) => {
+fluxerClient.on(FluxerEvents.MessageDeleteBulk, async msgs => {
   try {
     await FluxerBulkDeleteMessageHandler(msgs, discordClient);
   } catch (e) {
@@ -251,7 +235,7 @@ fluxerClient.on(FluxerEvents.MessageDeleteBulk, async (msgs) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
+fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async chnl => {
   try {
     await FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient);
   } catch (e) {
@@ -259,7 +243,7 @@ fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async (chnl) => {
   }
 });
 
-fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
+fluxerClient.on(FluxerEvents.TypingStart, async type => {
   if (type.userId === fluxerClient.user?.id) return;
 
   try {
@@ -269,15 +253,11 @@ fluxerClient.on(FluxerEvents.TypingStart, async (type) => {
       },
     });
 
-    if (
-      !channelMap ||
-      !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))
-    )
-      return;
+    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
     const channel = await discordClient.channels.fetch(
       //@ts-expect-error
-      channelMap.discordChannelId,
+      channelMap.discordChannelId
     );
     if (channel && channel.isSendable()) await channel.sendTyping();
   } catch (e) {
@@ -324,35 +304,27 @@ function isRecoverableRuntimeError(error) {
     "Missing Access",
     "You don't have the permissions",
     "_RateLimitError",
-  ].some((needle) => message.includes(needle));
+  ].some(needle => message.includes(needle));
 }
 
 async function onBothReady() {
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
     try {
-      const replyLRes = await fetch(
-        Config.InternalAssetsPrefixUrl + "/reply-l.webp",
-        {
-          headers: {
-            "User-Agent": buildExtHttpUserAgent(),
-          },
+      const replyLRes = await fetch(Config.InternalAssetsPrefixUrl + "/reply-l.webp", {
+        headers: {
+          "User-Agent": buildExtHttpUserAgent(),
         },
-      );
-      const replyRRes = await fetch(
-        Config.InternalAssetsPrefixUrl + "/reply-r.webp",
-        {
-          headers: {
-            "User-Agent": buildExtHttpUserAgent(),
-          },
+      });
+      const replyRRes = await fetch(Config.InternalAssetsPrefixUrl + "/reply-r.webp", {
+        headers: {
+          "User-Agent": buildExtHttpUserAgent(),
         },
-      );
+      });
       const replyL = Buffer.from(await replyLRes.arrayBuffer());
       const replyR = Buffer.from(await replyRRes.arrayBuffer());
 
-      const fluxerGuild = await fluxerClient.guilds.fetch(
-        Config.FluxerTempEmojiGuildId,
-      );
+      const fluxerGuild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
       try {
         await fluxerGuild?.createEmojisBulk([
           {
@@ -368,14 +340,8 @@ async function onBothReady() {
         ]);
       } catch {}
 
-      const fluxerEmojiReplyL = await fluxerClient.resolveEmoji(
-        ":reply_l:",
-        Config.FluxerTempEmojiGuildId,
-      );
-      const fluxerEmojiReplyR = await fluxerClient.resolveEmoji(
-        ":reply_r:",
-        Config.FluxerTempEmojiGuildId,
-      );
+      const fluxerEmojiReplyL = await fluxerClient.resolveEmoji(":reply_l:", Config.FluxerTempEmojiGuildId);
+      const fluxerEmojiReplyR = await fluxerClient.resolveEmoji(":reply_r:", Config.FluxerTempEmojiGuildId);
 
       let discordEmojiReplyL;
       try {
@@ -395,15 +361,14 @@ async function onBothReady() {
 
       if (!discordEmojiReplyL || !discordEmojiReplyR) {
         const existing = await discordClient.application?.emojis.fetch();
-        discordEmojiReplyL ??= existing?.find((e) => e.name === "reply_l");
-        discordEmojiReplyR ??= existing?.find((e) => e.name === "reply_r");
+        discordEmojiReplyL ??= existing?.find(e => e.name === "reply_l");
+        discordEmojiReplyR ??= existing?.find(e => e.name === "reply_r");
       }
 
       fs.writeFileSync(
         Config.DataFolderPath + "/fluxcord.json",
         JSON.stringify({
-          autoGenerated:
-            "This file is automatically generated by Fluxcord. Please do not touch it!",
+          autoGenerated: "This file is automatically generated by Fluxcord. Please do not touch it!",
           fluxerReplyEmoji: {
             replyL: fluxerEmojiReplyL,
             replyR: fluxerEmojiReplyR,
@@ -412,7 +377,7 @@ async function onBothReady() {
             replyL: discordEmojiReplyL?.id,
             replyR: discordEmojiReplyR?.id,
           },
-        }),
+        })
       );
       log("META", "First time setup done! Enjoy using the bot!");
     } catch (e) {
@@ -430,10 +395,7 @@ async function onBothReady() {
     }
   } else {
     try {
-      const r = fs.readFileSync(
-        Config.DataFolderPath + "/fluxcord.json",
-        "utf-8",
-      );
+      const r = fs.readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8");
       const t = JSON.parse(r);
       if (
         !t.fluxerReplyEmoji ||
@@ -463,18 +425,14 @@ async function onBothReady() {
   try {
     await ensureLoadingEmojis(discordClient, fluxerClient);
   } catch (e) {
-    log(
-      "META",
-      "Loading emoji setup failed, early bridge placeholders will use fallback markers.",
-      e,
-    );
+    log("META", "Loading emoji setup failed, early bridge placeholders will use fallback markers.", e);
   }
 
   if (
     Config.Motds &&
     ((Config.Motds.length > 0 &&
       // @ts-ignore
-      Config.Motds.every((x) => !!x)) ||
+      Config.Motds.every(x => !!x)) ||
       // @ts-ignore
       Config.Motds === "nontrinsic")
   ) {
@@ -482,7 +440,7 @@ async function onBothReady() {
       async () => {
         await motdLoop();
       },
-      10 * 60 * 1000,
+      10 * 60 * 1000
     );
     await motdLoop();
   }
@@ -501,10 +459,7 @@ async function onBothReady() {
 }
 
 fluxerClient.on(FluxerEvents.Ready, async () => {
-  log(
-    "FLUXER",
-    `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`,
-  );
+  log("FLUXER", `${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`);
 
   fluxerClient.user?.setPresence({
     status: "online",
@@ -526,22 +481,17 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
     log("DISCORD", "Failed to register application commands:", e);
   }
 
-  discordClient.user?.setActivity(
-    `${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`,
-  );
+  discordClient.user?.setActivity(`${Config.BotPrefix}help | bridging ${maps.length} channel${maps.length > 1 ? "s" : ""}`);
 
   discordReady = true;
   if (fluxerReady) onBothReady();
 });
 
-process.on("uncaughtException", (error) => {
+process.on("uncaughtException", error => {
   log("META", "A uncaught exception occurred.", error);
 
   if (isRecoverableRuntimeError(error)) {
-    log(
-      "META",
-      "Ignoring recoverable runtime error and keeping the process alive.",
-    );
+    log("META", "Ignoring recoverable runtime error and keeping the process alive.");
     return;
   }
 
@@ -564,10 +514,7 @@ process.on(
     log("META", "A unhandled rejection occurred.", reason);
 
     if (isRecoverableRuntimeError(reason)) {
-      log(
-        "META",
-        "Ignoring recoverable runtime rejection and keeping the process alive.",
-      );
+      log("META", "Ignoring recoverable runtime rejection and keeping the process alive.");
       return;
     }
 
@@ -580,13 +527,11 @@ process.on(
     } catch {}
 
     process.exit(1);
-  },
+  }
 );
 
 /** @type {string[]} */
-const discordVoiceTokens = Array.isArray(Config.DiscordVoiceTokens)
-  ? Config.DiscordVoiceTokens.filter(Boolean)
-  : [];
+const discordVoiceTokens = Array.isArray(Config.DiscordVoiceTokens) ? Config.DiscordVoiceTokens.filter(Boolean) : [];
 /** @type {import("discord.js").Client[]} */
 export const discordVoiceClients = [];
 for (const [i, token] of discordVoiceTokens.entries()) {
@@ -595,12 +540,9 @@ for (const [i, token] of discordVoiceTokens.entries()) {
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
   });
   voiceClient.on(DiscordEvents.ClientReady, () => {
-    log(
-      "DISCORD",
-      `Voice client ${i + 1}/${discordVoiceTokens.length} ready as ${voiceClient.user?.tag}`,
-    );
+    log("DISCORD", `Voice client ${i + 1}/${discordVoiceTokens.length} ready as ${voiceClient.user?.tag}`);
   });
-  voiceClient.login(token).catch((e) => {
+  voiceClient.login(token).catch(e => {
     log("DISCORD", `Voice client ${i + 1} failed to login`, e);
   });
   discordVoiceClients.push(voiceClient);
@@ -631,18 +573,12 @@ function checkIfFluxerConnected() {
 
 async function loadNontrinsic(maxLen = 128) {
   try {
-    log(
-      "DEBUG",
-      "Trying to fetch nonsense from endpoint /api/v1/nonsense/random, hostname nontrinsic.linerly.xyz",
-    );
-    const req = await fetch(
-      "https://nontrinsic.linerly.xyz/api/v1/nonsense/random",
-      {
-        headers: {
-          "User-Agent": buildExtHttpUserAgent(),
-        },
+    log("DEBUG", "Trying to fetch nonsense from endpoint /api/v1/nonsense/random, hostname nontrinsic.linerly.xyz");
+    const req = await fetch("https://nontrinsic.linerly.xyz/api/v1/nonsense/random", {
+      headers: {
+        "User-Agent": buildExtHttpUserAgent(),
       },
-    );
+    });
     if (!req.ok) {
       log("DEBUG", `Fetch failed (code ${req.status}), skipping MOTD rotation`);
       return undefined;
@@ -651,20 +587,12 @@ async function loadNontrinsic(maxLen = 128) {
     /** @type {string} */
     // @ts-expect-error
     const nonsense = json.nonsense;
-    if (
-      nonsense.length > maxLen ||
-      /\$.+\$/.test(nonsense) ||
-      /\$\{.+\\}/.test(nonsense) ||
-      /\:.+\:/.test(nonsense)
-    ) {
+    if (nonsense.length > maxLen || /\$.+\$/.test(nonsense) || /\$\{.+\\}/.test(nonsense) || /\:.+\:/.test(nonsense)) {
       return await loadNontrinsic(maxLen);
     }
     return nonsense;
   } catch {
-    log(
-      "DEBUG",
-      `Fetch failed (probably the fetch function threw), skipping MOTD rotation`,
-    );
+    log("DEBUG", `Fetch failed (probably the fetch function threw), skipping MOTD rotation`);
   }
 }
 

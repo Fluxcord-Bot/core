@@ -5,11 +5,7 @@ import { cloudUploadAttachments } from "./CloudUpload.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
-import {
-  parseFluxerEmojiToDiscord,
-  removeLinkEmbeds,
-  traverseMessageLinks,
-} from "./EmojiStickerParser.js";
+import { parseFluxerEmojiToDiscord, removeLinkEmbeds, traverseMessageLinks } from "./EmojiStickerParser.js";
 import { fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
@@ -17,23 +13,15 @@ import { log } from "./Logger.js";
 import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
-import {
-  isFluxerSpoilerAttachment,
-  toDiscordSpoilerFilename,
-} from "./SpoilerAttachments.js";
+import { isFluxerSpoilerAttachment, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
 import { isBridgeToggleEnabled } from "./BridgeToggle.js";
-import {
-  indicatorPrefix,
-  resolveNameIndicator,
-  withIndicator,
-} from "./NameIndicator.js";
+import { indicatorPrefix, resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { resolveDiscordThreadId } from "./DiscordThreadResolver.js";
 import { processSticker } from "./StickerProcessor.js";
 import { maybePublishDiscordMessage } from "./AnnouncementPublish.js";
-
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -60,14 +48,10 @@ async function getFluxerAvatarURL(user, member) {
     return user.avatarURL() ?? undefined;
   }
 
-  const mediaBase =
-    (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
-    Config.FluxerCDNBaseURL;
+  const mediaBase = (await getFluxerMediaBaseUrl().catch(() => undefined)) ?? Config.FluxerCDNBaseURL;
   const cdnBase = mediaBase.replace(/\/$/, "");
   const extension = avatar.startsWith("a_") ? "gif" : "webp";
-  const path = member?.avatar
-    ? `guilds/${member.guild.id}/users/${user.id}/avatars`
-    : `avatars/${user.id}`;
+  const path = member?.avatar ? `guilds/${member.guild.id}/users/${user.id}/avatars` : `avatars/${user.id}`;
 
   return `${cdnBase}/${path}/${avatar}.${extension}?size=160`;
 }
@@ -77,16 +61,12 @@ function isFluxerMessageNotFoundError(error) {
     error?.code === "MESSAGE_NOT_FOUND" ||
     error?.code === "UNKNOWN_MESSAGE" ||
     error?.statusCode === 404 ||
-    (error?.cause?.statusCode === 404 &&
-      /message .* not found/i.test(error?.message ?? ""))
+    (error?.cause?.statusCode === 404 && /message .* not found/i.test(error?.message ?? ""))
   );
 }
 
 function isDiscordUnknownMessageError(error) {
-  return (
-    error?.code === 10008 ||
-    (error?.status === 404 && /unknown message/i.test(error?.message ?? ""))
-  );
+  return error?.code === 10008 || (error?.status === 404 && /unknown message/i.test(error?.message ?? ""));
 }
 
 const earlyBridgeEmojiThreshold = 3;
@@ -102,39 +82,25 @@ function countCustomEmojis(content) {
  * @param {import("@fluxerjs/core").Client} client
  * @param {import("discord.js").Client} discordClient
  */
-export async function FluxerCreateMessageHandler(
-  message,
-  client,
-  discordClient,
-  forceGuildId = null,
-) {
+export async function FluxerCreateMessageHandler(message, client, discordClient, forceGuildId = null) {
   log(
     "DEBUG",
-    `FluxerCreate received id=${message.id} channelId=${message.channelId} guildId=${forceGuildId ?? message.guildId} authorId=${message.author?.id} type=${message.type} hasReference=${Boolean(message.messageReference)}`,
+    `FluxerCreate received id=${message.id} channelId=${message.channelId} guildId=${forceGuildId ?? message.guildId} authorId=${message.author?.id} type=${message.type} hasReference=${Boolean(message.messageReference)}`
   );
   cacheUser(message.author);
 
-  if (!fluxcordBotEmojiCfg)
-    fluxcordBotEmojiCfg = JSON.parse(
-      readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"),
-    );
+  if (!fluxcordBotEmojiCfg) fluxcordBotEmojiCfg = JSON.parse(readFileSync(Config.DataFolderPath + "/fluxcord.json", "utf-8"));
 
   const guildId = forceGuildId || message.guildId;
 
   if (!guildId || message.type === 6) {
-    log(
-      "DEBUG",
-      `FluxerCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`,
-    );
+    log("DEBUG", `FluxerCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`);
     return;
   }
 
   const guildPrefix = await getGuildPrefix(guildId);
   if (message.content.startsWith(guildPrefix)) {
-    log(
-      "DEBUG",
-      `FluxerCreate id=${message.id} isCommand=${!forceGuildId}`,
-    );
+    log("DEBUG", `FluxerCreate id=${message.id} isCommand=${!forceGuildId}`);
     if (forceGuildId) return;
     CommandHandler(message, discordClient, client);
     return;
@@ -150,10 +116,7 @@ export async function FluxerCreateMessageHandler(
   });
 
   if (channelMapViaUserId) {
-    log(
-      "DEBUG",
-      `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=webhookAuthor`,
-    );
+    log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=webhookAuthor`);
     return;
   }
 
@@ -167,7 +130,7 @@ export async function FluxerCreateMessageHandler(
   if (channelMap?.bridgeType === "discord2fluxer") {
     log(
       "DEBUG",
-      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=oneWayBridge bridgeType=${channelMap.bridgeType}`,
+      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=oneWayBridge bridgeType=${channelMap.bridgeType}`
     );
     return;
   }
@@ -202,15 +165,12 @@ export async function FluxerCreateMessageHandler(
   if (!channelMap || channelMap.fluxerWebhookId === message.webhookId) {
     log(
       "DEBUG",
-      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=${!channelMap ? "noChannelMap" : "webhookEcho"} webhookId=${message.webhookId ?? "none"}`,
+      `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=${!channelMap ? "noChannelMap" : "webhookEcho"} webhookId=${message.webhookId ?? "none"}`
     );
     return;
   }
 
-  const nameIndicator = await resolveNameIndicator(
-    channelMap.discordGuildId,
-    guildId,
-  );
+  const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, guildId);
 
   const userJoin =
     message.type === 7
@@ -219,12 +179,10 @@ export async function FluxerCreateMessageHandler(
 
   log(
     "DEBUG",
-    `FluxerCreate bridge start id=${message.id} channelMapId=${channelMap.id} hasForward=${Boolean(forwardedMessage)} hasReply=${Boolean(messageReference)} attachmentCount=${(forwardedMessage ?? message).attachments?.length ?? 0} stickerCount=${message.stickers?.length ?? 0}`,
+    `FluxerCreate bridge start id=${message.id} channelMapId=${channelMap.id} hasForward=${Boolean(forwardedMessage)} hasReply=${Boolean(messageReference)} attachmentCount=${(forwardedMessage ?? message).attachments?.length ?? 0} stickerCount=${message.stickers?.length ?? 0}`
   );
 
-  const mediaBase =
-    (await getFluxerMediaBaseUrl().catch(() => undefined)) ??
-    Config.FluxerCDNBaseURL;
+  const mediaBase = (await getFluxerMediaBaseUrl().catch(() => undefined)) ?? Config.FluxerCDNBaseURL;
 
   const stickerFiles = [];
   const stickerFallbacks = [];
@@ -245,29 +203,14 @@ export async function FluxerCreateMessageHandler(
 
   const stickerMsg = stickerFallbacks.join(", ");
 
-  const overAttachments =
-    (forwardedMessage ?? message).attachments?.filter(
-      (x) => x.size > 9999000,
-    ) ?? [];
-  const overAttachmentsStr = overAttachments
-    .map((x) => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`)
-    .join(" ");
+  const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 9999000) ?? [];
+  const overAttachmentsStr = overAttachments.map(x => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`).join(" ");
 
-  const webhook = await discordClient.fetchWebhook(
-    channelMap.discordWebhookId,
-    channelMap.discordWebhookToken,
-  );
+  const webhook = await discordClient.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
 
-  const threadId = await resolveDiscordThreadId(
-    discordClient,
-    channelMap.discordChannelId,
-  );
+  const threadId = await resolveDiscordThreadId(discordClient, channelMap.discordChannelId);
 
-  const fastUsername = withIndicator(
-    message.author.globalName ?? message.author.username,
-    "fluxer",
-    nameIndicator,
-  );
+  const fastUsername = withIndicator(message.author.globalName ?? message.author.username, "fluxer", nameIndicator);
 
   let earlyDiscordMsgId = null;
   const earlySourceText = (forwardedMessage ?? message).content ?? "";
@@ -293,10 +236,7 @@ export async function FluxerCreateMessageHandler(
         ...(threadId ? { threadId } : {}),
       });
       earlyDiscordMsgId = earlyMsg.id;
-      log(
-        "DEBUG",
-        `FluxerCreate early bridge id=${message.id} discordId=${earlyDiscordMsgId} emojiCount=${customEmojiCount}`,
-      );
+      log("DEBUG", `FluxerCreate early bridge id=${message.id} discordId=${earlyDiscordMsgId} emojiCount=${customEmojiCount}`);
     } catch (e) {
       log("DISCORD", `Early bridge placeholder failed for ${message.id}`, e);
     }
@@ -309,40 +249,29 @@ export async function FluxerCreateMessageHandler(
     guildUser = undefined;
   }
 
-  const otherSideGuild = await discordClient.guilds.fetch(
-    channelMap.discordGuildId,
-  );
+  const otherSideGuild = await discordClient.guilds.fetch(channelMap.discordGuildId);
 
   const canUserPing = await checkPingPerms(guildId, message.author.id, client);
-  const everyonePingsEnabled = await isBridgeToggleEnabled(
-    channelMap,
-    "everyonePingEnabled",
-  );
+  const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
   const canBridgePing = canUserPing && everyonePingsEnabled;
 
   const parsedContent = await traverseMessageLinks(
     await parseFluxerEmojiToDiscord(
       await resolveMentions(
         otherSideGuild,
-        sanitizePings(
-          await parseMentions(forwardedMessage ?? message, null, otherSideGuild),
-          canBridgePing && !forwardedMessage,
-        ),
+        sanitizePings(await parseMentions(forwardedMessage ?? message, null, otherSideGuild), canBridgePing && !forwardedMessage)
       ),
       discordClient,
-      channelMap.discordGuildId,
-    ),
+      channelMap.discordGuildId
+    )
   );
 
   const attachmentDescs =
     (forwardedMessage ?? message).attachments
-      ?.filter((x) => x.size < 19999000)
-      .map((a) => ({
+      ?.filter(x => x.size < 19999000)
+      .map(a => ({
         url: a.proxyUrl ?? a.url ?? "",
-        name: toDiscordSpoilerFilename(
-          a.filename,
-          isFluxerSpoilerAttachment(a),
-        ),
+        name: toDiscordSpoilerFilename(a.filename, isFluxerSpoilerAttachment(a)),
         description: a.description,
       })) ?? [];
 
@@ -361,13 +290,7 @@ export async function FluxerCreateMessageHandler(
   files.push(...stickerFiles);
 
   const attachments =
-    files.length > 0
-      ? await cloudUploadAttachments(
-        discordClient,
-        channelMap.discordChannelId,
-        files,
-      )
-      : undefined;
+    files.length > 0 ? await cloudUploadAttachments(discordClient, channelMap.discordChannelId, files) : undefined;
 
   /** @type {import("discord.js").MessagePayload | import("discord.js").WebhookMessageCreateOptions} */
   const webhookPayload = {
@@ -382,26 +305,17 @@ export async function FluxerCreateMessageHandler(
       parsedContent +
       userJoin +
       stickerMsg +
-      (overAttachmentsStr
-        ? "\n-# has attachments over 20mb: " + overAttachmentsStr
-        : ""),
+      (overAttachmentsStr ? "\n-# has attachments over 20mb: " + overAttachmentsStr : ""),
     // @ts-expect-error
     attachments,
     username: withIndicator(
-      guildUser?.displayName ??
-        message.author.globalName ??
-        message.author.username,
+      guildUser?.displayName ?? message.author.globalName ?? message.author.username,
       "fluxer",
-      nameIndicator,
+      nameIndicator
     ),
-    embeds: await fluxerEmbedToDiscord(
-      forwardedMessage ?? message,
-      discordClient,
-    ),
+    embeds: await fluxerEmbedToDiscord(forwardedMessage ?? message, discordClient),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
-    allowedMentions: forwardedMessage
-      ? { parse: [] }
-      : { parse: ["roles", "users", ...(canBridgePing ? ["everyone"] : [])] },
+    allowedMentions: forwardedMessage ? { parse: [] } : { parse: ["roles", "users", ...(canBridgePing ? ["everyone"] : [])] },
     ...(threadId ? { threadId } : {}),
   };
 
@@ -413,11 +327,7 @@ export async function FluxerCreateMessageHandler(
         ...(threadId ? { threadId } : {}),
       });
     } catch (e) {
-      log(
-        "DISCORD",
-        `Failed to edit early bridged Discord message ${earlyDiscordMsgId}`,
-        e,
-      );
+      log("DISCORD", `Failed to edit early bridged Discord message ${earlyDiscordMsgId}`, e);
 
       try {
         if (threadId) {
@@ -426,11 +336,7 @@ export async function FluxerCreateMessageHandler(
           await webhook.deleteMessage(earlyDiscordMsgId);
         }
       } catch (e) {
-        log(
-          "DISCORD",
-          `Failed to delete early bridged Discord message ${earlyDiscordMsgId}`,
-          e,
-        );
+        log("DISCORD", `Failed to delete early bridged Discord message ${earlyDiscordMsgId}`, e);
       }
 
       msg = await webhook.send(webhookPayload);
@@ -447,7 +353,7 @@ export async function FluxerCreateMessageHandler(
 
   log(
     "DEBUG",
-    `FluxerCreate bridged fluxerId=${message.id} discordId=${msg.id} channelMapId=${channelMap.id} fileCount=${files.length} hasReply=${Boolean(messageReference)} hasThread=${Boolean(threadId)}`,
+    `FluxerCreate bridged fluxerId=${message.id} discordId=${msg.id} channelMapId=${channelMap.id} fileCount=${files.length} hasReply=${Boolean(messageReference)} hasThread=${Boolean(threadId)}`
   );
 
   let bridgedMessageMap;
@@ -474,7 +380,7 @@ export async function FluxerCreateMessageHandler(
         if (isFluxerMessageNotFoundError(e)) {
           try {
             await msg.delete();
-          } catch { }
+          } catch {}
           await bridgedMessageMap?.destroy();
           return;
         }
@@ -493,14 +399,10 @@ export async function FluxerCreateMessageHandler(
  * @param {import("@fluxerjs/core").Message | import("@fluxerjs/core").PartialMessage} newMessage
  * @param {import("discord.js").Client} client
  */
-export async function FluxerUpdateMessageHandler(
-  oldMessage,
-  newMessage,
-  client,
-) {
+export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client) {
   log(
     "DEBUG",
-    `FluxerUpdate received id=${newMessage.id} channelId=${newMessage.channelId} guildId=${newMessage.guildId} authorId=${newMessage.author?.id} partial=${Boolean(newMessage.partial)}`,
+    `FluxerUpdate received id=${newMessage.id} channelId=${newMessage.channelId} guildId=${newMessage.guildId} authorId=${newMessage.author?.id} partial=${Boolean(newMessage.partial)}`
   );
   if (newMessage.partial) return;
 
@@ -524,14 +426,8 @@ export async function FluxerUpdateMessageHandler(
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
-    const nameIndicator = await resolveNameIndicator(
-      channelMap.discordGuildId,
-      newMessage.guildId,
-    );
-    const webhook = await client.fetchWebhook(
-      channelMap.discordWebhookId,
-      channelMap.discordWebhookToken,
-    );
+    const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, newMessage.guildId);
+    const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
@@ -549,23 +445,13 @@ export async function FluxerUpdateMessageHandler(
         },
       });
 
-      if (
-        messageReference &&
-        messageReference.channelMapId !== messageExisting.channelMapId
-      ) {
+      if (messageReference && messageReference.channelMapId !== messageExisting.channelMapId) {
         messageReference = null;
       }
     }
 
-    const canUserPing = await checkPingPerms(
-      newMessage.guildId,
-      newMessage.author.id,
-      client,
-    );
-    const everyonePingsEnabled = await isBridgeToggleEnabled(
-      channelMap,
-      "everyonePingEnabled",
-    );
+    const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
+    const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
     const otherSideGuild = await client.guilds.fetch(channelMap.discordGuildId);
@@ -579,18 +465,13 @@ export async function FluxerUpdateMessageHandler(
         await parseFluxerEmojiToDiscord(
           await resolveMentions(
             otherSideGuild,
-            sanitizePings(
-              await parseMentions(newMessage, null, otherSideGuild),
-              canBridgePing,
-            ),
+            sanitizePings(await parseMentions(newMessage, null, otherSideGuild), canBridgePing)
           ),
           client,
-          channelMap.discordGuildId,
-        ),
+          channelMap.discordGuildId
+        )
       ));
-    const editDescs = newMessage.attachments
-      .map((x) => ({ url: x.url ?? "", name: x.filename }))
-      .filter((x) => x.url);
+    const editDescs = newMessage.attachments.map(x => ({ url: x.url ?? "", name: x.filename })).filter(x => x.url);
     const editFiles = [];
     for (const a of editDescs) {
       const data = await downloadFluxerAttachment(a.url);
@@ -599,27 +480,18 @@ export async function FluxerUpdateMessageHandler(
     }
 
     const attachments =
-      editFiles.length > 0
-        ? await cloudUploadAttachments(
-          client,
-          channelMap.discordChannelId,
-          editFiles,
-        )
-        : undefined;
+      editFiles.length > 0 ? await cloudUploadAttachments(client, channelMap.discordChannelId, editFiles) : undefined;
 
     if (!editContent && !attachments?.length) {
       log("DEBUG", `FluxerUpdate skip id=${newMessage.id} reason=emptyEdit`);
       return;
     }
 
-    const threadId = await resolveDiscordThreadId(
-      client,
-      channelMap.discordChannelId,
-    );
+    const threadId = await resolveDiscordThreadId(client, channelMap.discordChannelId);
 
     log(
       "DEBUG",
-      `FluxerUpdate bridged fluxerId=${newMessage.id} discordId=${messageExisting.discordMessageId} channelMapId=${channelMap.id} fileCount=${editFiles.length} hasThread=${Boolean(threadId)}`,
+      `FluxerUpdate bridged fluxerId=${newMessage.id} discordId=${messageExisting.discordMessageId} channelMapId=${channelMap.id} fileCount=${editFiles.length} hasThread=${Boolean(threadId)}`
     );
 
     await webhook.editMessage(messageExisting.discordMessageId, {
@@ -635,11 +507,7 @@ export async function FluxerUpdateMessageHandler(
  * @param {import("discord.js").Client} client
  * @param {import("@fluxerjs/core").Client} fluxerClient
  */
-export async function FluxerDeleteMessageHandler(
-  message,
-  client,
-  fluxerClient,
-) {
+export async function FluxerDeleteMessageHandler(message, client, fluxerClient) {
   log("DEBUG", `FluxerDelete received id=${message.id}`);
   const messageExisting = await MessageMap.findOne({
     where: {
@@ -649,38 +517,23 @@ export async function FluxerDeleteMessageHandler(
   });
 
   if (messageExisting && !messageExisting.channelMap) {
-    log(
-      "FLUXER",
-      `Message map ${messageExisting.id} for Fluxer message ${message.id} has no channel map`,
-    );
+    log("FLUXER", `Message map ${messageExisting.id} for Fluxer message ${message.id} has no channel map`);
     await messageExisting.destroy();
   } else if (messageExisting) {
     const channelMap = messageExisting.channelMap;
 
     try {
       if (messageExisting.messageSource === "discord") {
-        const channel = await client.channels.fetch(
-          channelMap.discordChannelId,
+        const channel = await client.channels.fetch(channelMap.discordChannelId);
+        const discordMessage = await /** @type {import("discord.js").TextChannel} */ (channel).messages.fetch(
+          messageExisting.discordMessageId
         );
-        const discordMessage =
-          await /** @type {import("discord.js").TextChannel} */ (
-            channel
-          ).messages.fetch(messageExisting.discordMessageId);
         await discordMessage.delete();
       } else {
-        const webhook = await client.fetchWebhook(
-          channelMap.discordWebhookId,
-          channelMap.discordWebhookToken,
-        );
-        const threadId = await resolveDiscordThreadId(
-          client,
-          channelMap.discordChannelId,
-        );
+        const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+        const threadId = await resolveDiscordThreadId(client, channelMap.discordChannelId);
         if (threadId) {
-          await webhook.deleteMessage(
-            messageExisting.discordMessageId,
-            threadId,
-          );
+          await webhook.deleteMessage(messageExisting.discordMessageId, threadId);
         } else {
           await webhook.deleteMessage(messageExisting.discordMessageId);
         }
@@ -690,7 +543,7 @@ export async function FluxerDeleteMessageHandler(
         log(
           "DISCORD",
           `Failed to delete bridged Discord message ${messageExisting.discordMessageId} for Fluxer message ${message.id}`,
-          e,
+          e
         );
         return;
       }
@@ -703,8 +556,7 @@ export async function FluxerDeleteMessageHandler(
     where: {
       [Op.or]: {
         fluxerReplyId: message.id,
-        discordReplyId:
-          messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH",
+        discordReplyId: messageExisting?.discordMessageId ?? "THISSHOULDNOTMATCH",
       },
     },
     include: ["channelMap"],
@@ -713,17 +565,12 @@ export async function FluxerDeleteMessageHandler(
   if (replies.length > 0) {
     for (let reply of replies) {
       const channelMap = reply.channelMap;
-      const webhook = await client.fetchWebhook(
-        channelMap.discordWebhookId,
-        channelMap.discordWebhookToken,
-      );
+      const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
       let replyContent = "";
       if (reply.messageSource === "fluxer") {
         let channel;
         try {
-          channel = await fluxerClient.channels.fetch(
-            channelMap.fluxerChannelId,
-          );
+          channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
         } catch {
           continue;
         }
@@ -757,10 +604,7 @@ ${replyContent}`,
  * @param {DiscordClient} client
  */
 export async function FluxerBulkDeleteMessageHandler(msgs, client) {
-  log(
-    "DEBUG",
-    `FluxerBulkDelete received channelId=${msgs.channelId} count=${msgs.ids.length}`,
-  );
+  log("DEBUG", `FluxerBulkDelete received channelId=${msgs.channelId} count=${msgs.ids.length}`);
   const messagesExisting = await MessageMap.findAll({
     where: {
       fluxerMessageId: {
@@ -773,9 +617,7 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
   if (messagesExisting.length > 0) {
     try {
       const channel = /** @type {TextChannel} */ (
-        await client.channels.fetch(
-          messagesExisting[0]?.channelMap.discordChannelId ?? "",
-        )
+        await client.channels.fetch(messagesExisting[0]?.channelMap.discordChannelId ?? "")
       );
 
       const reply = await channel.send({
@@ -783,15 +625,13 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
       });
 
       try {
-        await channel.bulkDelete(
-          messagesExisting.map((x) => x.discordMessageId),
-        );
-      } catch { }
+        await channel.bulkDelete(messagesExisting.map(x => x.discordMessageId));
+      } catch {}
 
       await reply.delete();
-    } catch { }
+    } catch {}
 
-    await Promise.all(messagesExisting.map(async (x) => await x.destroy()));
+    await Promise.all(messagesExisting.map(async x => await x.destroy()));
   }
 }
 
@@ -808,17 +648,12 @@ export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
     },
   });
 
-  if (
-    channelMap &&
-    (await resolveDiscordThreadId(client, channelMap.discordChannelId))
-  ) {
+  if (channelMap && (await resolveDiscordThreadId(client, channelMap.discordChannelId))) {
     return;
   }
 
   if (channelMap) {
-    const channel = /** @type {FluxerTextChannel} */ (
-      await fluxerClient.channels.fetch(chnl.channelId)
-    );
+    const channel = /** @type {FluxerTextChannel} */ (await fluxerClient.channels.fetch(chnl.channelId));
 
     if (channel) {
       const pinned = await channel.fetchPinnedMessages();
@@ -826,51 +661,34 @@ export async function FluxerPinsUpdateHandler(chnl, client, fluxerClient) {
       const messages = await MessageMap.findAll({
         where: {
           fluxerMessageId: {
-            [Op.in]: pinned.map((x) => x.id),
+            [Op.in]: pinned.map(x => x.id),
           },
         },
       });
 
-      const discordChannel = await client.channels.fetch(
-        channelMap.discordChannelId,
-      );
+      const discordChannel = await client.channels.fetch(channelMap.discordChannelId);
 
       if (discordChannel && discordChannel.isTextBased()) {
         const discordPinned = await discordChannel.messages.fetchPins();
 
         const discordMessageBridgePinned = (
-          await Promise.all(
-            messages.map(
-              async (x) =>
-                await discordChannel.messages.fetch(x.discordMessageId),
-            ),
-          )
-        ).filter(
-          (x) => !discordPinned.items.find((y) => x.id === y.message.id),
-        );
+          await Promise.all(messages.map(async x => await discordChannel.messages.fetch(x.discordMessageId)))
+        ).filter(x => !discordPinned.items.find(y => x.id === y.message.id));
 
         const discordPinnedBridged = await MessageMap.findAll({
           where: {
             discordMessageId: {
-              [Op.in]: discordPinned.items.map((x) => x.message.id),
+              [Op.in]: discordPinned.items.map(x => x.message.id),
             },
           },
         });
 
         const discordPinnedRemove = discordPinned.items
-          .filter((x) =>
-            discordPinnedBridged.find(
-              (y) => y.discordMessageId === x.message.id,
-            ),
-          )
-          .filter(
-            (x) => !messages.find((y) => y.discordMessageId === x.message.id),
-          );
+          .filter(x => discordPinnedBridged.find(y => y.discordMessageId === x.message.id))
+          .filter(x => !messages.find(y => y.discordMessageId === x.message.id));
 
-        await Promise.all(
-          discordPinnedRemove.map(async (x) => x.message.unpin()),
-        );
-        await Promise.all(discordMessageBridgePinned.map(async (x) => x.pin()));
+        await Promise.all(discordPinnedRemove.map(async x => x.message.unpin()));
+        await Promise.all(discordMessageBridgePinned.map(async x => x.pin()));
       }
     }
   }

@@ -3,13 +3,7 @@ import { Events as FluxerEvents, Routes as FluxerRoutes } from "@fluxerjs/core";
 import { ChannelMap, MessageMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import Config from "./ConfigHandler.js";
-import {
-  getFluxEmojis,
-  getDiscordEmojis,
-  getBotEmojis,
-  clearFluxEmojiCache,
-  clearBotEmojiCache,
-} from "./EmojiCache.js";
+import { getFluxEmojis, getDiscordEmojis, getBotEmojis, clearFluxEmojiCache, clearBotEmojiCache } from "./EmojiCache.js";
 import { sendBridgeInfo } from "./MessageBridgeInfo.js";
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
 
@@ -23,63 +17,39 @@ import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
  * @param {string} targetFluxerGuildId
  * @param {string | null} emojiName
  */
-async function mirrorDiscordEmojiToFluxer(
-  discordEmojiId,
-  animated,
-  fluxerClient,
-  targetFluxerGuildId,
-  emojiName,
-) {
+async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient, targetFluxerGuildId, emojiName) {
   if (emojiName) {
     try {
-      const targetEmojis = await getFluxEmojis(
-        targetFluxerGuildId,
-        fluxerClient,
-      );
-      const byName = targetEmojis.find((x) => x.name === emojiName);
+      const targetEmojis = await getFluxEmojis(targetFluxerGuildId, fluxerClient);
+      const byName = targetEmojis.find(x => x.name === emojiName);
       if (byName) return `${byName.name}:${byName.id}`;
     } catch {}
   }
 
   const storeName = `e${animated ? "a" : ""}${discordEmojiId}`;
   try {
-    let emojis = await getFluxEmojis(
-      Config.FluxerTempEmojiGuildId,
-      fluxerClient,
-    );
-    let existing = emojis.find((x) => x.name === storeName);
+    let emojis = await getFluxEmojis(Config.FluxerTempEmojiGuildId, fluxerClient);
+    let existing = emojis.find(x => x.name === storeName);
 
     if (!existing) {
-      const res = await fetch(
-        `https://cdn.discordapp.com/emojis/${discordEmojiId}${animated ? ".gif" : ".webp"}`,
-      );
+      const res = await fetch(`https://cdn.discordapp.com/emojis/${discordEmojiId}${animated ? ".gif" : ".webp"}`);
       const buf = await res.arrayBuffer();
-      const guild = await fluxerClient.guilds.fetch(
-        Config.FluxerTempEmojiGuildId,
-      );
+      const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
       await guild?.createEmojisBulk([
         {
-          image: btoa(
-            new Uint8Array(buf).reduce(
-              (d, b) => d + String.fromCharCode(b),
-              "",
-            ),
-          ),
+          image: btoa(new Uint8Array(buf).reduce((d, b) => d + String.fromCharCode(b), "")),
           name: storeName,
         },
       ]);
       clearFluxEmojiCache(Config.FluxerTempEmojiGuildId);
       emojis = await getFluxEmojis(Config.FluxerTempEmojiGuildId, fluxerClient);
-      existing = emojis.find((x) => x.name === storeName);
+      existing = emojis.find(x => x.name === storeName);
     }
 
     if (!existing?.id) return null;
     return `${storeName}:${existing.id}`;
   } catch (e) {
-    log(
-      "FLUXER",
-      `Failed to mirror Discord emoji ${discordEmojiId} to Fluxer: ${e}`,
-    );
+    log("FLUXER", `Failed to mirror Discord emoji ${discordEmojiId} to Fluxer: ${e}`);
     return null;
   }
 }
@@ -94,20 +64,11 @@ async function mirrorDiscordEmojiToFluxer(
  * @param {string} targetDiscordGuildId
  * @param {string | null} emojiName
  */
-async function mirrorFluxerEmojiToDiscord(
-  fluxerEmojiId,
-  animated,
-  discordClient,
-  targetDiscordGuildId,
-  emojiName,
-) {
+async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient, targetDiscordGuildId, emojiName) {
   if (emojiName) {
     try {
-      const targetEmojis = await getDiscordEmojis(
-        targetDiscordGuildId,
-        discordClient,
-      );
-      const byName = targetEmojis.find((x) => x.name === emojiName);
+      const targetEmojis = await getDiscordEmojis(targetDiscordGuildId, discordClient);
+      const byName = targetEmojis.find(x => x.name === emojiName);
       if (byName) return `${byName.name}:${byName.id}`;
     } catch {}
   }
@@ -115,12 +76,12 @@ async function mirrorFluxerEmojiToDiscord(
   const storeName = `e${animated ? "a" : ""}${fluxerEmojiId}`;
   try {
     const appEmojis = await getBotEmojis(discordClient);
-    let existing = [...appEmojis.values()].find((x) => x.name === storeName);
+    let existing = [...appEmojis.values()].find(x => x.name === storeName);
 
     if (!existing) {
       const mediaUrl = await getFluxerMediaBaseUrl();
       const res = await fetch(
-        `${mediaUrl}/emojis/${fluxerEmojiId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`,
+        `${mediaUrl}/emojis/${fluxerEmojiId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`
       );
       const buf = Buffer.from(await res.arrayBuffer());
       existing = await discordClient.application?.emojis.create({
@@ -133,10 +94,7 @@ async function mirrorFluxerEmojiToDiscord(
     if (!existing?.id) return null;
     return `${storeName}:${existing.id}`;
   } catch (e) {
-    log(
-      "DISCORD",
-      `Failed to mirror Fluxer emoji ${fluxerEmojiId} to Discord: ${e}`,
-    );
+    log("DISCORD", `Failed to mirror Fluxer emoji ${fluxerEmojiId} to Discord: ${e}`);
     return null;
   }
 }
@@ -174,17 +132,13 @@ async function relayDiscordReaction(reaction, user, action, fluxerClient) {
       emoji.animated ?? false,
       fluxerClient,
       channelMap.fluxerGuildId,
-      emoji.name,
+      emoji.name
     );
   }
 
   if (!emojiStr) return;
 
-  const route = `${FluxerRoutes.channelMessageReaction(
-    channelMap.fluxerChannelId,
-    messageMap.fluxerMessageId,
-    emojiStr,
-  )}/@me`;
+  const route = `${FluxerRoutes.channelMessageReaction(channelMap.fluxerChannelId, messageMap.fluxerMessageId, emojiStr)}/@me`;
 
   if (action === "add") {
     await fluxerClient.rest.put(route);
@@ -200,13 +154,7 @@ async function relayDiscordReaction(reaction, user, action, fluxerClient) {
  * @param {import("discord.js").Client} discordClient target discord instance
  * @param {import("@fluxerjs/core").Client} fluxerClient source fluxer instance
  */
-async function relayFluxerReaction(
-  reaction,
-  user,
-  action,
-  discordClient,
-  fluxerClient,
-) {
+async function relayFluxerReaction(reaction, user, action, discordClient, fluxerClient) {
   if (user?.id === fluxerClient.user?.id) return;
 
   const messageMap = await MessageMap.findOne({
@@ -230,17 +178,13 @@ async function relayFluxerReaction(
       emoji.animated ?? false,
       discordClient,
       channelMap.discordGuildId,
-      emoji.name,
+      emoji.name
     );
   }
 
   if (!emojiStr) return;
 
-  const route = `${DiscordRoutes.channelMessageReaction(
-    channelMap.discordChannelId,
-    messageMap.discordMessageId,
-    emojiStr,
-  )}/@me`;
+  const route = `${DiscordRoutes.channelMessageReaction(channelMap.discordChannelId, messageMap.discordMessageId, emojiStr)}/@me`;
 
   if (action === "add") {
     await discordClient.rest.put(route);
@@ -256,39 +200,28 @@ async function relayFluxerReaction(
  */
 export function setupReactionHandling(discordClient, fluxerClient) {
   discordClient.on(DiscordEvents.MessageReactionAdd, async (reaction, user) => {
-    if (
-      reaction.emoji.name === "information_source" ||
-      reaction.emoji.name === "ℹ️"
-    ) {
+    if (reaction.emoji.name === "information_source" || reaction.emoji.name === "ℹ️") {
       try {
         await reaction.remove();
-        await sendBridgeInfo(
-          await reaction.message.fetch(),
-          user,
-          discordClient,
-          fluxerClient,
-        );
+        await sendBridgeInfo(await reaction.message.fetch(), user, discordClient, fluxerClient);
       } catch {}
       return;
     }
 
-    relayDiscordReaction(reaction, user, "add", fluxerClient).catch((e) =>
-      log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`),
+    relayDiscordReaction(reaction, user, "add", fluxerClient).catch(e =>
+      log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`)
     );
   });
 
   discordClient.on(DiscordEvents.MessageReactionRemove, (reaction, user) => {
-    relayDiscordReaction(reaction, user, "remove", fluxerClient).catch((e) =>
-      log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`),
+    relayDiscordReaction(reaction, user, "remove", fluxerClient).catch(e =>
+      log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`)
     );
   });
 
-  fluxerClient.on(FluxerEvents.MessageReactionAdd, async (payload) => {
+  fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {
     const { reaction, user } = payload;
-    if (
-      reaction.emoji.name === "information_source" ||
-      reaction.emoji.name === "ℹ️"
-    ) {
+    if (reaction.emoji.name === "information_source" || reaction.emoji.name === "ℹ️") {
       const message = await reaction.fetchMessage();
       try {
         message.removeReactionEmoji(":information_source:");
@@ -298,27 +231,15 @@ export function setupReactionHandling(discordClient, fluxerClient) {
       return;
     }
 
-    relayFluxerReaction(
-      reaction,
-      user,
-      "add",
-      discordClient,
-      fluxerClient,
-    ).catch((e) =>
-      log("DISCORD", `Fluxer→Discord reaction relay failed: ${e}`),
+    relayFluxerReaction(reaction, user, "add", discordClient, fluxerClient).catch(e =>
+      log("DISCORD", `Fluxer→Discord reaction relay failed: ${e}`)
     );
   });
 
-  fluxerClient.on(FluxerEvents.MessageReactionRemove, (payload) => {
+  fluxerClient.on(FluxerEvents.MessageReactionRemove, payload => {
     const { reaction, user } = payload;
-    relayFluxerReaction(
-      reaction,
-      user,
-      "remove",
-      discordClient,
-      fluxerClient,
-    ).catch((e) =>
-      log("DISCORD", `Fluxer→Discord reaction remove relay failed: ${e}`),
+    relayFluxerReaction(reaction, user, "remove", discordClient, fluxerClient).catch(e =>
+      log("DISCORD", `Fluxer→Discord reaction remove relay failed: ${e}`)
     );
   });
 }

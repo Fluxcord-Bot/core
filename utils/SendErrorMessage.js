@@ -3,10 +3,7 @@ import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import { GuildMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import { genMsgLink } from "./GenMsgLink.js";
-import {
-  isBridgeHealthDegraded,
-  recordBridgeFailure,
-} from "./BridgeHealth.js";
+import { isBridgeHealthDegraded, recordBridgeFailure } from "./BridgeHealth.js";
 
 /**
  * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | Message} message
@@ -15,13 +12,7 @@ import {
  * @param {any} error
  * @param {boolean} [replyFallback=false]
  */
-export async function sendErrorMessage(
-  message,
-  discordClient,
-  fluxerClient,
-  error,
-  replyFallback = false,
-) {
+export async function sendErrorMessage(message, discordClient, fluxerClient, error, replyFallback = false) {
   recordBridgeFailure(message.guildId);
   const suppressReaction = isBridgeHealthDegraded(message.guildId);
 
@@ -35,9 +26,7 @@ export async function sendErrorMessage(
     if (guildMap) {
       if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform) {
         if (guildMap.errorLoggingPlatform === "fluxer") {
-          const channel = await fluxerClient.channels.fetch(
-            guildMap.errorLoggingChannelId,
-          );
+          const channel = await fluxerClient.channels.fetch(guildMap.errorLoggingChannelId);
 
           /** @type {any} */ (channel).send({
             embeds: [
@@ -54,9 +43,7 @@ export async function sendErrorMessage(
             ],
           });
         } else {
-          const channel = await discordClient.channels.fetch(
-            guildMap.errorLoggingChannelId,
-          );
+          const channel = await discordClient.channels.fetch(guildMap.errorLoggingChannelId);
 
           if (channel?.isSendable()) {
             channel.send({
@@ -88,6 +75,6 @@ export async function sendErrorMessage(
   log(
     message instanceof Message ? "FLUXER" : "DISCORD",
     `An error occurred on ${await genMsgLink(message).catch(() => "?")}`,
-    error,
+    error
   );
 }

@@ -10,9 +10,9 @@ export function isDiscordSpoilerAttachment(attachment) {
         : 0;
   return Boolean(
     attachment?.spoiler ||
-      (numericFlags & SPOILER_ATTACHMENT_FLAG) !== 0 ||
-      attachment?.name?.startsWith(DISCORD_SPOILER_PREFIX) ||
-      attachment?.filename?.startsWith(DISCORD_SPOILER_PREFIX),
+    (numericFlags & SPOILER_ATTACHMENT_FLAG) !== 0 ||
+    attachment?.name?.startsWith(DISCORD_SPOILER_PREFIX) ||
+    attachment?.filename?.startsWith(DISCORD_SPOILER_PREFIX)
   );
 }
 
@@ -22,9 +22,7 @@ export function isFluxerSpoilerAttachment(attachment) {
 
 export function toDiscordSpoilerFilename(filename, spoiler) {
   if (!filename) return filename;
-  const cleanName = filename.startsWith(DISCORD_SPOILER_PREFIX)
-    ? filename.slice(DISCORD_SPOILER_PREFIX.length)
-    : filename;
+  const cleanName = filename.startsWith(DISCORD_SPOILER_PREFIX) ? filename.slice(DISCORD_SPOILER_PREFIX.length) : filename;
   return spoiler ? `${DISCORD_SPOILER_PREFIX}${cleanName}` : cleanName;
 }
 

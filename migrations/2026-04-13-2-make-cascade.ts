@@ -1,10 +1,6 @@
 import { DataTypes, QueryInterface } from "sequelize";
 
-export async function up({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function up({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.changeColumn("MessageMaps", "ChannelMapId", {
     type: DataTypes.INTEGER,
     allowNull: true,
@@ -30,11 +26,7 @@ export async function up({
   });
 }
 
-export async function down({
-  context: queryInterface,
-}: {
-  context: QueryInterface;
-}) {
+export async function down({ context: queryInterface }: { context: QueryInterface }) {
   await queryInterface.changeColumn("MessageMaps", "ChannelMapId", {
     type: DataTypes.INTEGER,
     allowNull: true,

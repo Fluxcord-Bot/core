@@ -31,7 +31,7 @@ const command = {
 
     if (!params[0]) {
       await message.reply(
-        `The prefix for this server is \`${currentPrefix}\`. Run \`${currentPrefix}guild prefix <newPrefix>\` to change it, or \`${currentPrefix}guild prefix reset\` to go back to the default (\`${Config.BotPrefix}\`).`,
+        `The prefix for this server is \`${currentPrefix}\`. Run \`${currentPrefix}guild prefix <newPrefix>\` to change it, or \`${currentPrefix}guild prefix reset\` to go back to the default (\`${Config.BotPrefix}\`).`
       );
       return;
     }
@@ -39,9 +39,7 @@ const command = {
     if (params[0].toLowerCase() === "reset") {
       guildMap[0].botPrefix = Config.BotPrefix;
       await guildMap[0].save();
-      await message.reply(
-        `Prefix reset! The bot will now respond to \`${Config.BotPrefix}\` in this server.`,
-      );
+      await message.reply(`Prefix reset! The bot will now respond to \`${Config.BotPrefix}\` in this server.`);
       return;
     }
 
@@ -53,9 +51,7 @@ const command = {
     }
 
     if (newPrefix.length > MAX_PREFIX_LENGTH) {
-      await message.reply(
-        `The prefix cannot be longer than ${MAX_PREFIX_LENGTH} characters.`,
-      );
+      await message.reply(`The prefix cannot be longer than ${MAX_PREFIX_LENGTH} characters.`);
       return;
     }
 
@@ -63,7 +59,7 @@ const command = {
     await guildMap[0].save();
 
     await message.reply(
-      `Prefix changed! The bot will now only respond to \`${newPrefix}\` in this server (no longer to \`${Config.BotPrefix}\`).`,
+      `Prefix changed! The bot will now only respond to \`${newPrefix}\` in this server (no longer to \`${Config.BotPrefix}\`).`
     );
   },
 };

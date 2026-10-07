@@ -1,27 +1,14 @@
-import {
-  ChannelType as DiscordChannelType,
-  GuildMember as DiscordGuildMember,
-} from "discord.js";
-import {
-  ChannelType as FluxerChannelType,
-  GuildMember as FluxerGuildMember,
-} from "@fluxerjs/core";
+import { ChannelType as DiscordChannelType, GuildMember as DiscordGuildMember } from "discord.js";
+import { ChannelType as FluxerChannelType, GuildMember as FluxerGuildMember } from "@fluxerjs/core";
 
 export function checkBotPermissions(botMember, channel) {
   const isFluxer = botMember instanceof FluxerGuildMember;
   const isVoice = isFluxer
     ? channel.type === FluxerChannelType.GuildVoice
-    : channel.type === DiscordChannelType.GuildVoice ||
-      channel.type === DiscordChannelType.GuildStageVoice;
-  const perms = isFluxer
-    ? botMember.permissionsIn(channel)
-    : channel.permissionsFor(botMember);
+    : channel.type === DiscordChannelType.GuildVoice || channel.type === DiscordChannelType.GuildStageVoice;
+  const perms = isFluxer ? botMember.permissionsIn(channel) : channel.permissionsFor(botMember);
   const missingGuildCritical = isFluxer
-    ? botMember.permissions.missing([
-        "ManageRoles",
-        "ManageExpressions",
-        "CreateExpressions",
-      ])
+    ? botMember.permissions.missing(["ManageRoles", "ManageExpressions", "CreateExpressions"])
     : [];
   const missingCritical = perms.missing([
     "ViewChannel",
@@ -32,11 +19,7 @@ export function checkBotPermissions(botMember, channel) {
     "AttachFiles",
     "ReadMessageHistory",
     "AddReactions",
-    ...(isVoice
-      ? isFluxer
-        ? ["Connect", "Speak", "UseVad"]
-        : ["Connect", "Speak", "UseVAD", "SetVoiceChannelStatus"]
-      : []),
+    ...(isVoice ? (isFluxer ? ["Connect", "Speak", "UseVad"] : ["Connect", "Speak", "UseVAD", "SetVoiceChannelStatus"]) : []),
   ]);
   const missingOptional = perms.missing(
     isFluxer
@@ -49,13 +32,12 @@ export function checkBotPermissions(botMember, channel) {
           "SendPolls",
           "CreatePublicThreads",
           "SendMessagesInThreads",
-        ],
+        ]
   );
   return {
     missingGuildCritical,
     missingCritical,
     missingOptional,
-    hasAllCritical:
-      missingGuildCritical.length === 0 && missingCritical.length === 0,
+    hasAllCritical: missingGuildCritical.length === 0 && missingCritical.length === 0,
   };
 }

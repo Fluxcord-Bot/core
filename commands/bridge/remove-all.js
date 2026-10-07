@@ -1,8 +1,4 @@
-import {
-  ChannelMap,
-  MessageMap,
-  VoiceChannelMap,
-} from "../../db/index.js";
+import { ChannelMap, MessageMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 
 /**
@@ -29,29 +25,19 @@ const command = {
         where: {
           [Op.and]: [
             {
-              [Op.or]: [
-                { discordGuildId: message.guildId },
-                { fluxerGuildId: message.guildId },
-              ],
+              [Op.or]: [{ discordGuildId: message.guildId }, { fluxerGuildId: message.guildId }],
             },
             {
-              [Op.or]: [
-                { discordChannelId: { [Op.in]: params } },
-                { fluxerChannelId: { [Op.in]: params } },
-              ],
+              [Op.or]: [{ discordChannelId: { [Op.in]: params } }, { fluxerChannelId: { [Op.in]: params } }],
             },
           ],
         },
       });
 
-      const foundIds = new Set(
-        channelMaps.flatMap((x) => [x.discordChannelId, x.fluxerChannelId]),
-      );
-      const missing = params.filter((x) => !foundIds.has(x));
+      const foundIds = new Set(channelMaps.flatMap(x => [x.discordChannelId, x.fluxerChannelId]));
+      const missing = params.filter(x => !foundIds.has(x));
       if (missing.length > 0) {
-        await message.reply(
-          `These channels are not bridged on this server: ${missing.join(", ")}`,
-        );
+        await message.reply(`These channels are not bridged on this server: ${missing.join(", ")}`);
         if (channelMaps.length === 0) return;
       }
     } else {
@@ -70,9 +56,7 @@ const command = {
       return;
     }
 
-    const statusMsg = await message.reply(
-      `Unbridging ${channelMaps.length} channels...`,
-    );
+    const statusMsg = await message.reply(`Unbridging ${channelMaps.length} channels...`);
 
     let success = 0;
     let failed = 0;
@@ -91,9 +75,7 @@ const command = {
     }
 
     await statusMsg.edit({
-      content:
-        `Successfully unbridged ${success} channels.` +
-        (failed > 0 ? ` Failed to unbridge ${failed} channels.` : ""),
+      content: `Successfully unbridged ${success} channels.` + (failed > 0 ? ` Failed to unbridge ${failed} channels.` : ""),
     });
   },
 };
@@ -106,21 +88,16 @@ async function unbridgeChannel(channelMap, discordClient, fluxerClient) {
   } catch {}
 
   try {
-    const channel = /** @type {TextChannel} */ (
-      await fluxerClient.channels.fetch(channelMap.fluxerChannelId)
-    );
+    const channel = /** @type {TextChannel} */ (await fluxerClient.channels.fetch(channelMap.fluxerChannelId));
     const webhooks = await channel.fetchWebhooks();
-    const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
+    const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
     await webhook?.delete();
   } catch {}
 
   await MessageMap.destroy({ where: { channelMapId: channelMap.id } });
   await VoiceChannelMap.destroy({
     where: {
-      [Op.or]: [
-        { discordChannelId: channelMap.discordChannelId },
-        { fluxerChannelId: channelMap.fluxerChannelId },
-      ],
+      [Op.or]: [{ discordChannelId: channelMap.discordChannelId }, { fluxerChannelId: channelMap.fluxerChannelId }],
     },
   });
   await channelMap.destroy();

@@ -21,7 +21,7 @@ export async function getFluxEmojis(guildId, fluxerClient) {
 
   const guild = await fluxerClient.guilds.fetch(guildId);
   const emojis = await guild?.fetchEmojis();
-  const mapped = (emojis ?? []).map((x) => ({ name: x.name, id: x.id }));
+  const mapped = (emojis ?? []).map(x => ({ name: x.name, id: x.id }));
   fluxEmojiCache.set(guildId, mapped);
   return mapped;
 }
@@ -36,7 +36,7 @@ export async function getDiscordEmojis(guildId, discordClient) {
 
   const guild = await discordClient.guilds.fetch(guildId);
   const emojis = await guild.emojis.fetch();
-  const mapped = emojis.map((x) => ({ name: x.name ?? "", id: x.id }));
+  const mapped = emojis.map(x => ({ name: x.name ?? "", id: x.id }));
   discordEmojiCache.set(guildId, [...mapped.values()]);
   return [...mapped.values()];
 }
@@ -51,7 +51,7 @@ export async function getBotEmojis(discordClient) {
   const fetched = await discordClient.application?.emojis.fetch();
   /** @type {Map<string, { name: string, id: string }>} */
   const mapped = new Map();
-  fetched?.forEach((x) => mapped.set(x.id, { name: x.name ?? "", id: x.id }));
+  fetched?.forEach(x => mapped.set(x.id, { name: x.name ?? "", id: x.id }));
   botEmojiCache.set("app", mapped);
   return mapped;
 }

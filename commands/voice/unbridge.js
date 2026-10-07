@@ -27,10 +27,7 @@ ${Config.BotPrefix}voice unbridge <channelId>
 
     const voiceMap = await VoiceChannelMap.findOne({
       where: {
-        [Op.or]: [
-          { discordChannelId: channelId },
-          { fluxerChannelId: channelId },
-        ],
+        [Op.or]: [{ discordChannelId: channelId }, { fluxerChannelId: channelId }],
       },
     });
     if (!voiceMap) {
@@ -41,9 +38,7 @@ ${Config.BotPrefix}voice unbridge <channelId>
     // @ts-expect-error
     const { discordChannelId, fluxerChannelId } = voiceMap;
     await voiceMap.destroy();
-    await message.reply(
-      `Voice bridge removed: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``,
-    );
+    await message.reply(`Voice bridge removed: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``);
   },
 };
 

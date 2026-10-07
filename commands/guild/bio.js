@@ -61,9 +61,7 @@ Run \`${Config.BotPrefix}guild bio reset\` to go back to the automatic bio.`);
     }
 
     if (text.length > MAX_BIO_LENGTH) {
-      await message.reply(
-        `The bio cannot be longer than ${MAX_BIO_LENGTH} characters.`,
-      );
+      await message.reply(`The bio cannot be longer than ${MAX_BIO_LENGTH} characters.`);
       return;
     }
 

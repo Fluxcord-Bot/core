@@ -44,19 +44,15 @@ const command = {
       message.guildId,
       isFluxer ? "fluxer" : "discord",
       "typingEnabled",
-      requested,
+      requested
     );
 
     if (!changed) {
-      await message.reply(
-        `Typing indicator relaying is already ${enabled ? "enabled" : "disabled"}.`,
-      );
+      await message.reply(`Typing indicator relaying is already ${enabled ? "enabled" : "disabled"}.`);
       return;
     }
 
-    await message.reply(
-      `Typing indicator relaying ${enabled ? "enabled" : "disabled"}.`,
-    );
+    await message.reply(`Typing indicator relaying ${enabled ? "enabled" : "disabled"}.`);
   },
 };
 

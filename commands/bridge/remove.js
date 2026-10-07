@@ -44,11 +44,9 @@ const command = {
     } catch {}
 
     try {
-      const channel = /** @type {TextChannel} */ (
-        await fluxerClient.channels.fetch(channelMap.fluxerChannelId)
-      );
+      const channel = /** @type {TextChannel} */ (await fluxerClient.channels.fetch(channelMap.fluxerChannelId));
       const webhooks = await channel.fetchWebhooks();
-      const webhook = webhooks.find((x) => x.id === channelMap.fluxerWebhookId);
+      const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
       await webhook?.delete();
     } catch {}
 

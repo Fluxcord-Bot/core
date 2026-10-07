@@ -8,9 +8,7 @@ export const NAME_INDICATOR_STYLES = {
 const MAX_WEBHOOK_NAME = 80;
 
 export async function resolveNameIndicator(receiverGuildId, senderGuildId) {
-  const guildIds = [
-    ...new Set([receiverGuildId, senderGuildId].filter(Boolean)),
-  ];
+  const guildIds = [...new Set([receiverGuildId, senderGuildId].filter(Boolean))];
   if (guildIds.length === 0) return null;
 
   const rows = await GuildMap.findAll({
@@ -20,10 +18,7 @@ export async function resolveNameIndicator(receiverGuildId, senderGuildId) {
   });
 
   for (const guildId of guildIds) {
-    const style =
-      NAME_INDICATOR_STYLES[
-        rows.find((x) => x.guildId === guildId)?.nameIndicator
-      ];
+    const style = NAME_INDICATOR_STYLES[rows.find(x => x.guildId === guildId)?.nameIndicator];
     if (style) return style;
   }
 

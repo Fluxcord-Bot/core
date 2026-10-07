@@ -44,13 +44,11 @@ const command = {
       message.guildId,
       isFluxer ? "fluxer" : "discord",
       "inviteEnabled",
-      requested,
+      requested
     );
 
     if (!changed) {
-      await message.reply(
-        `Invite command is already ${enabled ? "enabled" : "disabled"}.`,
-      );
+      await message.reply(`Invite command is already ${enabled ? "enabled" : "disabled"}.`);
       return;
     }
 

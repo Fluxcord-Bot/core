@@ -1,12 +1,5 @@
-import {
-  Message as FluxerMessage,
-  PermissionsBitField as FluxerPermissionsBitField,
-} from "@fluxerjs/core";
-import {
-  PermissionsBitField as DiscordPermissionsBitField,
-  AttachmentBuilder,
-  ChannelType,
-} from "discord.js";
+import { Message as FluxerMessage, PermissionsBitField as FluxerPermissionsBitField } from "@fluxerjs/core";
+import { PermissionsBitField as DiscordPermissionsBitField, AttachmentBuilder, ChannelType } from "discord.js";
 import { cloudUploadAttachments } from "../../utils/CloudUpload.js";
 
 /**
@@ -38,11 +31,7 @@ const command = {
       channels = await fluxerGuild.fetchChannels();
 
       for (const channel of channels) {
-        if (
-          channel.type !== ChannelType.GuildText &&
-          channel.type !== ChannelType.GuildVoice
-        )
-          continue;
+        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildVoice) continue;
         const perms = fluxerUser.permissionsIn(channel);
 
         processedChannels.push({
@@ -57,11 +46,7 @@ const command = {
       channels = discordGuild.channels.cache;
 
       for (const channel of channels) {
-        if (
-          channel[1].type !== ChannelType.GuildText &&
-          channel[1].type !== ChannelType.GuildVoice
-        )
-          continue;
+        if (channel[1].type !== ChannelType.GuildText && channel[1].type !== ChannelType.GuildVoice) continue;
         const perms = discordUser.permissionsIn(channel[1]);
         processedChannels.push({
           name: channel[1].name,
@@ -71,25 +56,19 @@ const command = {
       }
     }
 
-    const str = processedChannels
-      .map((x) => `#${x.name} (${x.id}): ${x.perms.join(", ")}`)
-      .join("\n");
+    const str = processedChannels.map(x => `#${x.name} (${x.id}): ${x.perms.join(", ")}`).join("\n");
 
     const strBuf = Buffer.from(str, "utf-8");
 
     if (message instanceof FluxerMessage) {
       await message.reply({ files: [{ name: "probed.txt", data: strBuf }] });
     } else {
-      const cloudUploaded = await cloudUploadAttachments(
-        discordClient,
-        message.channel.id,
-        [
-          {
-            attachment: strBuf,
-            name: "probed.txt",
-          },
-        ],
-      );
+      const cloudUploaded = await cloudUploadAttachments(discordClient, message.channel.id, [
+        {
+          attachment: strBuf,
+          name: "probed.txt",
+        },
+      ]);
       await message.reply({
         attachments: cloudUploaded,
       });

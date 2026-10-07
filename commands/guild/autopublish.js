@@ -44,19 +44,15 @@ const command = {
       message.guildId,
       isFluxer ? "fluxer" : "discord",
       "autoPublishEnabled",
-      requested,
+      requested
     );
 
     if (!changed) {
-      await message.reply(
-        `Auto publishing (on bridged announcement channels) is already ${enabled ? "enabled" : "disabled"}.`,
-      );
+      await message.reply(`Auto publishing (on bridged announcement channels) is already ${enabled ? "enabled" : "disabled"}.`);
       return;
     }
 
-    await message.reply(
-      `Auto publishing (on bridged announcement channels) ${enabled ? "enabled" : "disabled"}.`,
-    );
+    await message.reply(`Auto publishing (on bridged announcement channels) ${enabled ? "enabled" : "disabled"}.`);
   },
 };
 

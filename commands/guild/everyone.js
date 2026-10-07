@@ -44,19 +44,15 @@ const command = {
       message.guildId,
       isFluxer ? "fluxer" : "discord",
       "everyonePingEnabled",
-      requested,
+      requested
     );
 
     if (!changed) {
-      await message.reply(
-        `@\u200beveryone/@\u200bhere ping bridging is already ${enabled ? "enabled" : "disabled"}.`,
-      );
+      await message.reply(`@\u200beveryone/@\u200bhere ping bridging is already ${enabled ? "enabled" : "disabled"}.`);
       return;
     }
 
-    await message.reply(
-      `@\u200beveryone/@\u200bhere ping bridging ${enabled ? "enabled" : "disabled"}.`,
-    );
+    await message.reply(`@\u200beveryone/@\u200bhere ping bridging ${enabled ? "enabled" : "disabled"}.`);
   },
 };
 

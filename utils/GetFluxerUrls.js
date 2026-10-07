@@ -6,9 +6,7 @@ let FLUXER_WELLKNOWN = {};
 export async function getWellknownFluxer(attempt = 0) {
   if ("api_code_version" in FLUXER_WELLKNOWN) return FLUXER_WELLKNOWN;
   try {
-    const res = await fetch(
-      `${DefaultConfig.FluxerAPIBaseURL}/.well-known/fluxer`,
-    );
+    const res = await fetch(`${DefaultConfig.FluxerAPIBaseURL}/.well-known/fluxer`);
     if (res.status > 399) throw new Error("Fetch returned non-2xx or 3xx code");
     const json = await res.json();
     FLUXER_WELLKNOWN = json;
@@ -21,10 +19,7 @@ export async function getWellknownFluxer(attempt = 0) {
         },
       };
     }
-    log(
-      "FLUXER",
-      `Can't fetch Fluxer well-known (attempt ${attempt + 1}/5): ${e}`,
-    );
+    log("FLUXER", `Can't fetch Fluxer well-known (attempt ${attempt + 1}/5): ${e}`);
     return getWellknownFluxer(attempt + 1);
   }
 }

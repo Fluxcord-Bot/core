@@ -5,9 +5,7 @@ import { DataTypes, Model } from "sequelize";
 import DefaultConfig from "../utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
-export const isPostgres =
-  !!Config.PostgresConnectionString &&
-  Config.PostgresConnectionString.length > 0;
+export const isPostgres = !!Config.PostgresConnectionString && Config.PostgresConnectionString.length > 0;
 
 /** @type {import("sequelize").Sequelize} */
 let sequelize;
@@ -15,12 +13,12 @@ let sequelize;
 if (isPostgres) {
   if (DefaultConfig.DatabaseEncryptionToken) {
     console.warn(
-      "[DB] DatabaseEncryptionToken is set but PostgresConnectionString is also set. The encryption token is ignored in Postgres mode.",
+      "[DB] DatabaseEncryptionToken is set but PostgresConnectionString is also set. The encryption token is ignored in Postgres mode."
     );
   }
   sequelize = new Sequelize(Config.PostgresConnectionString, {
     dialect: "postgres",
-    logging: (msg) => log("DB", msg),
+    logging: msg => log("DB", msg),
   });
   await sequelize.query("SELECT 1;");
 } else {
@@ -28,17 +26,13 @@ if (isPostgres) {
     dialect: "sqlite",
     dialectModule: sqlite3,
     storage: Config.DataFolderPath + "/fluxcord.db",
-    logging: (msg) => log("DB", msg),
-    password: !!DefaultConfig.DatabaseEncryptionToken
-      ? DefaultConfig.DatabaseEncryptionToken
-      : undefined,
+    logging: msg => log("DB", msg),
+    password: !!DefaultConfig.DatabaseEncryptionToken ? DefaultConfig.DatabaseEncryptionToken : undefined,
   });
 
   if (DefaultConfig.DatabaseEncryptionToken) {
     await sequelize.query("PRAGMA cipher_compatibility = 4;");
-    await sequelize.query(
-      `PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`,
-    );
+    await sequelize.query(`PRAGMA key = ${sequelize.escape(Config.DatabaseEncryptionToken)};`);
   }
 
   await sequelize.query("PRAGMA wal_checkpoint(TRUNCATE);");
@@ -96,7 +90,7 @@ GuildMap.init(
     },
     customBio: { type: DataTypes.STRING, allowNull: true },
   },
-  { sequelize, modelName: "GuildMap" },
+  { sequelize, modelName: "GuildMap" }
 );
 
 ChannelMap.init(
@@ -125,7 +119,7 @@ ChannelMap.init(
       references: { model: GuildMap, key: "id" },
     },
   },
-  { sequelize, modelName: "ChannelMap" },
+  { sequelize, modelName: "ChannelMap" }
 );
 
 MessageMap.init(
@@ -145,7 +139,7 @@ MessageMap.init(
       references: { model: ChannelMap, key: "id" },
     },
   },
-  { sequelize, modelName: "MessageMap" },
+  { sequelize, modelName: "MessageMap" }
 );
 
 UserConfig.init(
@@ -158,7 +152,7 @@ UserConfig.init(
       defaultValue: null,
     },
   },
-  { sequelize, modelName: "UserConfig" },
+  { sequelize, modelName: "UserConfig" }
 );
 
 MessageMap.belongsTo(ChannelMap, {
@@ -193,14 +187,7 @@ VoiceChannelMap.init(
     fluxerGuildId: { type: DataTypes.STRING, allowNull: false },
     fluxerChannelId: { type: DataTypes.STRING, allowNull: false },
   },
-  { sequelize, modelName: "VoiceChannelMap" },
+  { sequelize, modelName: "VoiceChannelMap" }
 );
 
-export {
-  sequelize,
-  ChannelMap,
-  MessageMap,
-  UserConfig,
-  GuildMap,
-  VoiceChannelMap,
-};
+export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap, VoiceChannelMap };

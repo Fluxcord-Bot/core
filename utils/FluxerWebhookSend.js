@@ -23,12 +23,7 @@ function toAttachmentPayload(file, id) {
  * @param {import("@fluxerjs/core").Client} fluxerClient
  * @param {import("@fluxerjs/core").WebhookSendOptions & FileOptions} params
  */
-export async function sendFluxerWebhook(
-  webhookId,
-  webhookToken,
-  fluxerClient,
-  params,
-) {
+export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, params) {
   const attachments = [];
   const resolvedFiles = [];
   const { files, ...jsonPayload } = params;
@@ -66,14 +61,11 @@ export async function sendFluxerWebhook(
 
   jsonPayload.attachments = attachments;
 
-  const result = await fluxerClient.rest.post(
-    `/webhooks/${webhookId}/${webhookToken}?wait=true`,
-    {
-      body: jsonPayload,
-      files: resolvedFiles,
-      auth: false,
-    },
-  );
+  const result = await fluxerClient.rest.post(`/webhooks/${webhookId}/${webhookToken}?wait=true`, {
+    body: jsonPayload,
+    files: resolvedFiles,
+    auth: false,
+  });
 
   return result;
 }
