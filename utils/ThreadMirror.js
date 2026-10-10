@@ -65,8 +65,20 @@ async function downloadPostAttachment(url) {
 const backfillLimit = 1000;
 
 export async function backfillMirroredThread(thread, bridgeMessage) {
-  const page = await thread.messages.fetch({ limit: backfillLimit });
-  for (const message of [...page.values()].reverse()) {
+  const messages = [];
+  let before = null;
+  while (messages.length < backfillLimit) {
+    const page = await thread.messages.fetch({
+      limit: Math.min(100, backfillLimit - messages.length),
+      ...(before ? { before } : {}),
+    });
+    const batch = [...page.values()];
+    if (batch.length === 0) break;
+    messages.push(...batch);
+    before = batch[batch.length - 1].id;
+    if (batch.length < 100) break;
+  }
+  for (const message of messages.reverse()) {
     const existing = await MessageMap.findOne({
       where: { [Op.or]: [{ discordMessageId: message.id }, { fluxerMessageId: message.id }] },
     });
