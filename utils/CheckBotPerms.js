@@ -23,15 +23,17 @@ export function checkBotPermissions(botMember, channel) {
   ]);
   const missingOptional = perms.missing(
     isFluxer
-      ? ["UseExternalEmojis", "UseExternalStickers", "PinMessages"]
+      ? ["UseExternalEmojis", "UseExternalStickers", "PinMessages", "ManageChannels"]
       : [
           "MentionEveryone",
           "UseExternalEmojis",
           "UseExternalStickers",
           "PinMessages",
           "SendPolls",
+          "ManageChannels",
           "CreatePublicThreads",
           "SendMessagesInThreads",
+          "ManageThreads",
         ]
   );
   return {

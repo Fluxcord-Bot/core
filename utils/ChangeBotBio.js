@@ -6,6 +6,7 @@ import DefaultConfig from "./ConfigHandler.js";
  * @param {import("@fluxerjs/core").Guild | import("discord.js").Guild} guild
  */
 export default async function changeBotBio(guild) {
+  if (!guild?.id || !guild.members || !guild.channels) return;
   try {
     const guildMap = await GuildMap.findOne({
       where: { guildId: guild.id },

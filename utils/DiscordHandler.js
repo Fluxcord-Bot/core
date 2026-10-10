@@ -1,4 +1,4 @@
-import { MessageFlags, MessageType } from "discord.js";
+import { ChannelType, MessageFlags, MessageType } from "discord.js";
 import { Routes as FluxerRoutes } from "@fluxerjs/core";
 import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
@@ -23,6 +23,7 @@ import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 import { processSticker } from "./StickerProcessor.js";
 import { indicatorPrefix, resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { maybePublishFluxerMessage } from "./AnnouncementPublish.js";
+import { autoBridgeDiscordThread, backfillMirroredThread, fluxerThreadIdFor, fluxerWebhookChannelIdFor, waitForPendingMirror } from "./ThreadMirror.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -69,6 +70,18 @@ function countCustomEmojis(content) {
  * @param {DiscordClient} client
  * @param {import("@fluxerjs/core").Client} fluxerClient
  */
+async function mirrorExistingThread(threadId, parentId, discordClient, fluxerClient) {
+  const parentRow = await ChannelMap.findOne({ where: { discordChannelId: parentId }, raw: true });
+  if (!parentRow || parentRow.bridgeType === "fluxer2discord") return null;
+  const thread = await discordClient.channels.fetch(threadId).catch(() => null);
+  if (!thread || thread.type === ChannelType.PrivateThread) return null;
+  const row = await autoBridgeDiscordThread(thread, parentRow, discordClient, fluxerClient);
+  if (!row) return null;
+  log("DEBUG", `DiscordCreate mirrored on activity thread ${thread.id} rowId=${row.id}`);
+  await backfillMirroredThread(thread, message => DiscordCreateMessageHandler(message, discordClient, fluxerClient, true));
+  return row;
+}
+
 export async function DiscordCreateMessageHandler(message, client, fluxerClient, doNotExecuteCommand = false) {
   log(
     "DEBUG",
@@ -80,7 +93,14 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
 
   fluxcordBotEmojiCfg = normalizeFcJson(fluxcordBotEmojiCfg);
 
-  if (!message.guildId || message.type === MessageType.ChannelPinnedMessage || message.type === MessageType.ThreadCreated) {
+  if (
+    !message.guildId ||
+    message.type === MessageType.ChannelNameChange ||
+    message.type === MessageType.ChannelIconChange ||
+    message.type === MessageType.ChannelPinnedMessage ||
+    message.type === MessageType.ThreadCreated ||
+    message.type === MessageType.ThreadStarterMessage
+  ) {
     log("DEBUG", `DiscordCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`);
     return;
   }
@@ -134,12 +154,30 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     return;
   }
 
-  const channelMap = await ChannelMap.findOne({
+  let channelMap = await ChannelMap.findOne({
     where: {
       discordChannelId: message.channelId,
     },
     raw: true,
   });
+
+  if (!channelMap) {
+    const known = message.channel;
+    const thread = known?.isThread?.()
+      ? known
+      : !known || known.partial
+        ? await discordClient.channels.fetch(message.channelId).catch(() => null)
+        : null;
+    if (thread?.isThread?.()) {
+      channelMap = await waitForPendingMirror("discord", message.channelId);
+      if (channelMap) {
+        log("DEBUG", `DiscordCreate id=${message.id} resolved pending mirror for thread ${message.channelId}`);
+      } else if (thread.parentId) {
+        channelMap = await mirrorExistingThread(message.channelId, thread.parentId, client, fluxerClient);
+        if (channelMap) return;
+      }
+    }
+  }
 
   if (channelMap?.bridgeType === "fluxer2discord") {
     log(
@@ -155,6 +193,32 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       `DiscordCreate skip id=${message.id} channelId=${message.channelId} reason=${!channelMap ? "noChannelMap" : "webhookEcho"} webhookId=${message.webhookId ?? "none"}`
     );
     return;
+  }
+
+  let reroutedFluxerMessageId = null;
+  let reroutedMessageMap = null;
+  if (channelMap.autoMirrored) {
+    reroutedMessageMap = await MessageMap.findOne({
+      where: { discordMessageId: message.id },
+    });
+    if (
+      reroutedMessageMap &&
+      (reroutedMessageMap.channelMapId === channelMap.id || reroutedMessageMap.fluxerMessageId === channelMap.fluxerChannelId)
+    ) {
+      reroutedFluxerMessageId = reroutedMessageMap.fluxerMessageId;
+    } else {
+      reroutedMessageMap = null;
+    }
+  }
+
+  if (channelMap.autoMirrored && message.id === channelMap.discordChannelId && reroutedMessageMap) {
+    log("DEBUG", `DiscordCreate skip id=${message.id} reason=postHead`);
+    return;
+  }
+
+  let fluxerThreadId = null;
+  if (channelMap.autoMirrored) {
+    fluxerThreadId = await fluxerThreadIdFor(fluxerClient, channelMap);
   }
 
   const nameIndicator = await resolveNameIndicator(channelMap.fluxerGuildId, message.guildId);
@@ -250,7 +314,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     nameIndicator
   );
 
-  let earlyFluxerMsgId = null;
+  let earlyFluxerMsgId = reroutedFluxerMessageId;
   let earlyMessageReferenceOption;
   if (messageReference && !forwardedMessage) {
     earlyMessageReferenceOption = {
@@ -268,7 +332,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   try {
     guildUser = await message.guild.members.fetch(message.author.id);
   } catch {}
-  if (customEmojiCount >= earlyBridgeEmojiThreshold) {
+  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
       sourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) ||
@@ -287,6 +351,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         files: webhookFiles,
         message_reference: earlyMessageReferenceOption,
         allowed_mentions: { parse: [] },
+        ...(fluxerThreadId ? { threadId: fluxerThreadId } : {}),
       });
       earlyFluxerMsgId = earlyMsg?.id ?? null;
       log("DEBUG", `DiscordCreate early bridge id=${message.id} fluxerId=${earlyFluxerMsgId} emojiCount=${customEmojiCount}`);
@@ -295,7 +360,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     }
   }
 
-  const channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
+  const webhookChannelId = await fluxerWebhookChannelIdFor(channelMap);
+  const channel = await fluxerClient.channels.fetch(webhookChannelId);
   const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
   const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
   if (!webhook) {
@@ -375,7 +441,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     if (earlyFluxerMsgId) {
       try {
         await fluxerClient.rest.patch(
-          `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${earlyFluxerMsgId}`,
+          `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${earlyFluxerMsgId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
           {
             body: {
               content: webhookContent,
@@ -398,6 +464,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         files: webhookFiles,
         message_reference: messageReferenceOption,
         allowed_mentions: webhookAllowedMentions,
+        ...(fluxerThreadId ? { threadId: fluxerThreadId } : {}),
       });
     }
 
@@ -413,18 +480,20 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     );
 
     let bridgedMessageMap;
-    try {
-      bridgedMessageMap = await MessageMap.create({
-        messageSource: "discord",
-        discordMessageId: message.id,
-        fluxerMessageId: msg?.id,
-        fluxerReplyId: messageReference?.fluxerMessageId ?? null,
-        discordReplyId: message.reference?.messageId ?? null,
-        channelMapId: channelMap.id,
-        authorId: message.author.id,
-      });
-    } catch (e) {
-      log("DB", "Failed to save Discord -> Fluxer message map", e);
+    if (!reroutedFluxerMessageId) {
+      try {
+        bridgedMessageMap = await MessageMap.create({
+          messageSource: "discord",
+          discordMessageId: message.id,
+          fluxerMessageId: msg?.id,
+          fluxerReplyId: messageReference?.fluxerMessageId ?? null,
+          discordReplyId: message.reference?.messageId ?? null,
+          channelMapId: channelMap.id,
+          authorId: message.author.id,
+        });
+      } catch (e) {
+        log("DB", "Failed to save Discord -> Fluxer message map", e);
+      }
     }
 
     const checkMsg = async () => {
@@ -442,6 +511,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
           }
 
           await bridgedMessageMap?.destroy();
+          await reroutedMessageMap?.destroy();
           return;
         }
 
@@ -465,6 +535,11 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     "DEBUG",
     `DiscordUpdate received id=${newMsg.id} channelId=${newMsg.channelId ?? oldMsg.channelId} guildId=${newMsg.guildId ?? oldMsg.guildId} authorId=${authorId}`
   );
+
+  if (newMsg.thread && !(oldMsg && !oldMsg.partial && oldMsg.thread)) {
+    log("DEBUG", `DiscordUpdate skip id=${newMsg.id} reason=threadCreated`);
+    return;
+  }
 
   const userOptOut = await UserConfig.findOne({
     where: {
@@ -531,8 +606,10 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       `DiscordUpdate bridged discordId=${newMsg.id} fluxerId=${messageExisting.fluxerMessageId} channelMapId=${channelMap.id} embedCount=${newEmbeds.length}`
     );
 
+    const fluxerThreadId = channelMap.autoMirrored ? await fluxerThreadIdFor(client, channelMap) : null;
+
     await client.rest.patch(
-      `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}`,
+      `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
       {
         body: {
           content: newContent,

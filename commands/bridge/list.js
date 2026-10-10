@@ -1,7 +1,7 @@
 import { ChannelMap } from "../../db/index.js";
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { Op } from "sequelize";
-import { AttachmentBuilder } from "discord.js";
+import { cloudUploadAttachments } from "../../utils/CloudUpload.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -60,7 +60,9 @@ const command = {
       await message.reply({ files: [{ name: "channels.txt", data: strBuf }] });
     } else {
       await message.reply({
-        files: [new AttachmentBuilder(strBuf).setName("channels.txt")],
+        attachments: await cloudUploadAttachments(discordClient, message.channel.id, [
+          { attachment: strBuf, name: "channels.txt" },
+        ]),
       });
     }
   },

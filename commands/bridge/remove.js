@@ -1,4 +1,4 @@
-import { ChannelMap, MessageMap, sequelize } from "../../db/index.js";
+import { ChannelMap, MessageMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { BridgeMap } from "../../utils/CommandHandler.js";
 
@@ -12,7 +12,7 @@ const command = {
   description: "Unbridge the current channel",
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {
-    const channelMap = await ChannelMap.findOne({
+    let channelMap = await ChannelMap.findOne({
       where: {
         [Op.or]: [
           {
@@ -24,6 +24,20 @@ const command = {
         ],
       },
     });
+
+    if (!channelMap && message.channel?.parentId) {
+      const parentRow = await ChannelMap.findOne({
+        where: {
+          [Op.or]: [{ fluxerChannelId: message.channel.parentId }, { discordChannelId: message.channel.parentId }],
+        },
+      });
+      if (parentRow?.tagMap) channelMap = parentRow;
+    }
+
+    if (channelMap?.autoMirrored && channelMap.parentChannelMapId) {
+      const forumRow = await ChannelMap.findOne({ where: { id: channelMap.parentChannelMapId } });
+      if (forumRow?.tagMap) channelMap = forumRow;
+    }
 
     if (!channelMap) {
       if (BridgeMap.has(message.channelId)) {
@@ -37,18 +51,28 @@ const command = {
       return;
     }
 
-    try {
-      await discordClient.deleteWebhook(channelMap.discordWebhookId, {
-        token: channelMap.discordWebhookToken,
-      });
-    } catch {}
+    if (!channelMap.autoMirrored) {
+      try {
+        await discordClient.deleteWebhook(channelMap.discordWebhookId, {
+          token: channelMap.discordWebhookToken,
+        });
+      } catch {}
 
-    try {
-      const channel = /** @type {TextChannel} */ (await fluxerClient.channels.fetch(channelMap.fluxerChannelId));
-      const webhooks = await channel.fetchWebhooks();
-      const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
-      await webhook?.delete();
-    } catch {}
+      try {
+        const channel = /** @type {TextChannel} */ (await fluxerClient.channels.fetch(channelMap.fluxerChannelId));
+        const webhooks = await channel.fetchWebhooks();
+        const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
+        await webhook?.delete();
+      } catch {}
+    }
+
+    const children = await ChannelMap.findAll({
+      where: { parentChannelMapId: channelMap.id },
+    });
+    for (const child of children) {
+      await MessageMap.destroy({ where: { channelMapId: child.id } });
+      await child.destroy();
+    }
 
     await MessageMap.destroy({ where: { channelMapId: channelMap.id } });
     await channelMap.destroy();

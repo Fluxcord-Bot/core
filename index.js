@@ -1,6 +1,12 @@
 //@ts-check
-import { Events as FluxerEvents, Client as FluxerClient } from "@fluxerjs/core";
-import { Client as DiscordClient, Events as DiscordEvents, GatewayIntentBits, Partials } from "discord.js";
+import { Events as FluxerEvents, Client as FluxerClient, ChannelType as FluxerChannelType } from "@fluxerjs/core";
+import {
+  Client as DiscordClient,
+  Events as DiscordEvents,
+  GatewayIntentBits,
+  Partials,
+  ChannelType as DiscordChannelType,
+} from "discord.js";
 import Config from "./utils/ConfigHandler.js";
 import {
   FluxerBulkDeleteMessageHandler,
@@ -18,7 +24,18 @@ import {
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
+import { Op } from "sequelize";
 import { ChannelMap, GuildMap, MessageMap } from "./db/index.js";
+import {
+  autoBridgeDiscordThread,
+  autoBridgeFluxerThread,
+  cleanupMirroredRow,
+  mapTagsToDiscord,
+  mapTagsToFluxer,
+  isSelfCreate,
+  selfCreatedThreads,
+  syncForumTags,
+} from "./utils/ThreadMirror.js";
 import { isBridgeToggleEnabled } from "./utils/BridgeToggle.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
@@ -77,12 +94,21 @@ async function destroyChannelMaps(where) {
     where,
     attributes: ["id"],
   });
-  if (channelMaps.length > 0) {
-    await MessageMap.destroy({
-      where: {
-        channelMapId: channelMaps.map(c => c.get("id")),
-      },
+  const ids = channelMaps.map(c => c.get("id"));
+  if (ids.length > 0) {
+    const children = await ChannelMap.findAll({
+      where: { parentChannelMapId: { [Op.in]: ids } },
     });
+    const childIds = children.map(c => c.get("id"));
+    if (childIds.length > 0) {
+      await MessageMap.destroy({ where: { channelMapId: { [Op.in]: childIds } } });
+    }
+    await MessageMap.destroy({
+      where: { channelMapId: ids },
+    });
+    if (childIds.length > 0) {
+      await ChannelMap.destroy({ where: { id: { [Op.in]: childIds } } });
+    }
   }
   await ChannelMap.destroy({ where });
 }
@@ -110,11 +136,95 @@ discordClient.on(DiscordEvents.ChannelDelete, async chnl => {
   }
 });
 
+discordClient.on(DiscordEvents.ThreadCreate, async (thread, newlyCreated) => {
+  log(
+    "DEBUG",
+    `Discord ThreadCreate event id=${thread.id} type=${thread.type} newlyCreated=${newlyCreated} parent=${thread.parentId}`
+  );
+  if (selfCreatedThreads.has("discord:" + thread.id)) return;
+  try {
+    if (await isSelfCreate(`discord:${thread.parentId}`, thread.id)) {
+      log("DEBUG", `Discord ThreadCreate self-create skip id=${thread.id}`);
+      return;
+    }
+    if (thread.type === DiscordChannelType.PrivateThread) return;
+    if (!newlyCreated && Date.now() - (thread.createdTimestamp ?? 0) > 300_000) return;
+    const parentMap = await ChannelMap.findOne({
+      where: { discordChannelId: thread.parentId },
+      raw: true,
+    });
+    if (!parentMap || /** @type {any} */ (parentMap).bridgeType === "fluxer2discord") return;
+    await autoBridgeDiscordThread(thread, parentMap, discordClient, fluxerClient);
+  } catch (e) {
+    log("FLUXER", `Failed to auto-bridge Discord thread ${thread.id}`, e);
+  }
+});
+
 discordClient.on(DiscordEvents.ThreadDelete, async thread => {
   try {
+    const row = /** @type {any} */ (
+      await ChannelMap.findOne({
+        where: { discordChannelId: thread.id },
+      })
+    );
+    if (row?.autoMirrored) await cleanupMirroredRow(row, discordClient, fluxerClient, "discord");
     await destroyChannelMaps({ discordChannelId: thread.id });
   } catch (e) {
     log("DB", `ThreadDelete cleanup failed for discord thread ${thread.id}`, e);
+  }
+});
+
+discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
+  try {
+    const nameChanged = oldThread.name !== newThread.name;
+    const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
+    if (!nameChanged && !tagsChanged) return;
+    const row = /** @type {any} */ (
+      await ChannelMap.findOne({
+        where: { discordChannelId: newThread.id },
+      })
+    );
+    if (!row?.autoMirrored) return;
+    const fluxerThread = await fluxerClient.channels.fetch(row.fluxerChannelId);
+    if (!fluxerThread || typeof fluxerThread.isThread !== "function" || !fluxerThread.isThread()) return;
+    if (nameChanged) {
+      try {
+        await fluxerThread.edit({ name: newThread.name.slice(0, 100) });
+      } catch (e) {
+        log("FLUXER", `Failed to rename mirrored Fluxer thread ${row.fluxerChannelId}`, e);
+      }
+    }
+    if (tagsChanged) {
+      const parentRow = row.parentChannelMapId
+        ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
+        : null;
+      if (/** @type {any} */ (parentRow)?.tagMap) {
+        let discordParent = null;
+        try {
+          discordParent = newThread.parentId ? await discordClient.channels.fetch(newThread.parentId) : null;
+        } catch {}
+        const sourceIds = newThread.appliedTags ?? [];
+        const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerThread);
+        if (mapped.length > 0 || sourceIds.length === 0) {
+          try {
+            await fluxerThread.edit({ appliedTags: mapped });
+          } catch (e) {
+            log("FLUXER", `Failed to update tags on mirrored Fluxer thread ${row.fluxerChannelId}`, e);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    log("FLUXER", `Failed to mirror Discord thread update ${newThread.id}`, e);
+  }
+});
+
+discordClient.on(DiscordEvents.ChannelUpdate, async (oldChannel, newChannel) => {
+  if (newChannel.type !== DiscordChannelType.GuildForum && newChannel.type !== DiscordChannelType.GuildMedia) return;
+  try {
+    await syncForumTags(newChannel, "discord", discordClient, fluxerClient);
+  } catch (e) {
+    log("FLUXER", `Failed to sync forum tags for Discord forum ${newChannel.id}`, e);
   }
 });
 
@@ -197,6 +307,97 @@ fluxerClient.on(FluxerEvents.ChannelDelete, async chnl => {
     await destroyChannelMaps({ fluxerChannelId: chnl.id });
   } catch (e) {
     log("DB", `ChannelDelete cleanup failed for fluxer channel ${chnl.id}`, e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.ThreadCreate, async thread => {
+  log("DEBUG", `Fluxer ThreadCreate event id=${thread.id} type=${thread.type} parent=${thread.parentId}`);
+  if (selfCreatedThreads.has("fluxer:" + thread.id)) return;
+  try {
+    if (await isSelfCreate(`fluxer:${thread.parentId}`, thread.id)) {
+      log("DEBUG", `Fluxer ThreadCreate self-create skip id=${thread.id}`);
+      return;
+    }
+    if (thread.type === FluxerChannelType.PrivateThread) return;
+    const parentMap = await ChannelMap.findOne({
+      where: { fluxerChannelId: thread.parentId },
+      raw: true,
+    });
+    if (!parentMap || /** @type {any} */ (parentMap).bridgeType === "discord2fluxer") return;
+    await autoBridgeFluxerThread(thread, parentMap, discordClient, fluxerClient);
+  } catch (e) {
+    log("DISCORD", `Failed to auto-bridge Fluxer thread ${thread.id}`, e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.ThreadDelete, async thread => {
+  try {
+    const row = /** @type {any} */ (
+      await ChannelMap.findOne({
+        where: { fluxerChannelId: thread.id },
+      })
+    );
+    if (row?.autoMirrored) await cleanupMirroredRow(row, discordClient, fluxerClient, "fluxer");
+    await destroyChannelMaps({ fluxerChannelId: thread.id });
+  } catch (e) {
+    log("DB", `ThreadDelete cleanup failed for fluxer thread ${thread.id}`, e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
+  try {
+    const nameChanged = oldThread.name !== newThread.name;
+    const tagsChanged =
+      JSON.stringify(/** @type {any} */ (oldThread).appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
+    if (!nameChanged && !tagsChanged) return;
+    const row = /** @type {any} */ (
+      await ChannelMap.findOne({
+        where: { fluxerChannelId: newThread.id },
+      })
+    );
+    if (!row?.autoMirrored) return;
+    const discordThread = await discordClient.channels.fetch(row.discordChannelId);
+    if (!discordThread?.isThread?.()) return;
+    if (nameChanged) {
+      try {
+        await discordThread.setName((newThread.name ?? "").slice(0, 100));
+      } catch (e) {
+        log("DISCORD", `Failed to rename mirrored Discord thread ${row.discordChannelId}`, e);
+      }
+    }
+    if (tagsChanged) {
+      const parentRow = row.parentChannelMapId
+        ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
+        : null;
+      if (/** @type {any} */ (parentRow)?.tagMap) {
+        let fluxerParent = null;
+        try {
+          fluxerParent = newThread.parentId ? await fluxerClient.channels.fetch(newThread.parentId) : null;
+        } catch {}
+        const sourceIds = newThread.appliedTags ?? [];
+        const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordThread);
+        if (mapped.length > 0 || sourceIds.length === 0) {
+          try {
+            await discordThread.setAppliedTags(mapped);
+          } catch (e) {
+            log("DISCORD", `Failed to update tags on mirrored Discord thread ${row.discordChannelId}`, e);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    log("DISCORD", `Failed to mirror Fluxer thread update ${newThread.id}`, e);
+  }
+});
+
+fluxerClient.on(FluxerEvents.ChannelUpdate, async (oldChannel, newChannel) => {
+  const isForum = typeof newChannel.isForum === "function" && newChannel.isForum();
+  const isMedia = typeof newChannel.isMedia === "function" && newChannel.isMedia();
+  if (!isForum && !isMedia) return;
+  try {
+    await syncForumTags(newChannel, "fluxer", discordClient, fluxerClient);
+  } catch (e) {
+    log("DISCORD", `Failed to sync forum tags for Fluxer forum ${newChannel.id}`, e);
   }
 });
 

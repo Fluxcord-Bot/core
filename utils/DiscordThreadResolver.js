@@ -17,7 +17,7 @@ export async function resolveDiscordParentChannel(discordClient, channel) {
  * @param {import('discord.js').Client} discordClient
  * @param {string} discordChannelId
  */
-export async function resolveDiscordThreadId(discordClient, discordChannelId) {
+export async function resolveDiscordThreadChannel(discordClient, discordChannelId) {
   let channel;
   try {
     channel = await discordClient.channels.fetch(discordChannelId);
@@ -26,5 +26,14 @@ export async function resolveDiscordThreadId(discordClient, discordChannelId) {
   }
 
   if (!channel || !channel.isThread()) return null;
-  return channel.id;
+  return channel;
+}
+
+/**
+ * @param {import('discord.js').Client} discordClient
+ * @param {string} discordChannelId
+ */
+export async function resolveDiscordThreadId(discordClient, discordChannelId) {
+  const channel = await resolveDiscordThreadChannel(discordClient, discordChannelId);
+  return channel?.id ?? null;
 }

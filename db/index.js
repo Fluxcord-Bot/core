@@ -118,6 +118,13 @@ ChannelMap.init(
       field: "DiscordGuildMapId",
       references: { model: GuildMap, key: "id" },
     },
+    autoMirrored: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    parentChannelMapId: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
+    tagMap: { type: DataTypes.JSON, allowNull: true },
   },
   { sequelize, modelName: "ChannelMap" }
 );

@@ -227,6 +227,21 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent) {
     };
   }
 
+  const discordUnsupported =
+    typeof discordChannel.isThread === "function" && discordChannel.isThread()
+      ? true
+      : discordChannel.type === ChannelType.GuildForum || discordChannel.type === ChannelType.GuildMedia;
+  const fluxerUnsupported =
+    (typeof fluxerChannel.isThread === "function" && fluxerChannel.isThread()) ||
+    (typeof fluxerChannel.isForum === "function" && fluxerChannel.isForum()) ||
+    (typeof fluxerChannel.isMedia === "function" && fluxerChannel.isMedia());
+  if (discordUnsupported || fluxerUnsupported) {
+    return {
+      success: false,
+      errorType: "CHANNEL_NOT_SUPPORTED",
+    };
+  }
+
   const isFluxerVoice = fluxerChannel.type == ChannelType.GuildVoice;
   const isDiscordVoice = discordChannel.type == ChannelType.GuildVoice;
   if (isFluxerVoice !== isDiscordVoice) {
