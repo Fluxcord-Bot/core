@@ -286,6 +286,10 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
           discordParent = await discordClient.channels.fetch(parentMap.discordChannelId);
         } catch {}
         const appliedTags = await mapTagsToFluxer(parentMap, thread.appliedTags ?? [], discordParent, fluxerParent);
+        const moderatedTags = (fluxerParent.availableTags ?? [])
+          .filter(t => appliedTags.includes(t.id) && t.moderated)
+          .map(t => t.id);
+        const webhookTags = appliedTags.filter(id => !moderatedTags.includes(id));
         let headContent = "";
         let headUsername;
         let headAvatarUrl;
@@ -346,7 +350,7 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
           ...(headInlined && headFiles.length > 0 ? { files: headFiles } : {}),
           thread_name: thread.name.slice(0, 100),
           allowed_mentions: { parse: [] },
-          ...(appliedTags.length > 0 ? { applied_tags: appliedTags } : {}),
+          ...(webhookTags.length > 0 ? { applied_tags: webhookTags } : {}),
         });
         fluxerThreadId = res?.channel_id ?? null;
         starterMessageId = res?.id ?? null;
@@ -362,6 +366,14 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
           starterMessageId = null;
         }
         resolveSelfCreate(fluxerThreadId);
+        if (moderatedTags.length > 0 && fluxerThreadId) {
+          try {
+            const post = await fluxerClient.channels.fetch(fluxerThreadId);
+            await post.edit({ appliedTags });
+          } catch (e) {
+            log("FLUXER", `Failed to apply moderated tags on mirrored post ${fluxerThreadId}`, e);
+          }
+        }
       }
     } else {
       const starterMap = await MessageMap.findOne({
@@ -590,6 +602,10 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
           })
         );
         const appliedTags = await mapTagsToDiscord(parentMap, thread.appliedTags ?? [], fluxerSourceParent, discordParent);
+        const moderatedTags = (discordParent.availableTags ?? [])
+          .filter(t => appliedTags.includes(t.id) && t.moderated)
+          .map(t => t.id);
+        const webhookTags = appliedTags.filter(id => !moderatedTags.includes(id));
         let headContent = "";
         let headFiles = [];
         let headEmbeds = [];
@@ -642,7 +658,7 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
             : {}),
           ...(headInlined && headEmbeds.length > 0 ? { embeds: headEmbeds } : {}),
           threadName: thread.name.slice(0, 100),
-          ...(appliedTags.length > 0 ? { appliedTags } : {}),
+          ...(webhookTags.length > 0 ? { appliedTags: webhookTags } : {}),
           allowedMentions: { parse: [] },
         });
         if (headGone && created.channelId) {
@@ -654,6 +670,14 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
         }
         resolveSelfCreate(created.channelId ?? created.id);
         discordThreadId = created.channelId ?? created.id;
+        if (moderatedTags.length > 0 && discordThreadId) {
+          try {
+            const post = await discordClient.channels.fetch(discordThreadId);
+            await post.setAppliedTags(appliedTags);
+          } catch (e) {
+            log("DISCORD", `Failed to apply moderated tags on mirrored post ${discordThreadId}`, e);
+          }
+        }
       }
     } else if (!discordThreadId && discordParent.type === DiscordChannelType.GuildAnnouncement) {
       const created = await discordParent.threads.create({

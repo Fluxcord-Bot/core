@@ -203,8 +203,12 @@ discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
         try {
           discordParent = newThread.parentId ? await discordClient.channels.fetch(newThread.parentId) : null;
         } catch {}
+        let fluxerForum = null;
+        try {
+          fluxerForum = await fluxerClient.channels.fetch(parentRow.fluxerChannelId);
+        } catch {}
         const sourceIds = newThread.appliedTags ?? [];
-        const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerThread);
+        const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerForum);
         if (mapped.length > 0 || sourceIds.length === 0) {
           try {
             await fluxerThread.edit({ appliedTags: mapped });
@@ -374,8 +378,12 @@ fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
         try {
           fluxerParent = newThread.parentId ? await fluxerClient.channels.fetch(newThread.parentId) : null;
         } catch {}
+        let discordForum = null;
+        try {
+          discordForum = await discordClient.channels.fetch(parentRow.discordChannelId);
+        } catch {}
         const sourceIds = newThread.appliedTags ?? [];
-        const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordThread);
+        const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordForum);
         if (mapped.length > 0 || sourceIds.length === 0) {
           try {
             await discordThread.setAppliedTags(mapped);
