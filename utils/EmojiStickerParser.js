@@ -50,7 +50,7 @@ function isValidEmojiToken(token) {
 function discordEmojiLink(token, name) {
   const animated = token.startsWith("a");
   const rawId = animated ? token.slice(1) : token;
-  const url = `https://cdn.discordapp.com/emojis/${rawId}${animated ? ".gif" : ".webp"}`;
+  const url = `https://cdn.discordapp.com/emojis/${rawId}${animated ? ".gif" : ".webp"}?size=48`;
   return name ? `[${name}](${url})` : url;
 }
 
@@ -59,7 +59,7 @@ async function fluxerEmojiLink(token, name) {
   const rawId = animated ? token.slice(1) : token;
   const mediaBase = await getFluxerMediaBaseUrl();
   if (!mediaBase) return `:${token}:`;
-  const url = `${mediaBase}/emojis/${rawId}.webp${animated ? "?animated=true" : ""}`;
+  const url = `${mediaBase}/emojis/${rawId}.webp${animated ? "?animated=true" : ""}?size=48`;
   return name ? `[${name}](${url})` : url;
 }
 
