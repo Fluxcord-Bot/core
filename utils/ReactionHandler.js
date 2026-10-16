@@ -1,11 +1,10 @@
 import { Events as DiscordEvents, Routes as DiscordRoutes } from "discord.js";
 import { Events as FluxerEvents, Routes as FluxerRoutes } from "@fluxerjs/core";
-import { ChannelMap, MessageMap } from "../db/index.js";
+import { MessageMap } from "../db/index.js";
 import { log } from "./Logger.js";
-import Config from "./ConfigHandler.js";
-import { getFluxEmojis, getDiscordEmojis, getBotEmojis, clearFluxEmojiCache, clearBotEmojiCache } from "./EmojiCache.js";
+import { getFluxEmojis, getDiscordEmojis } from "./EmojiCache.js";
 import { sendBridgeInfo } from "./MessageBridgeInfo.js";
-import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
+import { ensureFluxerEmojis, ensureDiscordEmojis, isFluxerEmojiRateLimited, isDiscordEmojiRateLimited, } from "./EmojiStickerParser.js";
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -18,6 +17,7 @@ import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
  * @param {string | null} emojiName
  */
 async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient, targetFluxerGuildId, emojiName) {
+  if (isFluxerEmojiRateLimited()) return null;
   if (emojiName) {
     try {
       const targetEmojis = await getFluxEmojis(targetFluxerGuildId, fluxerClient);
@@ -26,32 +26,13 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
     } catch {}
   }
 
-  const storeName = `e${animated ? "a" : ""}${discordEmojiId}`;
-  try {
-    let emojis = await getFluxEmojis(Config.FluxerTempEmojiGuildId, fluxerClient);
-    let existing = emojis.find(x => x.name === storeName);
+  const originId = emojiName?.match(/^ea?(\d{17,19})$/)?.[1] ?? null;
+  if (originId) return `${emojiName}:${originId}`;
 
-    if (!existing) {
-      const res = await fetch(`https://cdn.discordapp.com/emojis/${discordEmojiId}${animated ? ".gif" : ".webp"}`);
-      const buf = await res.arrayBuffer();
-      const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
-      await guild?.createEmojisBulk([
-        {
-          image: btoa(new Uint8Array(buf).reduce((d, b) => d + String.fromCharCode(b), "")),
-          name: storeName,
-        },
-      ]);
-      clearFluxEmojiCache(Config.FluxerTempEmojiGuildId);
-      emojis = await getFluxEmojis(Config.FluxerTempEmojiGuildId, fluxerClient);
-      existing = emojis.find(x => x.name === storeName);
-    }
-
-    if (!existing?.id) return null;
-    return `${storeName}:${existing.id}`;
-  } catch (e) {
-    log("FLUXER", `Failed to mirror Discord emoji ${discordEmojiId} to Fluxer: ${e}`);
-    return null;
-  }
+  const token = `${animated ? "a" : ""}${discordEmojiId}`;
+  const ensured = await ensureFluxerEmojis(fluxerClient, [token]);
+  const emoji = ensured.get(token);
+  return emoji?.id ? `${emoji.name}:${emoji.id}` : null;
 }
 
 /**
@@ -65,6 +46,7 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
  * @param {string | null} emojiName
  */
 async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient, targetDiscordGuildId, emojiName) {
+  if (isDiscordEmojiRateLimited()) return null;
   if (emojiName) {
     try {
       const targetEmojis = await getDiscordEmojis(targetDiscordGuildId, discordClient);
@@ -73,30 +55,13 @@ async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient
     } catch {}
   }
 
-  const storeName = `e${animated ? "a" : ""}${fluxerEmojiId}`;
-  try {
-    const appEmojis = await getBotEmojis(discordClient);
-    let existing = [...appEmojis.values()].find(x => x.name === storeName);
+  const originId = emojiName?.match(/^ea?(\d{17,19})$/)?.[1] ?? null;
+  if (originId) return `${emojiName}:${originId}`;
 
-    if (!existing) {
-      const mediaUrl = await getFluxerMediaBaseUrl();
-      const res = await fetch(
-        `${mediaUrl}/emojis/${fluxerEmojiId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`
-      );
-      const buf = Buffer.from(await res.arrayBuffer());
-      existing = await discordClient.application?.emojis.create({
-        attachment: buf,
-        name: storeName,
-      });
-      clearBotEmojiCache();
-    }
-
-    if (!existing?.id) return null;
-    return `${storeName}:${existing.id}`;
-  } catch (e) {
-    log("DISCORD", `Failed to mirror Fluxer emoji ${fluxerEmojiId} to Discord: ${e}`);
-    return null;
-  }
+  const token = `${animated ? "a" : ""}${fluxerEmojiId}`;
+  const ensured = await ensureDiscordEmojis(discordClient, [token]);
+  const emoji = ensured.get(token);
+  return emoji?.id ? `${emoji.name}:${emoji.id}` : null;
 }
 
 /**
