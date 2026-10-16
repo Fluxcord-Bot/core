@@ -205,7 +205,7 @@ discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
         } catch {}
         let fluxerForum = null;
         try {
-          fluxerForum = await fluxerClient.channels.fetch(parentRow.fluxerChannelId);
+          fluxerForum = await fluxerClient.channels.fetch((/** @type {any} */ (parentRow)).fluxerChannelId);
         } catch {}
         const sourceIds = newThread.appliedTags ?? [];
         const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerForum);
@@ -295,7 +295,7 @@ discordClient.on(DiscordEvents.ChannelPinsUpdate, async channel => {
   }
 });
 
-// prob contributed on the sudden deletions, will comment this for now
+// prob contributed on the sudden deletions, will comment this for now   <- this is funny
 // fluxerClient.on(FluxerEvents.GuildDelete, async (guild) => {
 //   if (guild.unavailable) return;
 
@@ -380,7 +380,7 @@ fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
         } catch {}
         let discordForum = null;
         try {
-          discordForum = await discordClient.channels.fetch(parentRow.discordChannelId);
+          discordForum = await discordClient.channels.fetch((/** @type {any} */ (parentRow)).discordChannelId);
         } catch {}
         const sourceIds = newThread.appliedTags ?? [];
         const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordForum);
