@@ -5,7 +5,7 @@ import Config from "../../utils/ConfigHandler.js";
 import { genAuthLink } from "../../utils/GenAuthLink.js";
 import { ChannelMap, GuildMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
-import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
+import { GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
 import { resolveDiscordParentChannel } from "../../utils/DiscordThreadResolver.js";
@@ -13,6 +13,7 @@ import {
   isAnnouncementPairAllowed,
   isDiscordAnnouncementChannel,
   isFluxerAnnouncementChannel,
+  isVoiceChannel,
   resolveChannelVoiceText,
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
@@ -77,7 +78,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
 
       const code = RandomString(6);
 
-      let isVoice = message.channel?.type == ChannelType.GuildVoice;
+      let isVoice = isVoiceChannel(message.channel);
 
       PendingSetup.set(code, {
         guildId: message.guildId,
@@ -155,7 +156,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      let isVoice = message.channel?.type == ChannelType.GuildVoice;
+      let isVoice = isVoiceChannel(message.channel);
       let voiceText = isVoice ? "voice" : "text";
 
       if (setup.isVoice !== isVoice) {
@@ -297,6 +298,11 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       });
 
       if (isVoice && setup.isVoice) {
+        await VoiceChannelMap.destroy({
+          where: {
+            [Op.or]: [{ discordChannelId }, { fluxerChannelId }],
+          },
+        });
         await VoiceChannelMap.create({
           discordGuildId,
           discordChannelId,

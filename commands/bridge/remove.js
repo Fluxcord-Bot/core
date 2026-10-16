@@ -1,4 +1,4 @@
-import { ChannelMap, MessageMap } from "../../db/index.js";
+import { ChannelMap, MessageMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { BridgeMap } from "../../utils/CommandHandler.js";
 
@@ -47,6 +47,19 @@ const command = {
         return;
       }
 
+      const voiceMaps = await VoiceChannelMap.findAll({
+        where: {
+          [Op.or]: [{ discordChannelId: message.channelId }, { fluxerChannelId: message.channelId }],
+        },
+      });
+      if (voiceMaps.length > 0) {
+        for (const voiceMap of voiceMaps) {
+          await voiceMap.destroy();
+        }
+        await message.reply("Successfully unbridged!");
+        return;
+      }
+
       await message.reply("This channel is already unbridged.");
       return;
     }
@@ -75,6 +88,11 @@ const command = {
     }
 
     await MessageMap.destroy({ where: { channelMapId: channelMap.id } });
+    await VoiceChannelMap.destroy({
+      where: {
+        [Op.or]: [{ discordChannelId: channelMap.discordChannelId }, { fluxerChannelId: channelMap.fluxerChannelId }],
+      },
+    });
     await channelMap.destroy();
 
     await message.reply("Successfully unbridged!");

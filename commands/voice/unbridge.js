@@ -25,20 +25,20 @@ ${Config.BotPrefix}voice unbridge <channelId>
       return;
     }
 
-    const voiceMap = await VoiceChannelMap.findOne({
+    const voiceMaps = await VoiceChannelMap.findAll({
       where: {
         [Op.or]: [{ discordChannelId: channelId }, { fluxerChannelId: channelId }],
       },
     });
-    if (!voiceMap) {
+    if (voiceMaps.length === 0) {
       await message.reply("No voice bridge found for that channel ID.");
       return;
     }
 
-    // @ts-expect-error
-    const { discordChannelId, fluxerChannelId } = voiceMap;
-    await voiceMap.destroy();
-    await message.reply(`Voice bridge removed: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``);
+    for (const voiceMap of voiceMaps) {
+      await voiceMap.destroy();
+    }
+    await message.reply("Successfully unbridged!");
   },
 };
 
