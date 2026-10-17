@@ -410,12 +410,16 @@ async function createFluxerEmojis(fluxerClient, tokens) {
       }
     }
 
+    if (payloads.size > 0) log("FLUXER", `Uploading ${payloads.size} new emoji(s) to Fluxer temp guild`)
+
     const pass1 = await bulkCreateFluxerEmojis(fluxerClient, [...payloads.entries()], out);
     if (pass1.rateLimited) return settleEmojiResults(out, tokens);
 
     if (pass1.maxEmojis.length > 0) {
+      const deleteCount = Math.min(pass1.maxEmojis.length + EMOJI_DELETE_MARGIN, EMOJI_DELETE_BATCH);
+      log("FLUXER", `Fluxer temp guild is full, deleting ${deleteCount} oldest emoji(s) and retrying`);
       try {
-        await deleteOldestEmojisFluxer(fluxerClient, Math.min(pass1.maxEmojis.length + EMOJI_DELETE_MARGIN, EMOJI_DELETE_BATCH));
+        await deleteOldestEmojisFluxer(fluxerClient, deleteCount);
       } catch (e) {
         if (isRateLimitError(e)) startFluxerCooldown(e);
         return settleEmojiResults(out, tokens);
@@ -468,6 +472,7 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out) {
 async function createDiscordEmojis(discordClient, tokens) {
   const out = new Map();
   try {
+    log("DISCORD", `Uploading ${tokens.length} new emoji(s) to Discord app emojis`);
     const failedMax = [];
     for (const token of tokens) {
       try {
@@ -484,8 +489,10 @@ async function createDiscordEmojis(discordClient, tokens) {
     }
 
     if (failedMax.length > 0) {
+      const deleteCount = Math.min(failedMax.length + EMOJI_DELETE_MARGIN, EMOJI_DELETE_BATCH);
+      log("DISCORD", `Discord app emoji store is full, deleting ${deleteCount} oldest emoji(s) and retrying`);
       try {
-        await deleteOldestEmojisDiscord(discordClient, Math.min(failedMax.length + EMOJI_DELETE_MARGIN, EMOJI_DELETE_BATCH));
+        await deleteOldestEmojisDiscord(discordClient, deleteCount);
       } catch (e) {
         if (isRateLimitError(e)) startDiscordCooldown(e);
         return settleEmojiResults(out, tokens);
