@@ -59,7 +59,7 @@ async function fluxerEmojiLink(token, name) {
   const rawId = animated ? token.slice(1) : token;
   const mediaBase = await getFluxerMediaBaseUrl();
   if (!mediaBase) return `:${token}:`;
-  const url = `${mediaBase}/emojis/${rawId}.webp${animated ? "?animated=true" : ""}&size=48`;
+  const url = `${mediaBase}/emojis/${rawId}.webp${animated ? "?animated=true&" : "?"}size=48`;
   return name ? `[${name}](${url})` : url;
 }
 
