@@ -556,7 +556,11 @@ async function deleteOldestEmojisFluxer(fluxerClient, count) {
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, count);
     for (const emoji of emojis) {
-      await emoji.delete();
+      try {
+        await emoji.delete();
+      } catch (e) {
+        if (e?.code !== "UNKNOWN_EMOJI") throw e;
+      }
     }
   } catch (e) {
     log("FLUXER", `Cannot delete oldest emojis on Fluxer (guild ${Config.FluxerTempEmojiGuildId}): ` + e);
@@ -578,7 +582,11 @@ async function deleteOldestEmojisDiscord(discordClient, count) {
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .slice(0, count);
     for (const emoji of emojis) {
-      await emoji?.delete();
+      try {
+        await emoji?.delete();
+      } catch (e) {
+        if (e?.code !== 10008) throw e;
+      }
     }
   } catch (e) {
     log("DISCORD", "Cannot delete oldest emojis on Discord: " + e);
