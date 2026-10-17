@@ -31,6 +31,10 @@ function isMaxEmojisError(e) {
   return e?.code === "MAX_EMOJIS" || e?.code === 30008;
 }
 
+function isMaxEmojisFailure(error) {
+  return error === "MAX_EMOJIS" || /maximum number of emojis/i.test(error ?? "");
+}
+
 function startFluxerCooldown(e) {
   const retryAfter = Number(e?.retryAfter) > 0 ? Number(e.retryAfter) : 30;
   fluxerEmojiCooldownUntil = Date.now() + retryAfter * 1000 + 1000;
@@ -449,7 +453,7 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out) {
         }
       }
       for (const failed of res?.failed ?? []) {
-        if (failed?.error === "MAX_EMOJIS") {
+        if (isMaxEmojisFailure(failed?.error)) {
           maxEmojis.push(chunk.find(([t]) => `e${t}` === failed.name)[0]);
         }
       }
