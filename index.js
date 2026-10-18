@@ -30,8 +30,8 @@ import {
   autoBridgeDiscordThread,
   autoBridgeFluxerThread,
   cleanupMirroredRow,
-  mapTagsToDiscord,
-  mapTagsToFluxer,
+  mirrorDiscordThreadUpdate,
+  mirrorFluxerThreadUpdate,
   isSelfCreate,
   selfCreatedThreads,
   syncForumTags,
@@ -207,48 +207,7 @@ discordClient.on(DiscordEvents.ThreadDelete, async thread => {
 
 discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
   try {
-    const nameChanged = oldThread.name !== newThread.name;
-    const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
-    if (!nameChanged && !tagsChanged) return;
-    const row = /** @type {any} */ (
-      await ChannelMap.findOne({
-        where: { discordChannelId: newThread.id },
-      })
-    );
-    if (!row?.autoMirrored) return;
-    const fluxerThread = await fluxerClient.channels.fetch(row.fluxerChannelId);
-    if (!fluxerThread || typeof fluxerThread.isThread !== "function" || !fluxerThread.isThread()) return;
-    if (nameChanged) {
-      try {
-        await fluxerThread.edit({ name: newThread.name.slice(0, 100) });
-      } catch (e) {
-        log("FLUXER", `Failed to rename mirrored Fluxer thread ${row.fluxerChannelId}`, e);
-      }
-    }
-    if (tagsChanged) {
-      const parentRow = row.parentChannelMapId
-        ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
-        : null;
-      if (/** @type {any} */ (parentRow)?.tagMap) {
-        let discordParent = null;
-        try {
-          discordParent = newThread.parentId ? await discordClient.channels.fetch(newThread.parentId) : null;
-        } catch {}
-        let fluxerForum = null;
-        try {
-          fluxerForum = await fluxerClient.channels.fetch((/** @type {any} */ (parentRow)).fluxerChannelId);
-        } catch {}
-        const sourceIds = newThread.appliedTags ?? [];
-        const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerForum);
-        if (mapped.length > 0 || sourceIds.length === 0) {
-          try {
-            await fluxerThread.edit({ appliedTags: mapped });
-          } catch (e) {
-            log("FLUXER", `Failed to update tags on mirrored Fluxer thread ${row.fluxerChannelId}`, e);
-          }
-        }
-      }
-    }
+    await mirrorDiscordThreadUpdate(oldThread, newThread, discordClient, fluxerClient);
   } catch (e) {
     log("FLUXER", `Failed to mirror Discord thread update ${newThread.id}`, e);
   }
@@ -381,49 +340,7 @@ fluxerClient.on(FluxerEvents.ThreadDelete, async thread => {
 
 fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
   try {
-    const nameChanged = oldThread.name !== newThread.name;
-    const tagsChanged =
-      JSON.stringify(/** @type {any} */ (oldThread).appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
-    if (!nameChanged && !tagsChanged) return;
-    const row = /** @type {any} */ (
-      await ChannelMap.findOne({
-        where: { fluxerChannelId: newThread.id },
-      })
-    );
-    if (!row?.autoMirrored) return;
-    const discordThread = await discordClient.channels.fetch(row.discordChannelId);
-    if (!discordThread?.isThread?.()) return;
-    if (nameChanged) {
-      try {
-        await discordThread.setName((newThread.name ?? "").slice(0, 100));
-      } catch (e) {
-        log("DISCORD", `Failed to rename mirrored Discord thread ${row.discordChannelId}`, e);
-      }
-    }
-    if (tagsChanged) {
-      const parentRow = row.parentChannelMapId
-        ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
-        : null;
-      if (/** @type {any} */ (parentRow)?.tagMap) {
-        let fluxerParent = null;
-        try {
-          fluxerParent = newThread.parentId ? await fluxerClient.channels.fetch(newThread.parentId) : null;
-        } catch {}
-        let discordForum = null;
-        try {
-          discordForum = await discordClient.channels.fetch((/** @type {any} */ (parentRow)).discordChannelId);
-        } catch {}
-        const sourceIds = newThread.appliedTags ?? [];
-        const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordForum);
-        if (mapped.length > 0 || sourceIds.length === 0) {
-          try {
-            await discordThread.setAppliedTags(mapped);
-          } catch (e) {
-            log("DISCORD", `Failed to update tags on mirrored Discord thread ${row.discordChannelId}`, e);
-          }
-        }
-      }
-    }
+    await mirrorFluxerThreadUpdate(oldThread, newThread, discordClient, fluxerClient);
   } catch (e) {
     log("DISCORD", `Failed to mirror Fluxer thread update ${newThread.id}`, e);
   }

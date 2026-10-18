@@ -262,7 +262,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
   const webhook = await discordClient.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
 
   const discordThread = await resolveDiscordThreadChannel(discordClient, channelMap.discordChannelId);
-  if (discordThread?.archived) {
+  if (discordThread?.archived && !discordThread.locked) {
     try {
       await discordThread.setArchived(false);
     } catch (e) {

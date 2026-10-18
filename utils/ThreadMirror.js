@@ -218,7 +218,7 @@ export async function fluxerThreadIdFor(fluxerClient, channelMap) {
     return null;
   }
   if (typeof channel?.isThread !== "function" || !channel.isThread()) return null;
-  if (channel.archived) {
+  if (channel.archived && !channel.locked) {
     try {
       await channel.setArchived(false);
     } catch (e) {
@@ -781,6 +781,125 @@ export async function cleanupMirroredRow(row, discordClient, fluxerClient, skipP
       await fluxerThread.delete();
     } catch (e) {
       log("FLUXER", `Failed to delete mirrored Fluxer thread ${row.fluxerChannelId}`, e);
+    }
+  }
+}
+
+export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordClient, fluxerClient) {
+  const nameChanged = oldThread.name !== newThread.name;
+  const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
+  const archivedChanged = oldThread.archived !== newThread.archived;
+  const lockedChanged = oldThread.locked !== newThread.locked;
+  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged) return;
+  const row = /** @type {any} */ (
+    await ChannelMap.findOne({
+      where: { discordChannelId: newThread.id },
+    })
+  );
+  if (!row?.autoMirrored) return;
+  const fluxerThread = await fluxerClient.channels.fetch(row.fluxerChannelId);
+  if (!fluxerThread || typeof fluxerThread.isThread !== "function" || !fluxerThread.isThread()) return;
+  if (nameChanged) {
+    try {
+      await fluxerThread.edit({ name: newThread.name.slice(0, 100) });
+    } catch (e) {
+      log("FLUXER", `Failed to rename mirrored Fluxer thread ${row.fluxerChannelId}`, e);
+    }
+  }
+  if (tagsChanged) {
+    const parentRow = row.parentChannelMapId
+      ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
+      : null;
+    if (/** @type {any} */ (parentRow)?.tagMap) {
+      let discordParent = null;
+      try {
+        discordParent = newThread.parentId ? await discordClient.channels.fetch(newThread.parentId) : null;
+      } catch {}
+      let fluxerForum = null;
+      try {
+        fluxerForum = await fluxerClient.channels.fetch((/** @type {any} */ (parentRow)).fluxerChannelId);
+      } catch {}
+      const sourceIds = newThread.appliedTags ?? [];
+      const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerForum);
+      if (mapped.length > 0 || sourceIds.length === 0) {
+        try {
+          await fluxerThread.edit({ appliedTags: mapped });
+        } catch (e) {
+          log("FLUXER", `Failed to update tags on mirrored Fluxer thread ${row.fluxerChannelId}`, e);
+        }
+      }
+    }
+  }
+  if (archivedChanged || lockedChanged) {
+    const patch = {};
+    if (archivedChanged && fluxerThread.archived !== newThread.archived) patch.archived = newThread.archived;
+    if (lockedChanged && fluxerThread.locked !== newThread.locked) patch.locked = newThread.locked;
+    if (patch.archived !== undefined || patch.locked !== undefined) {
+      try {
+        await fluxerThread.edit(patch);
+      } catch (e) {
+        log("FLUXER", `Failed to mirror Discord thread close/lock ${row.fluxerChannelId}`, e);
+      }
+    }
+  }
+}
+
+export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClient, fluxerClient) {
+  const nameChanged = oldThread.name !== newThread.name;
+  const tagsChanged =
+    JSON.stringify(/** @type {any} */ (oldThread).appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
+  const archivedChanged = /** @type {any} */ (oldThread).archived !== newThread.archived;
+  const lockedChanged = /** @type {any} */ (oldThread).locked !== newThread.locked;
+  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged) return;
+  const row = /** @type {any} */ (
+    await ChannelMap.findOne({
+      where: { fluxerChannelId: newThread.id },
+    })
+  );
+  if (!row?.autoMirrored) return;
+  const discordThread = await discordClient.channels.fetch(row.discordChannelId);
+  if (!discordThread?.isThread?.()) return;
+  if (nameChanged) {
+    try {
+      await discordThread.setName((newThread.name ?? "").slice(0, 100));
+    } catch (e) {
+      log("DISCORD", `Failed to rename mirrored Discord thread ${row.discordChannelId}`, e);
+    }
+  }
+  if (tagsChanged) {
+    const parentRow = row.parentChannelMapId
+      ? await ChannelMap.findOne({ where: { id: row.parentChannelMapId }, raw: true })
+      : null;
+    if (/** @type {any} */ (parentRow)?.tagMap) {
+      let fluxerParent = null;
+      try {
+        fluxerParent = newThread.parentId ? await fluxerClient.channels.fetch(newThread.parentId) : null;
+      } catch {}
+      let discordForum = null;
+      try {
+        discordForum = await discordClient.channels.fetch((/** @type {any} */ (parentRow)).discordChannelId);
+      } catch {}
+      const sourceIds = newThread.appliedTags ?? [];
+      const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordForum);
+      if (mapped.length > 0 || sourceIds.length === 0) {
+        try {
+          await discordThread.setAppliedTags(mapped);
+        } catch (e) {
+          log("DISCORD", `Failed to update tags on mirrored Discord thread ${row.discordChannelId}`, e);
+        }
+      }
+    }
+  }
+  if (archivedChanged || lockedChanged) {
+    const patch = {};
+    if (archivedChanged && discordThread.archived !== newThread.archived) patch.archived = newThread.archived;
+    if (lockedChanged && discordThread.locked !== newThread.locked) patch.locked = newThread.locked;
+    if (patch.archived !== undefined || patch.locked !== undefined) {
+      try {
+        await discordThread.edit(patch);
+      } catch (e) {
+        log("DISCORD", `Failed to mirror Fluxer thread close/lock ${row.discordChannelId}`, e);
+      }
     }
   }
 }
