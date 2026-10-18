@@ -86,6 +86,37 @@ fluxerClient.on(FluxerEvents.Error, error => {
   log("FLUXER", error);
 });
 
+const fluxerSelfHealingCloseCodes = new Set([4000, 4007, 4008, 4009, 4012, 4013]);
+const fluxerUnrecoverableCloseCodes = new Set([4004, 4010, 4011]);
+
+let fluxerGatewayResetting = false;
+async function resetFluxerGateway() {
+  if (fluxerGatewayResetting) return;
+  fluxerGatewayResetting = true;
+  try {
+    await fluxerClient.destroy();
+    await fluxerClient.login(Config.FluxerBotToken);
+    log("FLUXER", "Gateway reconnected");
+  } catch (e) {
+    log("FLUXER", "Gateway reconnect failed, retrying in 30 seconds", e);
+    setTimeout(resetFluxerGateway, 30000);
+  } finally {
+    setTimeout(() => {
+      fluxerGatewayResetting = false;
+    }, 10000);
+  }
+}
+
+fluxerClient.on(FluxerEvents.ShardDisconnect, (shardId, code) => {
+  if (fluxerUnrecoverableCloseCodes.has(code)) {
+    log("FLUXER", `Gateway closed with unrecoverable code ${code}, not reconnecting`);
+    return;
+  }
+  if (code < 4000 || fluxerSelfHealingCloseCodes.has(code)) return;
+  log("FLUXER", `Gateway disconnected (code ${code ?? "unknown"}), reconnecting in 5 seconds`);
+  setTimeout(resetFluxerGateway, 5000);
+});
+
 /**
  * @param {{ discordChannelId?: string, fluxerChannelId?: string, discordGuildId?: string }} where
  */
