@@ -129,9 +129,12 @@ export async function parseDiscordEmojiToFluxer(content, fluxerClient, targetFlu
   }
 
   if (staged.length > 0) {
-    const ensured = await ensureFluxerEmojis(fluxerClient, staged);
+    const ensured = await Promise.race([
+      ensureFluxerEmojis(fluxerClient, staged),
+      new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
+    ]);
     for (const token of staged) {
-      const emoji = ensured.get(token);
+      const emoji = ensured?.get(token);
       if (emoji?.id) {
         replacements.set(token, `<${token.startsWith("a") ? "a:" : ":"}${emoji.name}:${emoji.id}>`);
       } else {
