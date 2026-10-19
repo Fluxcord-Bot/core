@@ -306,12 +306,12 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
           const overSized = [];
           for (const a of headMessage.attachments?.values() ?? []) {
             if (a.size >= MAX_POST_ATTACHMENT_SIZE) {
-              overSized.push(`[${a.name}](<${a.proxyURL ?? a.url}>)`);
+              overSized.push(`[${a.name}](<${a.url ?? a.proxyURL}>)`);
               continue;
             }
             headFiles.push({
               name: a.name,
-              url: a.proxyURL ?? a.url,
+              url: a.url ?? a.proxyURL,
               flags: isDiscordSpoilerAttachment(a) ? SPOILER_ATTACHMENT_FLAG : undefined,
               description: a.description,
             });

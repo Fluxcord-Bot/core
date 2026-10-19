@@ -302,7 +302,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const webhookFiles = bridgeAttachments
     .map(a => ({
       name: a.name,
-      url: a.proxyURL ?? a.url,
+      url: a.url ?? a.proxyURL,
       flags: isDiscordSpoilerAttachment(a) ? SPOILER_ATTACHMENT_FLAG : undefined,
       description: a.description,
     }))
@@ -374,7 +374,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   }
 
   const overAttachments = (forwardedMessage ?? message).attachments.filter(x => x.size > 24999900);
-  const overAttachmentsStr = overAttachments.map(x => `[${x.name}](<${x.proxyURL ?? x.url}>)`).join(" ");
+  const overAttachmentsStr = overAttachments.map(x => `[${x.name}](<${x.url ?? x.proxyURL}>)`).join(" ");
   if (webhook) {
     const otherSideGuild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
     const canUserPing = await checkPingPerms(message.guildId, message.author.id, client);

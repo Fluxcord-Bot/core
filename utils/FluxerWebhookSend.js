@@ -46,6 +46,10 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
           }
 
           const res = await fetch(file.url);
+          if (!res.ok) {
+            log("DISCORD", `Failed to download attachment ${file.name} from ${file.url}: ${res.status} ${res.statusText}`);
+            continue;
+          }
           data = await res.arrayBuffer();
         }
 
