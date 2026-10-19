@@ -9,7 +9,6 @@ import { DiscordCreateMessageHandler } from "../../utils/DiscordHandler.js";
 
 const activeBackfills = new Map();
 const fetchPageSize = 100;
-const maxBackfillMessages = 1000;
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -24,7 +23,7 @@ const command = {
     { name: "count", type: "integer" },
     { name: "cancel", type: "boolean", flag: "cancel" },
   ],
-  additionalInfo: `numOfMessages = message count starting from the last message sent, up to ${maxBackfillMessages}
+  additionalInfo: `numOfMessages = message count starting from the last message sent, up to ${Config.MaxBackfillMessages}
 cancel = interrupt the backfill currently running in this channel
 
 Run \`bridge backfill cancel\` while a backfill is running to stop it after the current message.`,
@@ -50,8 +49,8 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
 \`\`\``);
       return;
     }
-    if (numOfMessages > maxBackfillMessages) {
-      await message.reply(`Backfill is limited to ${maxBackfillMessages} messages at a time.`);
+    if (numOfMessages > Config.MaxBackfillMessages) {
+      await message.reply(`Backfill is limited to ${Config.MaxBackfillMessages} messages at a time.`);
       return;
     }
 

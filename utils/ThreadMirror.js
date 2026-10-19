@@ -1,3 +1,4 @@
+import Config from "./ConfigHandler.js";
 import { ChannelType as FluxerChannelType } from "@fluxerjs/core";
 import { ChannelType as DiscordChannelType } from "discord.js";
 import { ChannelMap, MessageMap } from "../db/index.js";
@@ -62,14 +63,12 @@ async function downloadPostAttachment(url) {
   }
 }
 
-const backfillLimit = 1000;
-
 export async function backfillMirroredThread(thread, bridgeMessage) {
   const messages = [];
   let before = null;
-  while (messages.length < backfillLimit) {
+  while (messages.length < Config.MaxBackfillMessages) {
     const page = await thread.messages.fetch({
-      limit: Math.min(100, backfillLimit - messages.length),
+      limit: Math.min(100, Config.MaxBackfillMessages - messages.length),
       ...(before ? { before } : {}),
     });
     const batch = [...page.values()];

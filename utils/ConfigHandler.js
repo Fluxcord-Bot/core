@@ -20,6 +20,8 @@ const DefaultConfig = {
   /** @type {({ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string }| undefined } | { nontrinsic: true })[]} */
   Motds: [],
 
+  MaxBackfillMessages: 1000,
+
   VoiceBridgingEnabled: false,
 
   RunnerWsPort: 8765,

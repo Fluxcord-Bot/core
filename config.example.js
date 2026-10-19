@@ -61,6 +61,8 @@ const Config = {
   // or use { nontrinsic: true } and it will use https://nontrinsic.linerly.xyz
   Motds: [],
 
+  MaxBackfillMessages: 1000,
+
   // The prefix of the bot
   BotPrefix: "fc!",
 
