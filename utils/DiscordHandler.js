@@ -380,6 +380,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     const canUserPing = await checkPingPerms(message.guildId, message.author.id, client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
+    const webhookFlags = message.flags.has(MessageFlags.SuppressNotifications) ? 4096 : undefined;
     const webhookAllowedMentions = forwardedMessage
       ? { parse: [] }
       : {
@@ -447,6 +448,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
               content: webhookContent,
               embeds: webhookEmbeds,
               allowed_mentions: webhookAllowedMentions,
+              flags: webhookFlags,
             },
             auth: false,
           }
@@ -464,6 +466,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         files: webhookFiles,
         message_reference: messageReferenceOption,
         allowed_mentions: webhookAllowedMentions,
+        flags: webhookFlags,
         ...(fluxerThreadId ? { threadId: fluxerThreadId } : {}),
       });
     }
@@ -615,7 +618,8 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       wEmbeds.filter(x => !x.url || !newContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, client))
     );
 
-    const suppressEmbeds = newMsg.flags?.has(MessageFlags.SuppressEmbeds) ?? false;
+    const suppressEmbeds = newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;
+    const suppressNotifications = newMsg.flags?.has?.(MessageFlags.SuppressNotifications) ?? false;
 
     if (!newContent && newEmbeds.length === 0 && !suppressEmbeds) {
       log("DEBUG", `DiscordUpdate skip id=${newMsg.id} reason=emptyEdit`);
@@ -635,7 +639,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         body: {
           content: newContent,
           embeds: newEmbeds,
-          flags: suppressEmbeds ? 4 : 0,
+          flags: (suppressEmbeds ? 4 : 0) | (suppressNotifications ? 4096 : 0),
         },
         auth: false,
       }

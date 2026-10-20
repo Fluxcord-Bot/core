@@ -353,6 +353,8 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
   const attachments =
     files.length > 0 ? await cloudUploadAttachments(discordClient, channelMap.discordChannelId, files) : undefined;
 
+  const silentFlag = message.flags?.has?.(4096) ? 4096 : undefined;
+
   /** @type {import("discord.js").MessagePayload | import("discord.js").WebhookMessageCreateOptions} */
   const webhookPayload = {
     content:
@@ -377,6 +379,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     embeds: await fluxerEmbedToDiscord(forwardedMessage ?? message, discordClient),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
     allowedMentions: forwardedMessage ? { parse: [] } : { parse: ["roles", "users", ...(canBridgePing ? ["everyone"] : [])] },
+    flags: silentFlag,
     ...(threadId ? { threadId } : {}),
   };
 
@@ -385,6 +388,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     try {
       msg = await webhook.editMessage(earlyDiscordMsgId, {
         ...webhookPayload,
+        flags: undefined,
         ...(threadId ? { threadId } : {}),
       });
     } catch (e) {
