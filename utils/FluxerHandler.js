@@ -488,7 +488,25 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     },
   });
 
-  if (channelMapViaUserId) return;
+  if (channelMapViaUserId) {
+    if (newMessage.flags?.has?.(4) !== oldMessage?.flags?.has?.(4)) {
+      const messageExisting = await MessageMap.findOne({
+        where: {
+          fluxerMessageId: newMessage.id,
+        },
+        include: ["channelMap"],
+      });
+      if (messageExisting) {
+        const mirrorSuppressed = newMessage.flags.has(4);
+        const channel = await client.channels.fetch(messageExisting.channelMap.discordChannelId);
+        const original = await channel.messages.fetch(messageExisting.discordMessageId);
+        if (original.flags.has(4) !== mirrorSuppressed) {
+          await original.suppressEmbeds(mirrorSuppressed);
+        }
+      }
+    }
+    return;
+  }
 
   const messageExisting = await MessageMap.findOne({
     where: {
@@ -555,7 +573,9 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     const attachments =
       editFiles.length > 0 ? await cloudUploadAttachments(client, channelMap.discordChannelId, editFiles) : undefined;
 
-    if (!editContent && !attachments?.length) {
+    const suppressEmbeds = newMessage.flags?.has?.(4) ?? false;
+
+    if (!editContent && !attachments?.length && !suppressEmbeds) {
       log("DEBUG", `FluxerUpdate skip id=${newMessage.id} reason=emptyEdit`);
       return;
     }
@@ -571,6 +591,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
       content: editContent,
       attachments,
       ...(threadId ? { threadId } : {}),
+      flags: suppressEmbeds ? 4 : 0,
     });
   }
 }

@@ -567,7 +567,26 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     },
   });
 
-  if (channelMapViaUserId) return;
+  if (channelMapViaUserId) {
+    if (messageExisting && newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)) {
+      const mirrorSuppressed = newMsg.flags.has(MessageFlags.SuppressEmbeds);
+      const original = await client.rest.get(
+        FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
+      );
+      const originalFlags = original.flags ?? 0;
+      if (Boolean(originalFlags & 4) !== mirrorSuppressed) {
+        await client.rest.patch(
+          FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId),
+          {
+            body: {
+              flags: mirrorSuppressed ? originalFlags | 4 : originalFlags & ~4,
+            },
+          }
+        );
+      }
+    }
+    return;
+  }
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
@@ -596,7 +615,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       wEmbeds.filter(x => !x.url || !newContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, client))
     );
 
-    if (!newContent && newEmbeds.length === 0) {
+    const suppressEmbeds = newMsg.flags?.has(MessageFlags.SuppressEmbeds) ?? false;
+
+    if (!newContent && newEmbeds.length === 0 && !suppressEmbeds) {
       log("DEBUG", `DiscordUpdate skip id=${newMsg.id} reason=emptyEdit`);
       return;
     }
@@ -614,6 +635,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         body: {
           content: newContent,
           embeds: newEmbeds,
+          flags: suppressEmbeds ? 4 : 0,
         },
         auth: false,
       }
