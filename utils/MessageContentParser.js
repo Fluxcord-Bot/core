@@ -42,7 +42,7 @@ export async function parseMentions(message, content, otherSideGuild) {
         (() => {
           if (!roles) return `@${v.name}`;
           const extRole = roles.find(x => x.name === v.name);
-          if (!extRole || !extRole.mentionable) return `@${v.name}`;
+          if (!extRole) return `@${v.name}`;
           whitelist.push(extRole.id);
           return `<@&${extRole.id}>`;
         })()
@@ -53,7 +53,7 @@ export async function parseMentions(message, content, otherSideGuild) {
       return whitelist.includes(id) ? match : "@unknown-role";
     });
   } else if (message.client instanceof FluxerClient) {
-    res = await parseRolesAndChannels(res, message.guildId ?? "", message.client, otherSideGuild);
+    res = await parseRolesAndChannels(res, message.guildId ?? "", message.client, otherSideGuild, message);
 
     message.mentions.forEach(v => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.username}#${v.discriminator}`);
@@ -68,8 +68,9 @@ export async function parseMentions(message, content, otherSideGuild) {
  * @param {string} guildId
  * @param {FluxerClient} fluxerClient
  * @param {import("discord.js").Guild?} otherSideGuild
+ * @param {import("@fluxerjs.core").Message} message
  */
-async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGuild) {
+async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGuild, message) {
   let guild;
   try {
     guild = await fluxerClient.guilds.fetch(guildId);
@@ -89,9 +90,10 @@ async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGu
       res = res.replaceAll(
         `<@&${v.id}>`,
         (() => {
+          if (!message.mentionRoles.includes(v.id)) return `@${v.name}`;
           if (!otherRoles) return `@${v.name}`;
           const extRole = otherRoles.find(x => x.name === v.name);
-          if (!extRole || !extRole.mentionable) return `@${v.name}`;
+          if (!extRole) return `@${v.name}`;
           whitelist.push(extRole.id);
           return `<@&${extRole.id}>`;
         })()
