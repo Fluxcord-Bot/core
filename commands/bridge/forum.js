@@ -11,6 +11,7 @@ import changeBotBio from "../../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
 import { log } from "../../utils/Logger.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
+import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
 
 function isDiscordForumLike(channel) {
   return channel?.type === ChannelType.GuildForum || channel?.type === ChannelType.GuildMedia;
@@ -176,7 +177,11 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      if ((forum.nsfw && !otherForum.nsfw) || (!forum.nsfw && otherForum.nsfw)) {
+      const [forumNsfw, otherForumNsfw] = await Promise.all([
+        resolveChannelNsfw(isFluxer ? fluxerClient : discordClient, forum),
+        resolveChannelNsfw(isFluxer ? discordClient : fluxerClient, otherForum),
+      ]);
+      if ((forumNsfw && !otherForumNsfw) || (!forumNsfw && otherForumNsfw)) {
         await message.reply("Both forums needs to be set as NSFW to bridge them.");
         return;
       }

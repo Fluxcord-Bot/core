@@ -17,6 +17,7 @@ import {
   resolveChannelVoiceText,
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
+import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -217,10 +218,11 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}guild autopublish on|off\`.`
         : "";
 
-      if (
-        (currentWebhookChannel.nsfw && !channelWebhookChannel.nsfw) ||
-        (!currentWebhookChannel.nsfw && channelWebhookChannel.nsfw)
-      ) {
+      const [currentNsfw, channelNsfw] = await Promise.all([
+        resolveChannelNsfw(isFluxer ? fluxerClient : discordClient, currentWebhookChannel),
+        resolveChannelNsfw(isFluxer ? discordClient : fluxerClient, channelWebhookChannel),
+      ]);
+      if ((currentNsfw && !channelNsfw) || (!currentNsfw && channelNsfw)) {
         await message.reply("Both channels needs to be set as NSFW to bridge them.");
         return;
       }
