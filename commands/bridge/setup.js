@@ -299,7 +299,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         discordGuildMapId: discordGuildMap[0].id,
         bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
       });
-      await syncBridgeTopic(bridgeRow, discordClient, fluxerClient);
+      await syncBridgeTopic(bridgeRow, discordClient, fluxerClient, setup.isFluxer ? "fluxer" : "discord");
 
       if (isVoice && setup.isVoice) {
         await VoiceChannelMap.destroy({

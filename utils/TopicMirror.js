@@ -48,19 +48,29 @@ export async function mirrorFluxerTopic(newChannel, discordClient, fluxerClient)
   }
 }
 
-export async function syncBridgeTopic(row, discordClient, fluxerClient) {
+export async function syncBridgeTopic(row, discordClient, fluxerClient, initiator) {
   if (row.autoMirrored) return;
   try {
-    if (row.bridgeType !== "fluxer2discord") {
-      const source = await discordClient.channels.fetch(row.discordChannelId);
-      if (source?.topic) {
-        await mirrorDiscordTopic(source, discordClient, fluxerClient);
+    if (initiator === "fluxer") {
+      const fluxerSource = await fluxerClient.channels.fetch(row.fluxerChannelId);
+      if (fluxerSource?.topic && row.bridgeType !== "discord2fluxer") {
+        await mirrorFluxerTopic(fluxerSource, discordClient, fluxerClient);
         return;
       }
-    }
-    if (row.bridgeType !== "discord2fluxer") {
-      const source = await fluxerClient.channels.fetch(row.fluxerChannelId);
-      if (source?.topic) await mirrorFluxerTopic(source, discordClient, fluxerClient);
+      const discordSource = await discordClient.channels.fetch(row.discordChannelId);
+      if (discordSource?.topic && row.bridgeType !== "fluxer2discord") {
+        await mirrorDiscordTopic(discordSource, discordClient, fluxerClient);
+      }
+    } else {
+      const discordSource = await discordClient.channels.fetch(row.discordChannelId);
+      if (discordSource?.topic && row.bridgeType !== "fluxer2discord") {
+        await mirrorDiscordTopic(discordSource, discordClient, fluxerClient);
+        return;
+      }
+      const fluxerSource = await fluxerClient.channels.fetch(row.fluxerChannelId);
+      if (fluxerSource?.topic && row.bridgeType !== "discord2fluxer") {
+        await mirrorFluxerTopic(fluxerSource, discordClient, fluxerClient);
+      }
     }
   } catch (e) {
     log("META", `Failed to sync topic for bridge discord=${row.discordChannelId} fluxer=${row.fluxerChannelId}`, e);

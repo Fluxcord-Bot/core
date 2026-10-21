@@ -187,7 +187,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
             });
           } catch {}
           try {
-            const result = await bridgeChannel(matchedChannel, channel[1], setup, setup.silent || silentRequested);
+            const result = await bridgeChannel(matchedChannel, channel[1], setup, setup.silent || silentRequested, discordClient, fluxerClient);
             results.push(result);
           } catch (e) {
             console.error(e);
@@ -211,7 +211,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
   },
 };
 
-async function bridgeChannel(fluxerChannel, discordChannel, setup, silent) {
+async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, discordClient, fluxerClient) {
   const channelMap = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -323,7 +323,7 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent) {
     discordGuildMapId: discordGuildMap[0].id,
     bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
   });
-  await syncBridgeTopic(bridgeRow, discordClient, fluxerClient);
+  await syncBridgeTopic(bridgeRow, discordClient, fluxerClient, setup.isFluxer ? "fluxer" : "discord");
 
   if (isFluxerVoice && isDiscordVoice) {
     await VoiceChannelMap.create({
