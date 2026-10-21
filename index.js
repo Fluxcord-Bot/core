@@ -36,6 +36,7 @@ import {
   selfCreatedThreads,
   syncForumTags,
 } from "./utils/ThreadMirror.js";
+import { mirrorDiscordTopic, mirrorFluxerTopic } from "./utils/TopicMirror.js";
 import { isBridgeToggleEnabled } from "./utils/BridgeToggle.js";
 import { sendErrorMessage } from "./utils/SendErrorMessage.js";
 import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
@@ -44,6 +45,7 @@ import { setupHealthcheck } from "./utils/HealthCheck.js";
 import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
 import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
 import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
+
 
 const discordClient = new DiscordClient({
   rest: {
@@ -214,7 +216,16 @@ discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
 });
 
 discordClient.on(DiscordEvents.ChannelUpdate, async (oldChannel, newChannel) => {
-  if (newChannel.type !== DiscordChannelType.GuildForum && newChannel.type !== DiscordChannelType.GuildMedia) return;
+  const isForum =
+    newChannel.type === DiscordChannelType.GuildForum || newChannel.type === DiscordChannelType.GuildMedia;
+  if (!isForum) {
+    try {
+      await mirrorDiscordTopic(newChannel, discordClient, fluxerClient);
+    } catch (e) {
+      log("FLUXER", `Failed to mirror topic for Discord channel ${newChannel.id}`, e);
+    }
+    return;
+  }
   try {
     await syncForumTags(newChannel, "discord", discordClient, fluxerClient);
   } catch (e) {
@@ -349,7 +360,14 @@ fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
 fluxerClient.on(FluxerEvents.ChannelUpdate, async (oldChannel, newChannel) => {
   const isForum = typeof newChannel.isForum === "function" && newChannel.isForum();
   const isMedia = typeof newChannel.isMedia === "function" && newChannel.isMedia();
-  if (!isForum && !isMedia) return;
+  if (!isForum && !isMedia) {
+    try {
+      await mirrorFluxerTopic(newChannel, discordClient, fluxerClient);
+    } catch (e) {
+      log("DISCORD", `Failed to mirror topic for Fluxer channel ${newChannel.id}`, e);
+    }
+    return;
+  }
   try {
     await syncForumTags(newChannel, "fluxer", discordClient, fluxerClient);
   } catch (e) {

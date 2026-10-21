@@ -15,6 +15,7 @@ import {
   resolveChannelVoiceText,
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
+import { syncBridgeTopic } from "../../utils/TopicMirror.js";
 
 function normalizeChannelName(name) {
   return name
@@ -309,7 +310,7 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent) {
     },
   });
 
-  await ChannelMap.create({
+  const bridgeRow = await ChannelMap.create({
     fluxerChannelId,
     discordChannelId,
     fluxerGuildId,
@@ -322,6 +323,7 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent) {
     discordGuildMapId: discordGuildMap[0].id,
     bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
   });
+  await syncBridgeTopic(bridgeRow, discordClient, fluxerClient);
 
   if (isFluxerVoice && isDiscordVoice) {
     await VoiceChannelMap.create({

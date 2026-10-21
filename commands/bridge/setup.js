@@ -18,6 +18,7 @@ import {
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
+import { syncBridgeTopic } from "../../utils/TopicMirror.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -285,7 +286,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         },
       });
 
-      await ChannelMap.create({
+      const bridgeRow = await ChannelMap.create({
         fluxerChannelId,
         discordChannelId,
         fluxerGuildId,
@@ -298,6 +299,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         discordGuildMapId: discordGuildMap[0].id,
         bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
       });
+      await syncBridgeTopic(bridgeRow, discordClient, fluxerClient);
 
       if (isVoice && setup.isVoice) {
         await VoiceChannelMap.destroy({
