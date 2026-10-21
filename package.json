@@ -1,6 +1,6 @@
 {
   "name": "fluxcord",
-  "version": "1.10a",
+  "version": "1.11a",
   "repository": "https://git.gay/Fluxcord/core",
   "module": "index.js",
   "type": "module",
