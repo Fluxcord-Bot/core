@@ -1,4 +1,4 @@
-FROM node:24-trixie
+FROM node:24-trixie AS comicallylongnamefordependencies
 
 ENV PNPM_HOME="/pnpm"
 
@@ -8,15 +8,17 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-COPY pnpm-workspace.yaml ./
+RUN pnpm install --prod --frozen-lockfile && rm -rf "$(pnpm store path)"
 
-RUN pnpm install
+FROM node:24-trixie-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  ffmpeg \
-  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+COPY --from=comicallylongnamefordependencies /app/node_modules ./node_modules
+
+COPY --from=mwader/static-ffmpeg:9.0.2-1 /ffmpeg /usr/local/bin/
 
 COPY . .
 

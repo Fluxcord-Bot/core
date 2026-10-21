@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
-pnpm run migrate
-exec pnpm run start
+./node_modules/.bin/tsx ./migrate.ts
+exec node ./index.js
