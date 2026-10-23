@@ -27,7 +27,7 @@ export default async function changeBotBio(guild) {
       await guild.members.me.edit({
         bio:
           (DefaultConfig.FluxerBioStart ? DefaultConfig.FluxerBioStart + "\n\n" : "") +
-          `Currently bridging ${guild.channels.size} channel${guild.channels.size != 1 ? "s" : ""} of this community to Discord\n\n` +
+          `Currently bridging ${guild.channels.filter(c => !c.isThread()).size} channel${guild.channels.filter(c => !c.isThread()).size != 1 ? "s" : ""} of this community to Discord\n\n` +
           "[Docs](https://fluxcord.jbcrn.dev/) // [Support](https://fluxer.gg/jbcrn)",
       });
     } catch (e) {
@@ -38,7 +38,7 @@ export default async function changeBotBio(guild) {
       await guild.members.editMe({
         bio:
           (DefaultConfig.DiscordBioStart ? DefaultConfig.DiscordBioStart + "\n\n" : "") +
-          `Currently bridging ${guild.channels.size} channel${guild.channels.size != 1 ? "s" : ""} of this server to Fluxer\n\n` +
+          `Currently bridging ${guild.channels.channelCountWithoutThreads} channel${guild.channels.channelCountWithoutThreads != 1 ? "s" : ""} of this server to Fluxer\n\n` +
           "Docs: https://fluxcord.jbcrn.dev/",
       });
     } catch (e) {
