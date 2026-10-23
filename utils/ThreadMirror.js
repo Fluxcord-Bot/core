@@ -13,6 +13,7 @@ import { log } from "./Logger.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
+const PINNED_POST_FLAG = 1 << 1;
 
 const pendingMirrors = new Map();
 
@@ -789,7 +790,8 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
   const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
   const archivedChanged = oldThread.archived !== newThread.archived;
   const lockedChanged = oldThread.locked !== newThread.locked;
-  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged) return;
+  const pinChanged = ((oldThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG);
+  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged && !pinChanged) return;
   const row = /** @type {any} */ (
     await ChannelMap.findOne({
       where: { discordChannelId: newThread.id },
@@ -842,6 +844,17 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
     }
   }
 }
+if (pinChaged) {
+  const want = ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
+  const has = (fluxerThread.flags & PINNED_POST_FLAG) !== 0;
+  if (has !== want) {
+    try {
+      await fluxerThread.edit({ flags: (fluxerThread.flags & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0) });
+    } catch (e) {
+      log("FLUXER", `Failed to mirror Discord thread pin ${row.fluxerChannelId}`, e);
+    }
+  }
+}
 
 export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClient, fluxerClient) {
   const nameChanged = oldThread.name !== newThread.name;
@@ -849,7 +862,8 @@ export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClie
     JSON.stringify(/** @type {any} */ (oldThread).appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
   const archivedChanged = /** @type {any} */ (oldThread).archived !== newThread.archived;
   const lockedChanged = /** @type {any} */ (oldThread).locked !== newThread.locked;
-  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged) return;
+  const pinChanged = ((oldThread.flags ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags ?? 0) & PINNED_POST_FLAG);
+  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged && !pinChanged) return;
   const row = /** @type {any} */ (
     await ChannelMap.findOne({
       where: { fluxerChannelId: newThread.id },
@@ -899,6 +913,19 @@ export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClie
       } catch (e) {
         log("DISCORD", `Failed to mirror Fluxer thread close/lock ${row.discordChannelId}`, e);
       }
+    }
+  }
+}
+if (pinChanged) {
+  const want = (newThread.flags & PINNED_POST_FLAG) !== 0;
+  const has = ((discordThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
+  if (has !== want) {
+    try {
+      await discordThread.edit({
+        flags: ((discordThread.flags?.bitfield ?? 0) & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0),
+      });
+    } catch (e) {
+      log("DISCORD", `Failed to mirror Fluxer thread pin ${row.discordChannelId}`, e);
     }
   }
 }
