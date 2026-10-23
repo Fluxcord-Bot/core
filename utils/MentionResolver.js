@@ -110,7 +110,7 @@ export async function resolveId(guild, userId) {
 export async function resolveMentions(guild, content) {
   if (!content) return content;
   const platform = platformOf(guild);
-  const mentionRegex = /(?<![\w.])@([a-z0-9_.]{2,32})(?:#(\d{4}))?/gi;
+  const mentionRegex = /(?<![\w./])@([a-z0-9_.]{2,32})(?:#(\d{4}))?/gi;
   const skipNames = ["everyone", "here"];
   const wanted = new Map();
   for (const [, username, discriminator] of content.matchAll(mentionRegex)) {
