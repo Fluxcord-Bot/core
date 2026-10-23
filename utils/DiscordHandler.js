@@ -429,13 +429,21 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       ? withIndicator(guildUser.displayName, "discord", nameIndicator)
       : fastUsername;
     const wEmbeds = (forwardedMessage ?? message).embeds;
+    if (message.type === MessageType.PollResult) {
+      const fields = Object.fromEntries(message.embeds[0]?.fields?.map(x => [x.name, x.value]) ?? {});
+      const totalVotes = Number(fields.total_votes) || 0;
+      const victorVotes = Number(fields.victor_answer_votes) || 0;
+      const pct = totalVotes > 0 ? Math.round((victorVotes / totalVotes) * 100) : 0;
+      webhookContent = `-# ${webhookUsername}'s poll has closed! The winner was ${fields.victor_answer_text} (${pct}%)`;
+      wEmbeds.length = 0;
+    }
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const webhookEmbeds = await Promise.all(
       wEmbeds.filter(x => !x.url || !webhookContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, fluxerClient))
     );
     if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
       log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
-      webhookContent = "-# Sent an unsupported sticker or empty message";
+      webhookContent = message.poll ? "-# Sent a poll" : "-# Sent an unsupported sticker or empty message";
     }
 
     let msg;
