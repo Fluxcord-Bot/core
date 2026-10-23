@@ -43,6 +43,7 @@ import { genAuthLink, renderBox } from "./utils/GenAuthLink.js";
 import { setupReactionHandling } from "./utils/ReactionHandler.js";
 import { setupHealthcheck } from "./utils/HealthCheck.js";
 import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
+import { runStartupSync } from "./utils/StartupSync.js";
 import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
 import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
 
@@ -631,6 +632,7 @@ async function onBothReady() {
   ]);
 
   startVoiceRecovery?.();
+  runStartupSync(discordClient, fluxerClient).catch(e => log("META", "Startup sync failed", e));
 }
 
 fluxerClient.on(FluxerEvents.Ready, async () => {

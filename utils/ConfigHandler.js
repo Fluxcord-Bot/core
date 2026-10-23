@@ -22,6 +22,8 @@ const DefaultConfig = {
 
   MaxBackfillMessages: 1000,
 
+  StartupSyncEnabled: false,
+
   VoiceBridgingEnabled: false,
 
   RunnerWsPort: 8765,
