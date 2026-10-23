@@ -15,7 +15,7 @@ import { log } from "./Logger.js";
 import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 import { isDiscordSpoilerAttachment, SPOILER_ATTACHMENT_FLAG } from "./SpoilerAttachments.js";
-import { checkPingPerms } from "./CheckManageServerPerms.js";
+import { checkEmbedPerms, checkPingPerms } from "./CheckManageServerPerms.js";
 import { normalizeFcJson } from "./NormalizeJson.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
@@ -331,7 +331,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   let guildUser = undefined;
   try {
     guildUser = await message.guild.members.fetch(message.author.id);
-  } catch {}
+  } catch { }
+  const canUserEmbed = await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
   if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
@@ -351,6 +352,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         files: webhookFiles,
         message_reference: earlyMessageReferenceOption,
         allowed_mentions: { parse: [] },
+        flags: canUserEmbed ? undefined : 4,
         ...(fluxerThreadId ? { threadId: fluxerThreadId } : {}),
       });
       earlyFluxerMsgId = earlyMsg?.id ?? null;
@@ -380,7 +382,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     const canUserPing = await checkPingPerms(message.guildId, message.author.id, client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
-    const webhookFlags = message.flags.has(MessageFlags.SuppressNotifications) ? 4096 : undefined;
+    const webhookFlags = (message.flags.has(MessageFlags.SuppressNotifications) ? 4096 : 0) | (canUserEmbed ? 0 : 4);
     const webhookAllowedMentions = forwardedMessage
       ? { parse: [] }
       : {
@@ -605,6 +607,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
     const canUserPing = await checkPingPerms(newMsg.guildId, newMsg.author.id, client);
+    const canUserEmbed = await checkEmbedPerms(newMsg.guildId, newMsg.channelId, newMsg.author.id, newMsg.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
@@ -647,7 +650,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         body: {
           content: newContent,
           embeds: newEmbeds,
-          flags: (suppressEmbeds ? 4 : 0) | (suppressNotifications ? 4096 : 0),
+          flags: (suppressEmbeds || !canUserEmbed ? 4 : 0) | (suppressNotifications ? 4096 : 0),
         },
         auth: false,
       }

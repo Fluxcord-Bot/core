@@ -57,3 +57,54 @@ export async function checkPingPerms(guildId, userId, client) {
 
   return member.permissions.has(client instanceof Client ? PermissionFlags.MentionEveryone : PermissionFlagsBits.MentionEveryone);
 }
+
+/**
+ * @param {string} guildId
+ * @param {string} channelId
+ * @param {string} userId
+ * @param {import('@fluxerjs/core').Client | import('discord.js').Client} client
+ */
+export async function checkEmbedPerms(guildId, channelId, userId, client) {
+  if (!userId) return;
+
+  if (client instanceof Client) {
+    let member;
+    let channel;
+    try {
+      const guild = await client.guilds.fetch(guildId);
+      member = await guild.fetchMember(userId);
+      channel = await client.channels.fetch(channelId);
+    } catch {
+      return false;
+    }
+
+    try {
+      if (channel?.isThread()) channel = await client.channels.fetch(channel.parentId ?? channelId);
+      return Boolean(
+        member?.permissionsIn(/** @type {import("@fluxerjs/core").GuildChannel} */ (channel)).has(PermissionFlags.EmbedLinks)
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  let member;
+  let channel;
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    member = await guild.members.fetch(userId);
+    channel = await client.channels.fetch(channelId);
+  } catch {
+    return false;
+  }
+
+  try {
+    return Boolean(
+      member?.permissionsIn(/** @type {import("discord.js").GuildChannelResolvable} */ (channel)).has(
+        PermissionFlagsBits.EmbedLinks
+      )
+    );
+  } catch {
+    return false;
+  }
+}

@@ -15,7 +15,7 @@ import { getGuildPrefix } from "./GetGuildPrefix.js";
 import { processReplyContent } from "./ProcessReplyContent.js";
 import { getFluxerMediaBaseUrl } from "./GetFluxerUrls.js";
 import { isFluxerSpoilerAttachment, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
-import { checkPingPerms } from "./CheckManageServerPerms.js";
+import { checkEmbedPerms, checkPingPerms } from "./CheckManageServerPerms.js";
 import { cacheUser, resolveMentions } from "./MentionResolver.js";
 import { resetBridgeHealth } from "./BridgeHealth.js";
 import { isBridgeToggleEnabled } from "./BridgeToggle.js";
@@ -273,6 +273,8 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   const fastUsername = withIndicator(message.author.globalName ?? message.author.username, "fluxer", nameIndicator);
 
+  const canUserEmbed = await checkEmbedPerms(guildId, message.channelId, message.author.id, client);
+
   let earlyDiscordMsgId = reroutedDiscordMessageId;
   const earlySourceText = (forwardedMessage ?? message).content ?? "";
   const customEmojiCount = countCustomEmojis(earlySourceText);
@@ -292,6 +294,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
           loadingText +
           userJoin,
         username: fastUsername,
+        flags: canUserEmbed ? undefined : 4,
         avatarURL: await getFluxerAvatarURL(message.author, undefined),
         allowedMentions: { parse: [] },
         ...(threadId ? { threadId } : {}),
@@ -379,7 +382,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     embeds: await fluxerEmbedToDiscord(forwardedMessage ?? message, discordClient),
     avatarURL: await getFluxerAvatarURL(message.author, guildUser),
     allowedMentions: forwardedMessage ? { parse: [] } : { parse: ["roles", "users", ...(canBridgePing ? ["everyone"] : [])] },
-    flags: silentFlag,
+    flags: (silentFlag ?? 0) | (canUserEmbed ? 0 : 4),
     ...(threadId ? { threadId } : {}),
   };
 
@@ -388,7 +391,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     try {
       msg = await webhook.editMessage(earlyDiscordMsgId, {
         ...webhookPayload,
-        flags: undefined,
+        flags: canUserEmbed ? undefined : 4,
         ...(threadId ? { threadId } : {}),
       });
     } catch (e) {
@@ -546,6 +549,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     }
 
     const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
+    const canUserEmbed = await checkEmbedPerms(newMessage.guildId, newMessage.channelId, newMessage.author.id, newMessage.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
@@ -595,7 +599,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
       content: editContent,
       attachments,
       ...(threadId ? { threadId } : {}),
-      flags: suppressEmbeds ? 4 : 0,
+      flags: suppressEmbeds || !canUserEmbed ? 4 : 0,
     });
   }
 }
