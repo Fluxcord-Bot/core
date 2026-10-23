@@ -273,7 +273,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   const fastUsername = withIndicator(message.author.globalName ?? message.author.username, "fluxer", nameIndicator);
 
-  const canUserEmbed = await checkEmbedPerms(guildId, message.channelId, message.author.id, client);
+  const canUserEmbed = message.webhookId ? true : await checkEmbedPerms(guildId, message.channelId, message.author.id, client);
 
   let earlyDiscordMsgId = reroutedDiscordMessageId;
   const earlySourceText = (forwardedMessage ?? message).content ?? "";
@@ -549,7 +549,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     }
 
     const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
-    const canUserEmbed = await checkEmbedPerms(newMessage.guildId, newMessage.channelId, newMessage.author.id, newMessage.client);
+    const canUserEmbed = newMessage.webhookId ? true : await checkEmbedPerms(newMessage.guildId, newMessage.channelId, newMessage.author.id, newMessage.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 

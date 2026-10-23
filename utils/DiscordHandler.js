@@ -332,7 +332,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   try {
     guildUser = await message.guild.members.fetch(message.author.id);
   } catch { }
-  const canUserEmbed = await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
+  const canUserEmbed = message.webhookId ? true : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
   if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
@@ -607,7 +607,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
     const canUserPing = await checkPingPerms(newMsg.guildId, newMsg.author.id, client);
-    const canUserEmbed = await checkEmbedPerms(newMsg.guildId, newMsg.channelId, newMsg.author.id, newMsg.client);
+    const canUserEmbed = newMsg.webhookId ? true : await checkEmbedPerms(newMsg.guildId, newMsg.channelId, newMsg.author.id, newMsg.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
