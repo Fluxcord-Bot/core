@@ -844,7 +844,7 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
     }
   }
 }
-if (pinChaged) {
+if (pinChanged) {
   const want = ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
   const has = (fluxerThread.flags & PINNED_POST_FLAG) !== 0;
   if (has !== want) {
