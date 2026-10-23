@@ -843,15 +843,15 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
       }
     }
   }
-}
-if (pinChanged) {
-  const want = ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
-  const has = (fluxerThread.flags & PINNED_POST_FLAG) !== 0;
-  if (has !== want) {
-    try {
-      await fluxerThread.edit({ flags: (fluxerThread.flags & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0) });
-    } catch (e) {
-      log("FLUXER", `Failed to mirror Discord thread pin ${row.fluxerChannelId}`, e);
+  if (pinChanged) {
+    const want = ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
+    const has = (fluxerThread.flags & PINNED_POST_FLAG) !== 0;
+    if (has !== want) {
+      try {
+        await fluxerThread.edit({ flags: (fluxerThread.flags & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0) });
+      } catch (e) {
+        log("FLUXER", `Failed to mirror Discord thread pin ${row.fluxerChannelId}`, e);
+      }
     }
   }
 }
@@ -915,17 +915,17 @@ export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClie
       }
     }
   }
-}
-if (pinChanged) {
-  const want = (newThread.flags & PINNED_POST_FLAG) !== 0;
-  const has = ((discordThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
-  if (has !== want) {
-    try {
-      await discordThread.edit({
-        flags: ((discordThread.flags?.bitfield ?? 0) & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0),
-      });
-    } catch (e) {
-      log("DISCORD", `Failed to mirror Fluxer thread pin ${row.discordChannelId}`, e);
+  if (pinChanged) {
+    const want = (newThread.flags & PINNED_POST_FLAG) !== 0;
+    const has = ((discordThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
+    if (has !== want) {
+      try {
+        await discordThread.edit({
+          flags: ((discordThread.flags?.bitfield ?? 0) & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0),
+        });
+      } catch (e) {
+        log("DISCORD", `Failed to mirror Fluxer thread pin ${row.discordChannelId}`, e);
+      }
     }
   }
 }
