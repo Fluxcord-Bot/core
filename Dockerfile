@@ -1,3 +1,11 @@
+FROM node:24-trixie AS commit
+
+WORKDIR /src
+
+COPY .git .git
+
+RUN git rev-parse --short HEAD > /commit
+
 FROM node:24-trixie AS comicallylongnamefordependencies
 
 ENV PNPM_HOME="/pnpm"
@@ -20,7 +28,9 @@ COPY --from=comicallylongnamefordependencies /app/node_modules ./node_modules
 
 COPY --from=mwader/static-ffmpeg:9.0.2-1 /ffmpeg /usr/local/bin/
 
-COPY . .
+COPY --from=commit /commit /app/.commit
+
+COPY --exclude=.git . .
 
 RUN sed -i 's/\r//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
