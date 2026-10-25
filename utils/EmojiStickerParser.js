@@ -282,7 +282,7 @@ export async function traverseMessageLinks(str) {
             },
           });
           if (channel) {
-            if (m[1].startsWith("fluxer")) {
+            if (!m[1].startsWith("discord.com")) {
               result = result.replaceAll(
                 m[0],
                 `https://discord.com/channels/${channel.discordGuildId}/${channel.discordChannelId}`
