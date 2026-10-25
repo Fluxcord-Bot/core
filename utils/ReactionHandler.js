@@ -165,10 +165,11 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
  */
 export function setupReactionHandling(discordClient, fluxerClient) {
   discordClient.on(DiscordEvents.MessageReactionAdd, async (reaction, user) => {
-    if (reaction.emoji.name === "information_source" || reaction.emoji.name === "ℹ️") {
+    if (["information_source", "ℹ️", "question", "question_mark", "❓"].includes(reaction.emoji.name)) {
       try {
-        await reaction.remove();
-        await sendBridgeInfo(await reaction.message.fetch(), user, discordClient, fluxerClient);
+        if (await sendBridgeInfo(await reaction.message.fetch(), user, discordClient, fluxerClient)) {
+          await reaction.remove();
+        }
       } catch {}
       return;
     }
@@ -186,11 +187,12 @@ export function setupReactionHandling(discordClient, fluxerClient) {
 
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {
     const { reaction, user } = payload;
-    if (reaction.emoji.name === "information_source" || reaction.emoji.name === "ℹ️") {
+    if (["information_source", "ℹ️", "question", "question_mark", "❓"].includes(reaction.emoji.name)) {
       const message = await reaction.fetchMessage();
       try {
-        message.removeReactionEmoji(":information_source:");
-        await sendBridgeInfo(message, user, discordClient, fluxerClient);
+        if (await sendBridgeInfo(message, user, discordClient, fluxerClient)) {
+          await message.removeReactionEmoji(reaction.emoji.name);
+        }
       } catch {}
 
       return;

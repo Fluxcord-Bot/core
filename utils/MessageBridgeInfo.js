@@ -57,4 +57,5 @@ export async function sendBridgeInfo(message, user, discordClient, fluxerClient)
   await dm.send({
     embeds: [embed],
   });
+  return true;
 }
