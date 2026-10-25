@@ -443,6 +443,8 @@ fluxerClient.on(FluxerEvents.TypingStart, async type => {
 
 let discordReady = false;
 let fluxerReady = false;
+let fluxerEverReady = false;
+let fluxerGatewayStrikes = 0;
 /** @type {null | (() => void)} */
 let startVoiceRecovery = null;
 
@@ -484,6 +486,7 @@ function isRecoverableRuntimeError(error) {
 }
 
 async function onBothReady() {
+  startVoiceRecovery?.();
   if (!fs.existsSync(Config.DataFolderPath + "/fluxcord.json")) {
     log("META", "Welcome to Fluxcord! Doing first-time setup...");
     try {
@@ -631,7 +634,6 @@ async function onBothReady() {
     await genAuthLink(fluxerClient.user?.id, true),
   ]);
 
-  startVoiceRecovery?.();
   runStartupSync(discordClient, fluxerClient).catch(e => log("META", "Startup sync failed", e));
 }
 
@@ -646,6 +648,7 @@ fluxerClient.on(FluxerEvents.Ready, async () => {
   });
 
   fluxerReady = true;
+  fluxerEverReady = true;
   if (discordReady) onBothReady();
 });
 
@@ -742,9 +745,28 @@ discordClient.login(Config.DiscordBotToken);
 fluxerClient.login(Config.FluxerBotToken);
 
 function checkIfFluxerConnected() {
-  if (!fluxerClient.isReady()) {
-    log("META", "Fluxer didn't connect after 10 seconds, restarting...");
-    process.exit(1);
+  if (!fluxerEverReady) return;
+  const shards = fluxerClient.ws?.getShards?.();
+  let alive = false;
+  if (shards && shards.size > 0) {
+    for (const shard of shards.values()) {
+      if (shard.status === 2) {
+        alive = true;
+        break;
+      }
+    }
+  } else {
+    alive = fluxerClient.isReady();
+  }
+  if (alive) {
+    fluxerGatewayStrikes = 0;
+    return;
+  }
+  fluxerGatewayStrikes += 1;
+  log("META", `Fluxer gateway looks down (check ${fluxerGatewayStrikes}/3)`);
+  if (fluxerGatewayStrikes >= 3) {
+    fluxerGatewayStrikes = 0;
+    void resetFluxerGateway();
   }
 }
 

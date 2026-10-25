@@ -19,7 +19,10 @@ let _voicePool = [];
 let _fluxerClient = null;
 let _startupRecoveryScheduled = false;
 let _recoveryArmed = false;
+let _recoveryRunning = false;
+let _reconcileTimer = null;
 const RESTART_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+const REJOIN_COOLDOWN_MS = 10 * 60_000;
 function getFluxerOccupancyKey(guildId, channelId) {
   return `${guildId}:${channelId}`;
 }
@@ -141,8 +144,11 @@ function scheduleSessionRejoin(channelId, guildId, options) {
   }
   const attempt = (existing?.attempt ?? 0) + 1;
   if (!shouldScheduleRejoinAttempt(attempt)) {
-    clearRestartBackoff(channelId);
-    log("VOICE", `Not rejoining channel ${channelId}; reached max attempts (${MAX_REJOIN_ATTEMPTS}) after ${options.reason}`);
+    restartBackoff.set(channelId, { attempt: 0, timer: null, cooldownUntil: Date.now() + REJOIN_COOLDOWN_MS });
+    log(
+      "VOICE",
+      `Not rejoining channel ${channelId}; reached max attempts (${MAX_REJOIN_ATTEMPTS}) after ${options.reason}, cooling down ${REJOIN_COOLDOWN_MS / 60_000} minutes`
+    );
     return;
   }
   const delay = RESTART_DELAYS_MS[Math.min(attempt - 1, RESTART_DELAYS_MS.length - 1)];
@@ -253,17 +259,32 @@ async function flushPendingRunnerRestarts() {
 }
 async function recoverActiveVoiceBridges(reason) {
   if (!_discordClient || !_fluxerClient || !_recoveryArmed || !hasRunner()) return;
-  const voiceMaps = await VoiceChannelMap.findAll();
-  for (const voiceMap of voiceMaps) {
-    const channelId = voiceMap.discordChannelId;
-    if (sessions.has(channelId) || pending.has(channelId) || pendingRunnerRestarts.has(channelId)) continue;
-    const discordCount = getDiscordHumanCount(voiceMap.discordGuildId, voiceMap.discordChannelId);
-    const fluxerCount = getFluxerHumanCount(voiceMap.fluxerGuildId, voiceMap.fluxerChannelId);
-    if (discordCount === 0 && fluxerCount === 0) continue;
-    log("VOICE", `Recovering mapped VC ${channelId} after ${reason} (discord=${discordCount}, fluxer=${fluxerCount})`);
-    await rejoinMappedChannel(voiceMap.discordGuildId, channelId, {
-      allowWithoutDiscord: fluxerCount > 0,
-    });
+  if (_recoveryRunning) return;
+  _recoveryRunning = true;
+  try {
+    const voiceMaps = await VoiceChannelMap.findAll();
+    for (const voiceMap of voiceMaps) {
+      const channelId = voiceMap.discordChannelId;
+      const backoff = restartBackoff.get(channelId);
+      if (
+        sessions.has(channelId) ||
+        pending.has(channelId) ||
+        pendingRunnerRestarts.has(channelId) ||
+        backoff?.timer ||
+        (backoff?.cooldownUntil ?? 0) > Date.now()
+      )
+        continue;
+      const discordCount = getDiscordHumanCount(voiceMap.discordGuildId, voiceMap.discordChannelId);
+      const fluxerCount = getFluxerHumanCount(voiceMap.fluxerGuildId, voiceMap.fluxerChannelId);
+      if (discordCount === 0 && fluxerCount === 0) continue;
+      log("VOICE", `Recovering mapped VC ${channelId} after ${reason} (discord=${discordCount}, fluxer=${fluxerCount})`);
+      await rejoinMappedChannel(voiceMap.discordGuildId, channelId, {
+        allowWithoutDiscord: fluxerCount > 0,
+      });
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } finally {
+    _recoveryRunning = false;
   }
 }
 function scheduleStartupRecovery(reason) {
@@ -431,8 +452,12 @@ export async function setupVoiceHandling(discordClient, fluxerClient, extraVoice
   });
 }
 export function startVoiceRecovery() {
+  if (_recoveryArmed) return;
   _recoveryArmed = true;
   scheduleStartupRecovery("startup complete");
+  _reconcileTimer ??= setInterval(() => {
+    void recoverActiveVoiceBridges("periodic reconcile");
+  }, 60_000);
 }
 async function sendJoinOp(guildId, channelId, options = {}) {
   if (!guildId || !channelId) return;
@@ -482,22 +507,29 @@ async function sendJoinOp(guildId, channelId, options = {}) {
     livekitToken: fluxerServer?.livekitToken,
   });
   clearPendingJoinWatchdog(channelId);
-  if (requireFreshDiscord) {
-    const watchdog = setTimeout(() => {
-      pendingJoinWatchdogs.delete(channelId);
-      const stillPending = pending.get(channelId);
-      if (!stillPending) return;
-      log("VOICE", `Timed out waiting for fresh Discord voice state for ${channelId}`);
-      clearPendingChannel(channelId);
-      sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true, channelId);
-      scheduleSessionRejoin(channelId, guildId, {
-        allowWithoutDiscord: getFluxerHumanCount(voiceMap.fluxerGuildId, voiceMap.fluxerChannelId) > 0,
-        requireFreshDiscord: true,
-        reason: "fresh Discord voice credentials timed out",
-      });
-    }, 15_000);
-    pendingJoinWatchdogs.set(channelId, watchdog);
-  }
+  const joinTimeoutMs = 45_000;
+  const watchdog = setTimeout(() => {
+    pendingJoinWatchdogs.delete(channelId);
+    const stillPending = pending.get(channelId);
+    if (!stillPending) return;
+    log("VOICE", `Timed out waiting for voice credentials for ${channelId}`);
+    clearPendingChannel(channelId);
+    sendLeaveOps(voiceClient, guildId, voiceMap.fluxerGuildId, true, channelId);
+    if (!stillPending.sessionId) {
+      log(
+        "VOICE",
+        `Channel ${channelId} never produced a Discord voice session; bot likely lacks Connect permission there, cooling down ${REJOIN_COOLDOWN_MS / 60_000} minutes`
+      );
+      restartBackoff.set(channelId, { attempt: 0, timer: null, cooldownUntil: Date.now() + REJOIN_COOLDOWN_MS });
+      return;
+    }
+    scheduleSessionRejoin(channelId, guildId, {
+      allowWithoutDiscord: getFluxerHumanCount(voiceMap.fluxerGuildId, voiceMap.fluxerChannelId) > 0,
+      requireFreshDiscord: true,
+      reason: "voice credentials timed out",
+    });
+  }, joinTimeoutMs);
+  pendingJoinWatchdogs.set(channelId, watchdog);
   guild?.shard.send({
     op: 4,
     d: {
