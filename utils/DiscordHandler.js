@@ -35,6 +35,39 @@ let fluxcordBotEmojiCfg = undefined;
 
 const MAX_ATTACHMENT_SIZE = 24999900; // 25 MB, discord default max
 
+const discordCdnAttachmentUrl = /https?:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\/\d+\/\d+\/[^\s<>()]+/g;
+
+function staleDiscordCdnLink(url) {
+  try {
+    const ex = Number.parseInt(new URL(url).searchParams.get("ex") ?? "", 16);
+    return !Number.isFinite(ex) || ex * 1000 <= Date.now() + 300000;
+  } catch {
+    return true;
+  }
+}
+
+async function refreshDiscordCdnLinks(content, client, messageId) {
+  const urls = [...new Set(content.match(discordCdnAttachmentUrl) ?? [])].filter(staleDiscordCdnLink);
+  if (urls.length === 0) return content;
+
+  let result = content;
+  for (let i = 0; i < urls.length; i += 50) {
+    try {
+      const { refreshed_urls } = await client.rest.post("/attachments/refresh-urls", {
+        body: { attachment_urls: urls.slice(i, i + 50) },
+      });
+      for (const { original, refreshed } of refreshed_urls ?? []) {
+        if (original && refreshed)
+          result = result.replaceAll(original, refreshed.replace("://media.discordapp.net/", "://cdn.discordapp.com/"));
+      }
+    } catch (e) {
+      log("DISCORD", `Failed to refresh Discord CDN attachment links for message ${messageId}`, e);
+    }
+  }
+
+  return result;
+}
+
 function isDiscordUnknownMessageError(error) {
   return error?.code === 10008 || (error?.status === 404 && /unknown message/i.test(error?.message ?? ""));
 }
@@ -410,13 +443,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         channelMap.fluxerGuildId
       )
     );
-    for (const embed of (forwardedMessage ?? message).embeds ?? []) {
-      const proxyUrl = embed.thumbnail?.proxyURL ?? embed.image?.proxyURL;
-
-      if (embed.url && proxyUrl && embed.url.includes("cdn.discordapp.com/attachments/")) {
-        parsedContent = parsedContent.replaceAll(embed.url, proxyUrl);
-      }
-    }
+    parsedContent = await refreshDiscordCdnLinks(parsedContent, client, message.id);
 
     let messageReferenceOption;
     if (messageReference && !forwardedMessage) {
@@ -632,7 +659,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const wEmbeds = newMsg.embeds;
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const otherSideGuild = await client.guilds.fetch(channelMap.fluxerGuildId);
-    const newContent = await traverseMessageLinks(
+    let newContent = await traverseMessageLinks(
       await parseDiscordEmojiToFluxer(
         await resolveMentions(
           otherSideGuild,
@@ -642,6 +669,8 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         channelMap.fluxerGuildId
       )
     );
+
+    newContent = await refreshDiscordCdnLinks(newContent, newMsg.client, newMsg.id);
 
     const newEmbeds = await Promise.all(
       wEmbeds.filter(x => !x.url || !newContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, client))
