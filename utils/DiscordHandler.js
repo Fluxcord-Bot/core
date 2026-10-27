@@ -23,7 +23,13 @@ import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 import { processSticker } from "./StickerProcessor.js";
 import { indicatorPrefix, resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { maybePublishFluxerMessage } from "./AnnouncementPublish.js";
-import { autoBridgeDiscordThread, backfillMirroredThread, fluxerThreadIdFor, fluxerWebhookChannelIdFor, waitForPendingMirror } from "./ThreadMirror.js";
+import {
+  autoBridgeDiscordThread,
+  backfillMirroredThread,
+  fluxerThreadIdFor,
+  fluxerWebhookChannelIdFor,
+  waitForPendingMirror,
+} from "./ThreadMirror.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -331,8 +337,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   let guildUser = undefined;
   try {
     guildUser = await message.guild.members.fetch(message.author.id);
-  } catch { }
-  const canUserEmbed = message.webhookId ? true : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
+  } catch {}
+  const canUserEmbed = message.webhookId
+    ? true
+    : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
   if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
@@ -554,6 +562,11 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     return;
   }
 
+  if (newMsg.type === MessageType.PollResult) {
+    log("DEBUG", `DiscordUpdate skip id=${newMsg.id} reason=pollResult`);
+    return;
+  }
+
   const userOptOut = await UserConfig.findOne({
     where: {
       userType: "discord",
@@ -581,7 +594,10 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   });
 
   if (channelMapViaUserId) {
-    if (messageExisting && newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)) {
+    if (
+      messageExisting &&
+      newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)
+    ) {
       const mirrorSuppressed = newMsg.flags.has(MessageFlags.SuppressEmbeds);
       const original = await client.rest.get(
         FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
@@ -607,7 +623,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
     const canUserPing = await checkPingPerms(newMsg.guildId, newMsg.author.id, client);
-    const canUserEmbed = newMsg.webhookId ? true : await checkEmbedPerms(newMsg.guildId, newMsg.channelId, newMsg.author.id, newMsg.client);
+    const canUserEmbed = newMsg.webhookId
+      ? true
+      : await checkEmbedPerms(newMsg.guildId, newMsg.channelId, newMsg.author.id, newMsg.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
