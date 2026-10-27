@@ -321,15 +321,15 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
           }
           headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
           if (headMessage.author) {
-            headUsername = withIndicator(
-              headMessage.author.displayName ?? headMessage.author.globalName ?? "Fluxcord",
-              "discord",
-              await resolveNameIndicator(parentMap.fluxerGuildId, parentMap.discordGuildId)
-            );
             let guildUser;
             try {
               guildUser = await thread.guild?.members.fetch(headMessage.author.id);
             } catch {}
+            headUsername = withIndicator(
+              guildUser?.displayName ?? headMessage.author.displayName ?? "Fluxcord",
+              "discord",
+              await resolveNameIndicator(parentMap.fluxerGuildId, parentMap.discordGuildId)
+            );
             headAvatarUrl = guildUser?.avatarURL() ?? headMessage.author.avatarURL() ?? undefined;
           }
         }
@@ -638,8 +638,14 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
           }
           headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
           if (headMessage.author) {
+            let guildUser;
+            try {
+              guildUser = await (await fluxerClient.guilds.fetch(parentMap.fluxerGuildId)).fetchMember(
+                headMessage.author.id
+              );
+            } catch {}
             headUsername = withIndicator(
-              headMessage.author.globalName ?? headMessage.author.username,
+              guildUser?.displayName ?? headMessage.author.globalName ?? headMessage.author.username,
               "fluxer",
               await resolveNameIndicator(parentMap.discordGuildId, parentMap.fluxerGuildId)
             );
