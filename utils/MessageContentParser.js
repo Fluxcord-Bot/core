@@ -184,7 +184,7 @@ export async function attemptParseBridgedMessage(message) {
     }
   }
 
-  const pluralkitReplyRegex = /\*\*\[Reply to:\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
+  const pluralkitReplyRegex = /\*https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
 
   if (Array.isArray(message.embeds)) {
     for (const [i, embed] of message.embeds.entries()) {
