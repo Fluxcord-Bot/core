@@ -5,6 +5,7 @@ import { log } from "./Logger.js";
 import { getFluxEmojis, getDiscordEmojis } from "./EmojiCache.js";
 import { sendBridgeInfo } from "./MessageBridgeInfo.js";
 import { ensureFluxerEmojis, ensureDiscordEmojis, isFluxerEmojiRateLimited, isDiscordEmojiRateLimited, } from "./EmojiStickerParser.js";
+import { noteFluxerRateLimit } from "./FluxerRateLimit.js";
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -174,15 +175,15 @@ export function setupReactionHandling(discordClient, fluxerClient) {
       return;
     }
 
-    relayDiscordReaction(reaction, user, "add", fluxerClient).catch(e =>
-      log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`)
-    );
+    relayDiscordReaction(reaction, user, "add", fluxerClient).catch(e => {
+      if (!noteFluxerRateLimit(e)) log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`);
+    });
   });
 
   discordClient.on(DiscordEvents.MessageReactionRemove, (reaction, user) => {
-    relayDiscordReaction(reaction, user, "remove", fluxerClient).catch(e =>
-      log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`)
-    );
+    relayDiscordReaction(reaction, user, "remove", fluxerClient).catch(e => {
+      if (!noteFluxerRateLimit(e)) log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`);
+    });
   });
 
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {

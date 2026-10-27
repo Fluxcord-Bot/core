@@ -7,6 +7,7 @@
  */
 
 import { log } from "./Logger.js";
+import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 function toAttachmentPayload(file, id) {
   const attachment = {
@@ -73,9 +74,11 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
 
   const query = threadId ? `?wait=true&thread_id=${threadId}` : "?wait=true";
 
-  return await fluxerClient.rest.post(`/webhooks/${webhookId}/${webhookToken}${query}`, {
-    body: jsonPayload,
-    files: resolvedFiles,
-    auth: false,
-  });
+  return await withFluxerRateLimit(() =>
+    fluxerClient.rest.post(`/webhooks/${webhookId}/${webhookToken}${query}`, {
+      body: jsonPayload,
+      files: resolvedFiles,
+      auth: false,
+    })
+  );
 }

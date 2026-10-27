@@ -30,6 +30,7 @@ import {
   fluxerWebhookChannelIdFor,
   waitForPendingMirror,
 } from "./ThreadMirror.js";
+import { isFluxerRateLimited, waitForFluxerCooldown } from "./FluxerRateLimit.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -234,6 +235,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     return;
   }
 
+  await waitForFluxerCooldown();
+
   let reroutedFluxerMessageId = null;
   let reroutedMessageMap = null;
   if (channelMap.autoMirrored) {
@@ -374,7 +377,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const canUserEmbed = message.webhookId
     ? true
     : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
-  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId) {
+  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId && !isFluxerRateLimited()) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
       sourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) ||
