@@ -66,6 +66,9 @@ const Config = {
   // Uhm yeah backfills every message that was sent when the bot was down
   StartupSyncEnabled: false,
 
+  // idk this is pretty obvious im not even gonna explain it
+  TypingIndicatorEnabled: true,
+
   // The prefix of the bot
   BotPrefix: "fc!",
 

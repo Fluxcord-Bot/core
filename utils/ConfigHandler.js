@@ -24,6 +24,8 @@ const DefaultConfig = {
 
   StartupSyncEnabled: false,
 
+  TypingIndicatorEnabled: true,
+
   VoiceBridgingEnabled: false,
 
   RunnerWsPort: 8765,

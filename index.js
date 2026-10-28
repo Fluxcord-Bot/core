@@ -248,7 +248,7 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
       },
     });
 
-    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
+    if (!Config.TypingIndicatorEnabled || !channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
     //@ts-expect-error
     fluxerChannelId = channelMap.fluxerChannelId;
@@ -436,7 +436,7 @@ fluxerClient.on(FluxerEvents.TypingStart, async type => {
       },
     });
 
-    if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
+    if (!Config.TypingIndicatorEnabled || !channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
     const channel = await discordClient.channels.fetch(
       //@ts-expect-error
