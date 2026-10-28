@@ -1,0 +1,4 @@
+/.forgejo/CODEOWNERS    @jbcarreon123
+/utils/.*voice.*        @vesaber
+
+.*                      @Fluxcord/owners
