@@ -46,6 +46,7 @@ import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
 import { runStartupSync } from "./utils/StartupSync.js";
 import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
 import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
+import { fluxerRetryPolicy, isFluxerRateLimited, noteFluxerRateLimit } from "./utils/FluxerRateLimit.js";
 
 
 const discordClient = new DiscordClient({
@@ -72,6 +73,7 @@ const fluxerClient = new FluxerClient({
   rest: {
     api: Config.FluxerAPIBaseURL,
     userAgent: buildFluxerUserAgent(),
+    retryPolicy: fluxerRetryPolicy,
   },
   presence: {
     status: "online",
@@ -236,6 +238,7 @@ discordClient.on(DiscordEvents.ChannelUpdate, async (oldChannel, newChannel) => 
 
 discordClient.on(DiscordEvents.TypingStart, async type => {
   if (type.user.id === discordClient.user?.id) return;
+  if (isFluxerRateLimited()) return;
 
   try {
     const channelMap = await ChannelMap.findOne({
@@ -252,7 +255,7 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
     );
     await channel.sendTyping();
   } catch (e) {
-    log("DISCORD", "Failed to relay typing indicator:", e);
+    if (!noteFluxerRateLimit(e)) log("DISCORD", "Failed to relay typing indicator:", e);
   }
 });
 
