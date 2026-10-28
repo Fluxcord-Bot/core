@@ -54,6 +54,7 @@ GuildMap.init(
       defaultValue: "⛓️‍💥",
       allowNull: true,
     },
+    infoReactionEmoji: { type: DataTypes.STRING, allowNull: true },
     errorLoggingChannelId: { type: DataTypes.STRING, allowNull: true },
     errorLoggingPlatform: {
       type: DataTypes.ENUM("fluxer", "discord"),
@@ -66,7 +67,7 @@ GuildMap.init(
     typingEnabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: true,
+      defaultValue: false,
     },
     inviteEnabled: {
       type: DataTypes.BOOLEAN,

@@ -3,6 +3,29 @@ import { ButtonStyle, ComponentType, Message, MessageMentions } from "discord.js
 import { ChannelMap } from "../db/index.js";
 import { Op } from "sequelize";
 
+const FLUXER_GUILD_CACHE_TTL = 60_000;
+const fluxerGuildCache = new Map();
+
+function getFluxerGuildCacheEntry(guildId) {
+  const cached = fluxerGuildCache.get(guildId);
+  if (cached && Date.now() - cached.at < FLUXER_GUILD_CACHE_TTL) return cached;
+  const entry = { at: Date.now() };
+  fluxerGuildCache.set(guildId, entry);
+  return entry;
+}
+
+async function getFluxerGuildRoles(guild) {
+  const entry = getFluxerGuildCacheEntry(guild.id);
+  if (!entry.roles) entry.roles = guild.roles.size > 0 ? guild.roles : await guild.fetchRoles();
+  return entry.roles;
+}
+
+async function getFluxerGuildChannels(guild) {
+  const entry = getFluxerGuildCacheEntry(guild.id);
+  if (!entry.channels) entry.channels = guild.channels.size > 0 ? guild.channels : await guild.fetchChannels();
+  return entry.channels;
+}
+
 /**
  * @param {import("discord.js").Message | import("@fluxerjs/core").Message} message
  * @param {string?} content
@@ -35,7 +58,7 @@ export async function parseMentions(message, content, otherSideGuild) {
     const whitelist = [];
 
     /** @type {import("@fluxerjs/core").Role[]} */
-    const roles = await otherSideGuild.fetchRoles();
+    const roles = await getFluxerGuildRoles(otherSideGuild);
     message.mentions.roles.forEach(v => {
       res = res.replaceAll(
         `<@&${v.id}>`,
@@ -81,9 +104,10 @@ async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGu
   let res = content;
 
   if (guild) {
-    const roles = await guild.fetchRoles();
-    const channels = await guild.fetchChannels();
-    const otherRoles = await otherSideGuild.roles.fetch();
+    const roles = await getFluxerGuildRoles(guild);
+    const channels = await getFluxerGuildChannels(guild);
+    const otherRoles =
+      otherSideGuild.roles.cache.size > 0 ? otherSideGuild.roles.cache : await otherSideGuild.roles.fetch();
     const whitelist = [];
 
     roles.forEach(v => {

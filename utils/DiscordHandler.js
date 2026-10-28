@@ -30,7 +30,7 @@ import {
   fluxerWebhookChannelIdFor,
   waitForPendingMirror,
 } from "./ThreadMirror.js";
-import { isFluxerRateLimited, waitForFluxerCooldown } from "./FluxerRateLimit.js";
+import { isFluxerRateLimited, withFluxerRateLimit } from "./FluxerRateLimit.js";
 import { isUserOptedOut } from "./UserOptOut.js";
 import { waitForMessageMap } from "./WaitForMessageMap.js";
 
@@ -129,6 +129,18 @@ function countCustomEmojis(content) {
   if (!content) return 0;
   const matches = content.match(/<a?:.+?:\d+>/g);
   return matches ? matches.length : 0;
+}
+
+const webhookListCache = new Map();
+
+async function hasFluxerWebhook(fluxerClient, channelId, webhookId) {
+  const cached = webhookListCache.get(channelId);
+  if (cached && Date.now() - cached.at < 60_000 && cached.ids.has(webhookId)) return true;
+  const channel = await fluxerClient.channels.fetch(channelId);
+  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
+  const ids = new Set(webhooks.map(x => x.id));
+  webhookListCache.set(channelId, { at: Date.now(), ids });
+  return ids.has(webhookId);
 }
 
 /**
@@ -252,8 +264,6 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     );
     return;
   }
-
-  await waitForFluxerCooldown();
 
   let reroutedFluxerMessageId = null;
   let reroutedMessageMap = null;
@@ -414,7 +424,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const canUserEmbed = message.webhookId
     ? true
     : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
-  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId && !isFluxerRateLimited()) {
+  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId && !isFluxerRateLimited(`webhook:${channelMap.fluxerWebhookId}`)) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
       sourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) ||
@@ -444,9 +454,9 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   }
 
   const webhookChannelId = await fluxerWebhookChannelIdFor(channelMap);
-  const channel = await fluxerClient.channels.fetch(webhookChannelId);
-  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
-  const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
+  const webhook = (await hasFluxerWebhook(fluxerClient, webhookChannelId, channelMap.fluxerWebhookId))
+    ? channelMap.fluxerWebhookId
+    : null;
   if (!webhook) {
     if (earlyFluxerMsgId) {
       try {
@@ -529,17 +539,21 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     let msg;
     if (earlyFluxerMsgId) {
       try {
-        await fluxerClient.rest.patch(
-          `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${earlyFluxerMsgId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
-          {
-            body: {
-              content: webhookContent,
-              embeds: webhookEmbeds,
-              allowed_mentions: webhookAllowedMentions,
-              flags: webhookFlags,
-            },
-            auth: false,
-          }
+        await withFluxerRateLimit(
+          () =>
+            fluxerClient.rest.patch(
+              `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${earlyFluxerMsgId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
+              {
+                body: {
+                  content: webhookContent,
+                  embeds: webhookEmbeds,
+                  allowed_mentions: webhookAllowedMentions,
+                  flags: webhookFlags,
+                },
+                auth: false,
+              }
+            ),
+          `webhook-patch:${channelMap.fluxerWebhookId}`
         );
       } catch (e) {
         log("FLUXER", `Failed to edit early bridged Fluxer message ${earlyFluxerMsgId}`, e);
@@ -759,16 +773,20 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
     const fluxerThreadId = channelMap.autoMirrored ? await fluxerThreadIdFor(client, channelMap) : null;
 
-    await client.rest.patch(
-      `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
-      {
-        body: {
-          content: newContent,
-          embeds: newEmbeds,
-          flags: (suppressEmbeds || !canUserEmbed ? 4 : 0) | (suppressNotifications ? 4096 : 0),
-        },
-        auth: false,
-      }
+    await withFluxerRateLimit(
+      () =>
+        client.rest.patch(
+          `/webhooks/${channelMap.fluxerWebhookId}/${channelMap.fluxerWebhookToken}/messages/${messageExisting.fluxerMessageId}${fluxerThreadId ? `?thread_id=${fluxerThreadId}` : ""}`,
+          {
+            body: {
+              content: newContent,
+              embeds: newEmbeds,
+              flags: (suppressEmbeds || !canUserEmbed ? 4 : 0) | (suppressNotifications ? 4096 : 0),
+            },
+            auth: false,
+          }
+        ),
+      `webhook-patch:${channelMap.fluxerWebhookId}`
     );
   }
 }

@@ -46,7 +46,7 @@ import { ensureLoadingEmojis } from "./utils/LoadingEmojiSetup.js";
 import { runStartupSync } from "./utils/StartupSync.js";
 import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
 import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
-import { fluxerRetryPolicy, isFluxerRateLimited, noteFluxerRateLimit } from "./utils/FluxerRateLimit.js";
+import { fluxerRetryPolicy, isFluxerRateLimited, noteFluxerRateLimit, withFluxerRateLimit } from "./utils/FluxerRateLimit.js";
 
 
 const discordClient = new DiscordClient({
@@ -238,10 +238,11 @@ discordClient.on(DiscordEvents.ChannelUpdate, async (oldChannel, newChannel) => 
 
 discordClient.on(DiscordEvents.TypingStart, async type => {
   if (type.user.id === discordClient.user?.id) return;
-  if (isFluxerRateLimited()) return;
 
+  let channelMap;
+  let fluxerChannelId;
   try {
-    const channelMap = await ChannelMap.findOne({
+    channelMap = await ChannelMap.findOne({
       where: {
         discordChannelId: type.channel.id,
       },
@@ -249,13 +250,16 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
 
     if (!channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
-    const channel = await fluxerClient.channels.fetch(
-      //@ts-expect-error
-      channelMap.fluxerChannelId
-    );
-    await channel.sendTyping();
+    //@ts-expect-error
+    fluxerChannelId = channelMap.fluxerChannelId;
+
+    if (isFluxerRateLimited(`typing:${fluxerChannelId}`)) return;
+
+    const channel = await fluxerClient.channels.fetch(fluxerChannelId);
+    await withFluxerRateLimit(() => channel.sendTyping(), `typing:${fluxerChannelId}`);
   } catch (e) {
-    if (!noteFluxerRateLimit(e)) log("DISCORD", "Failed to relay typing indicator:", e);
+    if (!noteFluxerRateLimit(e, fluxerChannelId ? `typing:${fluxerChannelId}` : "typing"))
+      log("DISCORD", "Failed to relay typing indicator:", e);
   }
 });
 

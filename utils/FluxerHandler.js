@@ -84,6 +84,19 @@ async function getFluxerAvatarURL(user, member) {
   return `${cdnBase}/${path}/${avatar}.${extension}?size=160`;
 }
 
+const webhookCache = new Map();
+
+function getDiscordWebhook(discordClient, channelMap) {
+  const key = channelMap.discordWebhookId;
+  let pending = webhookCache.get(key);
+  if (!pending) {
+    pending = discordClient.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+    pending.catch(() => webhookCache.delete(key));
+    webhookCache.set(key, pending);
+  }
+  return pending;
+}
+
 function isFluxerMessageNotFoundError(error) {
   return (
     error?.code === "MESSAGE_NOT_FOUND" ||
@@ -312,7 +325,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
   const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 9999000) ?? [];
   const overAttachmentsStr = overAttachments.map(x => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`).join(" ");
 
-  const webhook = await discordClient.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+  const webhook = await getDiscordWebhook(discordClient, channelMap);
 
   const discordThread = await resolveDiscordThreadChannel(discordClient, channelMap.discordChannelId);
   if (discordThread?.archived && !discordThread.locked) {
@@ -586,7 +599,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
     const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, newMessage.guildId);
-    const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+    const webhook = await getDiscordWebhook(client, channelMap);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
@@ -701,7 +714,7 @@ export async function FluxerDeleteMessageHandler(message, client, fluxerClient) 
         );
         await discordMessage.delete();
       } else {
-        const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+        const webhook = await getDiscordWebhook(client, channelMap);
         const threadId = await resolveDiscordThreadId(client, channelMap.discordChannelId);
         if (threadId) {
           await webhook.deleteMessage(messageExisting.discordMessageId, threadId);
@@ -736,7 +749,7 @@ export async function FluxerDeleteMessageHandler(message, client, fluxerClient) 
   if (replies.length > 0) {
     for (let reply of replies) {
       const channelMap = reply.channelMap;
-      const webhook = await client.fetchWebhook(channelMap.discordWebhookId, channelMap.discordWebhookToken);
+      const webhook = await getDiscordWebhook(client, channelMap);
       let replyContent = "";
       if (reply.messageSource === "fluxer") {
         let channel;

@@ -3,9 +3,9 @@ import { Events as FluxerEvents, Routes as FluxerRoutes } from "@fluxerjs/core";
 import { MessageMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import { getFluxEmojis, getDiscordEmojis } from "./EmojiCache.js";
-import { sendBridgeInfo } from "./MessageBridgeInfo.js";
+import { DEFAULT_INFO_EMOJI, getInfoReactionEmoji, isInfoReactionEmoji, sendBridgeInfo } from "./MessageBridgeInfo.js";
 import { ensureFluxerEmojis, ensureDiscordEmojis, isFluxerEmojiRateLimited, isDiscordEmojiRateLimited, } from "./EmojiStickerParser.js";
-import { noteFluxerRateLimit } from "./FluxerRateLimit.js";
+import { isFluxerRateLimitError, withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -106,11 +106,10 @@ async function relayDiscordReaction(reaction, user, action, fluxerClient) {
 
   const route = `${FluxerRoutes.channelMessageReaction(channelMap.fluxerChannelId, messageMap.fluxerMessageId, emojiStr)}/@me`;
 
-  if (action === "add") {
-    await fluxerClient.rest.put(route);
-  } else {
-    await fluxerClient.rest.delete(route);
-  }
+  await withFluxerRateLimit(
+    () => (action === "add" ? fluxerClient.rest.put(route) : fluxerClient.rest.delete(route)),
+    `reaction:${channelMap.fluxerChannelId}`
+  );
 }
 
 /**
@@ -159,6 +158,15 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
   }
 }
 
+async function normalizeFluxerEmojiName(fluxerClient, name) {
+  if (!/^\w+$/.test(name ?? "")) return name;
+  try {
+    return await fluxerClient.resolveEmoji(name);
+  } catch {
+    return name;
+  }
+}
+
 /**
  * Register reaction relay handlers on both clients.
  * @param {import("discord.js").Client} discordClient discord instance
@@ -166,7 +174,8 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
  */
 export function setupReactionHandling(discordClient, fluxerClient) {
   discordClient.on(DiscordEvents.MessageReactionAdd, async (reaction, user) => {
-    if (["information_source", "ℹ️", "question", "question_mark", "❓"].includes(reaction.emoji.name)) {
+    const infoEmoji = await getInfoReactionEmoji(reaction.message.guildId).catch(() => DEFAULT_INFO_EMOJI);
+    if (isInfoReactionEmoji(reaction.emoji.id, reaction.emoji.name, infoEmoji)) {
       try {
         if (await sendBridgeInfo(await reaction.message.fetch(), user, discordClient, fluxerClient)) {
           await reaction.remove();
@@ -176,19 +185,23 @@ export function setupReactionHandling(discordClient, fluxerClient) {
     }
 
     relayDiscordReaction(reaction, user, "add", fluxerClient).catch(e => {
-      if (!noteFluxerRateLimit(e)) log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`);
+      if (!isFluxerRateLimitError(e)) log("FLUXER", `Discord→Fluxer reaction relay failed: ${e}`);
     });
   });
 
   discordClient.on(DiscordEvents.MessageReactionRemove, (reaction, user) => {
     relayDiscordReaction(reaction, user, "remove", fluxerClient).catch(e => {
-      if (!noteFluxerRateLimit(e)) log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`);
+      if (!isFluxerRateLimitError(e)) log("FLUXER", `Discord→Fluxer reaction remove relay failed: ${e}`);
     });
   });
 
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {
     const { reaction, user } = payload;
-    if (["information_source", "ℹ️", "question", "question_mark", "❓"].includes(reaction.emoji.name)) {
+    const infoEmoji = await getInfoReactionEmoji(reaction.guildId).catch(() => DEFAULT_INFO_EMOJI);
+    const emojiName = reaction.emoji.id
+      ? reaction.emoji.name
+      : await normalizeFluxerEmojiName(fluxerClient, reaction.emoji.name);
+    if (isInfoReactionEmoji(reaction.emoji.id, emojiName, infoEmoji)) {
       const message = await reaction.fetchMessage();
       try {
         if (await sendBridgeInfo(message, user, discordClient, fluxerClient)) {

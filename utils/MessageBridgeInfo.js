@@ -1,8 +1,22 @@
 import { EmbedBuilder, TextChannel as FluxerTextChannel } from "@fluxerjs/core";
-import { MessageMap } from "../db/index.js";
+import { GuildMap, MessageMap } from "../db/index.js";
 import { Op, or } from "sequelize";
 import { ChannelType, TextChannel } from "discord.js";
 import { genMsgLink } from "./GenMsgLink.js";
+
+export const DEFAULT_INFO_EMOJI = "ℹ️";
+
+export async function getInfoReactionEmoji(guildId) {
+  if (!guildId) return DEFAULT_INFO_EMOJI;
+  const guildMap = await GuildMap.findOne({ where: { guildId } });
+  return guildMap?.infoReactionEmoji || DEFAULT_INFO_EMOJI;
+}
+
+export function isInfoReactionEmoji(emojiId, emojiName, configured) {
+  if (emojiId) return false;
+  const strip = value => (value ?? "").replace(/\uFE0F/g, "");
+  return strip(emojiName) === strip(configured);
+}
 
 /**
  * @param {import("@fluxerjs/core").Message | import("discord.js").Message} message
