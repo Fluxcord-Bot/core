@@ -10,6 +10,7 @@ import { resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { discordEmbedToFluxer, fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
+import { isUserOptedOut } from "./UserOptOut.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
@@ -297,40 +298,48 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
         let headFiles = [];
         if (headMessage) {
           headAuthorId = headMessage.author?.id ?? "";
-          headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
-          headEmbeds = await Promise.all(
-            (headMessage.embeds ?? [])
-              .filter(x => !x.url || !headContent.includes(x.url))
-              .map(async x => await discordEmbedToFluxer(x, fluxerClient))
-          );
-          const overSized = [];
-          for (const a of headMessage.attachments?.values() ?? []) {
-            if (a.size >= MAX_POST_ATTACHMENT_SIZE) {
-              overSized.push(`[${a.name}](<${a.url ?? a.proxyURL}>)`);
-              continue;
-            }
-            headFiles.push({
-              name: a.name,
-              url: a.url ?? a.proxyURL,
-              flags: isDiscordSpoilerAttachment(a) ? SPOILER_ATTACHMENT_FLAG : undefined,
-              description: a.description,
-            });
-          }
-          if (overSized.length > 0) {
-            headContent += (headContent ? "\n" : "") + `-# has attachments over 25mb: ${overSized.join(" ")}`;
-          }
-          headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
-          if (headMessage.author) {
-            let guildUser;
-            try {
-              guildUser = await thread.guild?.members.fetch(headMessage.author.id);
-            } catch {}
-            headUsername = withIndicator(
-              guildUser?.displayName ?? headMessage.author.displayName ?? "Fluxcord",
-              "discord",
-              await resolveNameIndicator(parentMap.fluxerGuildId, parentMap.discordGuildId)
+          if (headAuthorId && (await isUserOptedOut("discord", headAuthorId))) {
+            headContent = "*Thread creator opted-out*";
+            headInlined = true;
+            headUsername = fluxerClient.user?.username ?? "Fluxcord";
+            headAvatarUrl = fluxerClient.user?.avatarURL?.() ?? undefined;
+            headAuthorId = fluxerClient.user?.id ?? headAuthorId;
+          } else {
+            headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
+            headEmbeds = await Promise.all(
+              (headMessage.embeds ?? [])
+                .filter(x => !x.url || !headContent.includes(x.url))
+                .map(async x => await discordEmbedToFluxer(x, fluxerClient))
             );
-            headAvatarUrl = guildUser?.avatarURL() ?? headMessage.author.avatarURL() ?? undefined;
+            const overSized = [];
+            for (const a of headMessage.attachments?.values() ?? []) {
+              if (a.size >= MAX_POST_ATTACHMENT_SIZE) {
+                overSized.push(`[${a.name}](<${a.url ?? a.proxyURL}>)`);
+                continue;
+              }
+              headFiles.push({
+                name: a.name,
+                url: a.url ?? a.proxyURL,
+                flags: isDiscordSpoilerAttachment(a) ? SPOILER_ATTACHMENT_FLAG : undefined,
+                description: a.description,
+              });
+            }
+            if (overSized.length > 0) {
+              headContent += (headContent ? "\n" : "") + `-# has attachments over 25mb: ${overSized.join(" ")}`;
+            }
+            headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
+            if (headMessage.author) {
+              let guildUser;
+              try {
+                guildUser = await thread.guild?.members.fetch(headMessage.author.id);
+              } catch {}
+              headUsername = withIndicator(
+                guildUser?.displayName ?? headMessage.author.displayName ?? "Fluxcord",
+                "discord",
+                await resolveNameIndicator(parentMap.fluxerGuildId, parentMap.discordGuildId)
+              );
+              headAvatarUrl = guildUser?.avatarURL() ?? headMessage.author.avatarURL() ?? undefined;
+            }
           }
         }
         let resolveSelfCreate;
@@ -613,43 +622,51 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
         let headAvatarUrl;
         if (headMessage) {
           headAuthorId = headMessage.author?.id ?? "";
-          const files = [];
-          const overSized = [];
-          for (const a of headMessage.attachments?.values?.() ?? []) {
-            const data = await downloadPostAttachment(a.proxy_url ?? a.proxyUrl ?? a.url);
-            if ((a.size ?? 0) >= 19999000 || !data) {
-              overSized.push(`[${a.filename}](<${a.url}>)`);
-              continue;
+          if (headAuthorId && (await isUserOptedOut("fluxer", headAuthorId))) {
+            headContent = "*Thread creator opted-out*";
+            headInlined = true;
+            headUsername = discordClient.user?.displayName ?? discordClient.user?.username ?? "Fluxcord";
+            headAvatarUrl = discordClient.user?.displayAvatarURL?.() ?? undefined;
+            headAuthorId = discordClient.user?.id ?? headAuthorId;
+          } else {
+            const files = [];
+            const overSized = [];
+            for (const a of headMessage.attachments?.values?.() ?? []) {
+              const data = await downloadPostAttachment(a.proxy_url ?? a.proxyUrl ?? a.url);
+              if ((a.size ?? 0) >= 19999000 || !data) {
+                overSized.push(`[${a.filename}](<${a.url}>)`);
+                continue;
+              }
+              files.push({
+                attachment: data,
+                name: toDiscordSpoilerFilename(a.filename, isFluxerSpoilerAttachment(a)),
+                description: a.description,
+              });
             }
-            files.push({
-              attachment: data,
-              name: toDiscordSpoilerFilename(a.filename, isFluxerSpoilerAttachment(a)),
-              description: a.description,
-            });
-          }
-          const embeds = await fluxerEmbedToDiscord(headMessage, discordClient);
-          if (headMessage.content || files.length > 0 || embeds.length > 0) {
-            headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
-            headFiles = files;
-            headEmbeds = embeds;
-          }
-          if (overSized.length > 0) {
-            headContent += (headContent ? "\n" : "") + `-# has attachments over 20mb: ${overSized.join(" ")}`;
-          }
-          headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
-          if (headMessage.author) {
-            let guildUser;
-            try {
-              guildUser = await (await fluxerClient.guilds.fetch(parentMap.fluxerGuildId)).fetchMember(
-                headMessage.author.id
+            const embeds = await fluxerEmbedToDiscord(headMessage, discordClient);
+            if (headMessage.content || files.length > 0 || embeds.length > 0) {
+              headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
+              headFiles = files;
+              headEmbeds = embeds;
+            }
+            if (overSized.length > 0) {
+              headContent += (headContent ? "\n" : "") + `-# has attachments over 20mb: ${overSized.join(" ")}`;
+            }
+            headInlined = Boolean(headContent || headFiles.length > 0 || headEmbeds.length > 0);
+            if (headMessage.author) {
+              let guildUser;
+              try {
+                guildUser = await (await fluxerClient.guilds.fetch(parentMap.fluxerGuildId)).fetchMember(
+                  headMessage.author.id
+                );
+              } catch {}
+              headUsername = withIndicator(
+                guildUser?.displayName ?? headMessage.author.globalName ?? headMessage.author.username,
+                "fluxer",
+                await resolveNameIndicator(parentMap.discordGuildId, parentMap.fluxerGuildId)
               );
-            } catch {}
-            headUsername = withIndicator(
-              guildUser?.displayName ?? headMessage.author.globalName ?? headMessage.author.username,
-              "fluxer",
-              await resolveNameIndicator(parentMap.discordGuildId, parentMap.fluxerGuildId)
-            );
-            headAvatarUrl = headMessage.author.avatarURL?.() ?? undefined;
+              headAvatarUrl = headMessage.author.avatarURL?.() ?? undefined;
+            }
           }
         }
         const headGone = !headContent && headFiles.length === 0 && headEmbeds.length === 0;

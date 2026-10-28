@@ -39,6 +39,7 @@ const command = {
               "Before continuing, note that:\n" +
               `- New messages will no longer be bridged to ${otherSide}.\n` +
               `- Replies to your messages will show an *Unbridged message* on ${otherSide}. Author information nor message content will not be visible.\n` +
+              `- Forum threads you create will still have it's thread title visible but your message will not be bridged.\n` +
               "- Already bridged messages will stay, but edits will no longer be bridged. Deletions will be bridged regardless.\n" +
               `- This only affects your current account on ${platform}. You need to run this again on the other side.\n` +
               "- **This will not apply on voice bridges.**\n\n" +
