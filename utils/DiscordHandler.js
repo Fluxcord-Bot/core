@@ -1,6 +1,6 @@
 import { ChannelType, MessageFlags, MessageType } from "discord.js";
 import { Routes as FluxerRoutes } from "@fluxerjs/core";
-import { ChannelMap, MessageMap, UserConfig } from "../db/index.js";
+import { ChannelMap, MessageMap } from "../db/index.js";
 import Config from "../utils/ConfigHandler.js";
 import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
@@ -31,6 +31,8 @@ import {
   waitForPendingMirror,
 } from "./ThreadMirror.js";
 import { isFluxerRateLimited, waitForFluxerCooldown } from "./FluxerRateLimit.js";
+import { isUserOptedOut } from "./UserOptOut.js";
+import { waitForMessageMap } from "./WaitForMessageMap.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -67,6 +69,30 @@ async function refreshDiscordCdnLinks(content, client, messageId) {
   }
 
   return result;
+}
+
+/**
+ * @param {import("discord.js").Message} message
+ * @param {import("discord.js").Client} client
+ */
+async function resolveDiscordReference(message, client) {
+  const reference = message.reference;
+  if (!reference?.messageId || reference.type === 1) return null;
+
+  if (reference.resolved && !reference.resolved.partial) return reference.resolved;
+
+  try {
+    const channel =
+      reference.channelId && reference.channelId !== message.channelId
+        ? await client.channels.fetch(reference.channelId)
+        : message.channel;
+
+    if (channel?.isTextBased?.() && channel.messages) {
+      return await channel.messages.fetch(reference.messageId);
+    }
+  } catch {}
+
+  return null;
 }
 
 function isDiscordUnknownMessageError(error) {
@@ -153,15 +179,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     return;
   }
 
-  const userOptOut = await UserConfig.findOne({
-    where: {
-      userType: "discord",
-      userId: message.author.id,
-      doNotBridgePrefix: "__opted_out__",
-    },
-  });
-
-  if (userOptOut) {
+  if (await isUserOptedOut("discord", message.author.id)) {
     log("DEBUG", `DiscordCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;
   }
@@ -300,6 +318,25 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       messageReference = null;
     }
   }
+
+  if (!messageReference && message.reference?.messageId && message.reference.type !== 1) {
+    const referencedMessage = await resolveDiscordReference(message, client);
+    if (referencedMessage) {
+      messageReference = await waitForMessageMap(
+        "discord",
+        referencedMessage.id,
+        channelMap.id,
+        referencedMessage.author?.id,
+        referencedMessage.createdAt
+      );
+    }
+  }
+
+  const hasUnbridgedReference =
+    !forwardedMessage &&
+    !messageReference &&
+    message.reference?.type !== 1 &&
+    Boolean(message.reference?.messageId || bridgeContent.messageData?.messageId);
 
   const stickerFiles = [];
   const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
@@ -457,6 +494,9 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       (forwardedMessage
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Forwarded\n`
         : "") +
+      (hasUnbridgedReference
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Unbridged message\n`
+        : "") +
       (interactingUser
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${indicatorPrefix("discord", nameIndicator)}@${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
@@ -597,15 +637,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     return;
   }
 
-  const userOptOut = await UserConfig.findOne({
-    where: {
-      userType: "discord",
-      userId: authorId,
-      doNotBridgePrefix: "__opted_out__",
-    },
-  });
-
-  if (userOptOut) return;
+  if (await isUserOptedOut("discord", authorId)) return;
 
   const messageExisting = await MessageMap.findOne({
     where: {
@@ -652,6 +684,35 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
+    /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
+    let messageReference;
+    if (newMsg.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
+      messageReference = await MessageMap.findOne({
+        where: {
+          [Op.or]: [
+            {
+              discordMessageId: newMsg.reference?.messageId ?? "",
+            },
+            {
+              discordMessageId: bridgeContent.messageData.messageId ?? "",
+            },
+            {
+              fluxerMessageId: newMsg.reference?.messageId ?? "",
+            },
+          ],
+        },
+      });
+
+      if (messageReference && messageReference.channelMapId !== channelMap.id) {
+        messageReference = null;
+      }
+    }
+
+    const hasUnbridgedReference =
+      !messageReference &&
+      newMsg.reference?.type !== 1 &&
+      Boolean(newMsg.reference?.messageId || bridgeContent.messageData?.messageId);
+
     const canUserPing = await checkPingPerms(newMsg.guildId, newMsg.author.id, client);
     const canUserEmbed = newMsg.webhookId
       ? true
@@ -662,16 +723,20 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     const wEmbeds = newMsg.embeds;
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const otherSideGuild = await client.guilds.fetch(channelMap.fluxerGuildId);
-    let newContent = await traverseMessageLinks(
-      await parseDiscordEmojiToFluxer(
-        await resolveMentions(
-          otherSideGuild,
-          sanitizePings(await parseMentions(newMsg, bridgeContent.messageData.parsedContent, otherSideGuild), canBridgePing)
-        ),
-        client,
-        channelMap.fluxerGuildId
-      )
-    );
+    let newContent =
+      (hasUnbridgedReference
+        ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> Unbridged message\n`
+        : "") +
+      (await traverseMessageLinks(
+        await parseDiscordEmojiToFluxer(
+          await resolveMentions(
+            otherSideGuild,
+            sanitizePings(await parseMentions(newMsg, bridgeContent.messageData.parsedContent, otherSideGuild), canBridgePing)
+          ),
+          client,
+          channelMap.fluxerGuildId
+        )
+      ));
 
     newContent = await refreshDiscordCdnLinks(newContent, newMsg.client, newMsg.id);
 

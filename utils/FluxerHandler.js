@@ -24,6 +24,8 @@ import { resolveDiscordThreadChannel, resolveDiscordThreadId } from "./DiscordTh
 import { autoBridgeFluxerThread, backfillMirroredThread, waitForPendingMirror } from "./ThreadMirror.js";
 import { processSticker } from "./StickerProcessor.js";
 import { maybePublishDiscordMessage } from "./AnnouncementPublish.js";
+import { isUserOptedOut } from "./UserOptOut.js";
+import { waitForMessageMap } from "./WaitForMessageMap.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -40,6 +42,30 @@ async function downloadFluxerAttachment(url) {
       }
     }
   }
+  return null;
+}
+
+/**
+ * @param {import("@fluxerjs/core").Message} message
+ * @param {import("@fluxerjs/core").Client} client
+ */
+async function resolveFluxerReference(message, client) {
+  if (message.referencedMessage) return message.referencedMessage;
+
+  const reference = message.messageReference;
+  if (!reference?.messageId || reference.type === 1) return null;
+
+  try {
+    const channel =
+      reference.channelId && reference.channelId !== message.channelId
+        ? await client.channels.fetch(reference.channelId)
+        : (message.channel ?? (await client.channels.fetch(message.channelId)));
+
+    if (channel?.isTextBased?.() && channel.messages) {
+      return await channel.messages.fetch(reference.messageId);
+    }
+  } catch {}
+
   return null;
 }
 
@@ -107,7 +133,14 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   const guildId = forceGuildId || message.guildId;
 
-  if (!guildId || message.type === 4 || message.type === 5 || message.type === 6 || message.type === 18 || message.type === MessageType.ThreadStarterMessage) {
+  if (
+    !guildId ||
+    message.type === 4 ||
+    message.type === 5 ||
+    message.type === 6 ||
+    message.type === 18 ||
+    message.type === MessageType.ThreadStarterMessage
+  ) {
     log("DEBUG", `FluxerCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`);
     return;
   }
@@ -117,6 +150,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     log("DEBUG", `FluxerCreate id=${message.id} isCommand=${!forceGuildId}`);
     if (forceGuildId) return;
     CommandHandler(message, discordClient, client);
+    return;
+  }
+
+  if (await isUserOptedOut("fluxer", message.author.id)) {
+    log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;
   }
 
@@ -143,11 +181,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   if (!channelMap) {
     const known = message.channel;
-    const thread = known?.isThread?.()
-      ? known
-      : known
-        ? null
-        : await client.channels.fetch(message.channelId).catch(() => null);
+    const thread = known?.isThread?.() ? known : known ? null : await client.channels.fetch(message.channelId).catch(() => null);
     if (thread?.isThread?.()) {
       channelMap = await waitForPendingMirror("fluxer", message.channelId);
       if (channelMap) {
@@ -201,6 +235,25 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     );
     return;
   }
+
+  if (!messageReference && message.messageReference?.messageId && message.messageReference.type !== 1) {
+    const referencedMessage = await resolveFluxerReference(message, client);
+    if (referencedMessage) {
+      messageReference = await waitForMessageMap(
+        "fluxer",
+        referencedMessage.id,
+        channelMap.id,
+        referencedMessage.author?.id,
+        referencedMessage.createdAt
+      );
+    }
+  }
+
+  const hasUnbridgedReference =
+    !forwardedMessage &&
+    !messageReference &&
+    message.messageReference?.type !== 1 &&
+    Boolean(message.messageReference?.messageId);
 
   let reroutedDiscordMessageId = null;
   let reroutedMessageMap = null;
@@ -365,6 +418,9 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
       (forwardedMessage
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Forwarded message\n`
         : "") +
+      (hasUnbridgedReference
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Unbridged message\n`
+        : "") +
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${await processReplyContent(message.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
@@ -486,6 +542,11 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     return;
   }
 
+  if (await isUserOptedOut("fluxer", newMessage.author?.id)) {
+    log("DEBUG", `FluxerUpdate skip id=${newMessage.id} authorId=${newMessage.author?.id} reason=userOptOut`);
+    return;
+  }
+
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -548,8 +609,13 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
       }
     }
 
+    const hasUnbridgedReference =
+      !messageReference && newMessage.messageReference?.type !== 1 && Boolean(newMessage.messageReference?.messageId);
+
     const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
-    const canUserEmbed = newMessage.webhookId ? true : await checkEmbedPerms(newMessage.guildId, newMessage.channelId, newMessage.author.id, newMessage.client);
+    const canUserEmbed = newMessage.webhookId
+      ? true
+      : await checkEmbedPerms(newMessage.guildId, newMessage.channelId, newMessage.author.id, newMessage.client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
 
@@ -557,6 +623,9 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
 
     const editContent =
       // @ts-expect-error
+      (hasUnbridgedReference
+        ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> Unbridged message\n`
+        : "") +
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${newMessage.referencedMessage?.author.username}#${newMessage.referencedMessage?.author.discriminator}`}: [${await processReplyContent(newMessage.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
