@@ -15,6 +15,15 @@ let discordEmojiCooldownUntil = 0;
 const fluxerEmojiInflight = new Map();
 const discordEmojiInflight = new Map();
 
+const emojiGuildLocks = new Map();
+
+function withEmojiGuildLock(key, fn) {
+  const prevTail = emojiGuildLocks.get(key) ?? Promise.resolve();
+  const run = prevTail.then(fn, fn);
+  emojiGuildLocks.set(key, run.catch(() => {}));
+  return run;
+}
+
 export function isFluxerEmojiRateLimited() {
   return Date.now() < fluxerEmojiCooldownUntil;
 }
@@ -195,9 +204,12 @@ export async function parseFluxerEmojiToDiscord(content, discordClient, targetDi
   }
 
   if (staged.length > 0) {
-    const ensured = await ensureDiscordEmojis(discordClient, staged);
+    const ensured = await Promise.race([
+      ensureDiscordEmojis(discordClient, staged),
+      new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
+    ]);
     for (const token of staged) {
-      const emoji = ensured.get(token);
+      const emoji = ensured?.get(token);
       if (emoji?.id) {
         replacements.set(token, `<${token.startsWith("a") ? "a" : ""}:${emoji.name}:${emoji.id}>`);
       } else {
@@ -331,7 +343,7 @@ export async function ensureFluxerEmojis(fluxerClient, tokens) {
   }
 
   if (toCreate.length > 0) {
-    const batch = createFluxerEmojis(fluxerClient, toCreate);
+    const batch = withEmojiGuildLock(`fluxer:${Config.FluxerTempEmojiGuildId}`, () => createFluxerEmojis(fluxerClient, toCreate));
     for (const token of toCreate) {
       const entry = batch.then(results => results.get(token) ?? null);
       fluxerEmojiInflight.set(token, entry);
@@ -380,7 +392,7 @@ export async function ensureDiscordEmojis(discordClient, tokens) {
   }
 
   if (toCreate.length > 0) {
-    const batch = createDiscordEmojis(discordClient, toCreate);
+    const batch = withEmojiGuildLock("discord-app-emojis", () => createDiscordEmojis(discordClient, toCreate));
     for (const token of toCreate) {
       const entry = batch.then(results => results.get(token) ?? null);
       discordEmojiInflight.set(token, entry);
@@ -399,6 +411,7 @@ export async function ensureDiscordEmojis(discordClient, tokens) {
 
 async function createFluxerEmojis(fluxerClient, tokens) {
   const out = new Map();
+  if (isFluxerEmojiRateLimited()) return settleEmojiResults(out, tokens);
   try {
     const payloads = new Map();
     for (const token of tokens) {
@@ -478,6 +491,7 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out) {
 
 async function createDiscordEmojis(discordClient, tokens) {
   const out = new Map();
+  if (isDiscordEmojiRateLimited()) return settleEmojiResults(out, tokens);
   try {
     log("DISCORD", `Uploading ${tokens.length} new emoji(s) to Discord app emojis`);
     const failedMax = [];

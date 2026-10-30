@@ -135,12 +135,20 @@ const webhookListCache = new Map();
 
 async function hasFluxerWebhook(fluxerClient, channelId, webhookId) {
   const cached = webhookListCache.get(channelId);
-  if (cached && Date.now() - cached.at < 60_000 && cached.ids.has(webhookId)) return true;
-  const channel = await fluxerClient.channels.fetch(channelId);
-  const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
-  const ids = new Set(webhooks.map(x => x.id));
-  webhookListCache.set(channelId, { at: Date.now(), ids });
-  return ids.has(webhookId);
+  if (cached && Date.now() - cached.at < 60_000) {
+    if (cached.error) throw cached.error;
+    if (cached.ids.has(webhookId)) return true;
+  }
+  try {
+    const channel = await fluxerClient.channels.fetch(channelId);
+    const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
+    const ids = new Set(webhooks.map(x => x.id));
+    webhookListCache.set(channelId, { at: Date.now(), ids });
+    return ids.has(webhookId);
+  } catch (e) {
+    webhookListCache.set(channelId, { at: Date.now(), ids: new Set(), error: e });
+    throw e;
+  }
 }
 
 /**
