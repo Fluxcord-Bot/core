@@ -6,6 +6,7 @@ import { ChannelMap, MessageMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { FluxerCreateMessageHandler } from "../../utils/FluxerHandler.js";
 import { DiscordCreateMessageHandler } from "../../utils/DiscordHandler.js";
+import { pendingBackfills, runBackfill } from "../../utils/BackfillQueue.js";
 
 const activeBackfills = new Map();
 const fetchPageSize = 100;
@@ -82,7 +83,15 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
     const state = { cancelled: false };
     activeBackfills.set(message.channelId, state);
 
-    try {
+    const ahead = pendingBackfills(channelMap.discordGuildId);
+    if (ahead > 0) await message.reply(`Queued behind ${ahead} backfill(s) in this guild.`);
+
+    await runBackfill(channelMap.discordGuildId, async () => {
+      try {
+        if (state.cancelled) {
+          await message.reply("Backfill cancelled before it started.");
+          return;
+        }
       const collected = [];
       let before = undefined;
       while (collected.length < numOfMessages + 2) {
@@ -134,7 +143,7 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
           }
           success++;
         } catch {}
-        await sleep(500);
+        await sleep(2000);
       }
 
       if (state.cancelled) {
@@ -151,6 +160,7 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
         activeBackfills.delete(message.channelId);
       }
     }
+    });
   },
 };
 

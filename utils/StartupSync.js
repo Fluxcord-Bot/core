@@ -5,6 +5,7 @@ import { ChannelType as DiscordChannelType } from "discord.js";
 import { FluxerCreateMessageHandler } from "./FluxerHandler.js";
 import { DiscordCreateMessageHandler } from "./DiscordHandler.js";
 import { log } from "./Logger.js";
+import { runBackfill } from "./BackfillQueue.js";
 
 let ran = false;
 
@@ -31,6 +32,7 @@ async function sweepSide(channel, map, cutoff, idColumn, side, discordClient, fl
     return 0;
   }
 
+return runBackfill(map.discordGuildId, async () => {
   const collected = [];
   let before = undefined;
   while (true) {
@@ -79,6 +81,7 @@ async function sweepSide(channel, map, cutoff, idColumn, side, discordClient, fl
     await sleep(500);
   }
   return success;
+});
 }
 
 export async function runStartupSync(discordClient, fluxerClient) {

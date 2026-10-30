@@ -11,6 +11,7 @@ import { discordEmbedToFluxer, fluxerEmbedToDiscord } from "./EmbedConverter.js"
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
 import { isUserOptedOut } from "./UserOptOut.js";
+import { runBackfill } from "./BackfillQueue.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
@@ -65,30 +66,32 @@ async function downloadPostAttachment(url) {
   }
 }
 
-export async function backfillMirroredThread(thread, bridgeMessage) {
-  const messages = [];
-  let before = null;
-  while (messages.length < Config.MaxBackfillMessages) {
-    const page = await thread.messages.fetch({
-      limit: Math.min(100, Config.MaxBackfillMessages - messages.length),
-      ...(before ? { before } : {}),
-    });
-    const batch = [...page.values()];
-    if (batch.length === 0) break;
-    messages.push(...batch);
-    before = batch[batch.length - 1].id;
-    if (batch.length < 100) break;
-  }
-  for (const message of messages.reverse()) {
-    const existing = await MessageMap.findOne({
-      where: { [Op.or]: [{ discordMessageId: message.id }, { fluxerMessageId: message.id }] },
-    });
-    if (existing) continue;
-    try {
-      await bridgeMessage(message);
-    } catch {}
-    await delay(500);
-  }
+export async function backfillMirroredThread(thread, bridgeMessage, guildId) {
+  return runBackfill(guildId, async () => {
+    const messages = [];
+    let before = null;
+    while (messages.length < Config.MaxBackfillMessages) {
+      const page = await thread.messages.fetch({
+        limit: Math.min(100, Config.MaxBackfillMessages - messages.length),
+        ...(before ? { before } : {}),
+      });
+      const batch = [...page.values()];
+      if (batch.length === 0) break;
+      messages.push(...batch);
+      before = batch[batch.length - 1].id;
+      if (batch.length < 100) break;
+    }
+    for (const message of messages.reverse()) {
+      const existing = await MessageMap.findOne({
+        where: { [Op.or]: [{ discordMessageId: message.id }, { fluxerMessageId: message.id }] },
+      });
+      if (existing) continue;
+      try {
+        await bridgeMessage(message);
+      } catch {}
+      await delay(500);
+    }
+  });
 }
 
 export async function waitForPendingMirror(platform, threadId) {
