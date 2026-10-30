@@ -89,7 +89,7 @@ export async function backfillMirroredThread(thread, bridgeMessage, guildId) {
       try {
         await bridgeMessage(message);
       } catch {}
-      await delay(500);
+      await delay(2000);
     }
   });
 }
