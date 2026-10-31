@@ -1,7 +1,17 @@
 //@ts-check
+import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
 import Config from "./ConfigHandler.js";
 import { log } from "./Logger.js";
+
+/** @type {string | null} */
+let version = null;
+try {
+  version = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version || null;
+} catch {
+  // no package.json next to utils/: leave the version out
+}
 
 /**
  * @param {import("discord.js").Client} discordClient
@@ -36,6 +46,7 @@ export function setupHealthcheck(discordClient, fluxerClient) {
         fluxer: fluxerOnline ? "online" : "offline",
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
+        ...(hasToken(req) ? details(discordClient, fluxerClient) : {}),
       })
     );
   });
@@ -49,6 +60,47 @@ export function setupHealthcheck(discordClient, fluxerClient) {
   });
 
   return server;
+}
+
+/**
+ * Whether the request carries the HealthcheckToken (as "Authorization: Bearer <token>").
+ * @param {import("node:http").IncomingMessage} req
+ */
+function hasToken(req) {
+  const token = Config.HealthcheckToken;
+  if (!token) return false;
+  const given = Buffer.from(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
+  const want = Buffer.from(String(token));
+  return given.length === want.length && crypto.timingSafeEqual(given, want);
+}
+
+/**
+ * Extra stats for token holders: version, Discord latency/guilds/shards, Fluxer guilds.
+ * @param {import("discord.js").Client} discordClient
+ * @param {import("@fluxerjs/core").Client} fluxerClient
+ */
+function details(discordClient, fluxerClient) {
+  /** @type {Record<string, any>} */
+  const out = { version };
+  try {
+    const ping = discordClient.ws?.ping;
+    out.latency_ms = typeof ping === "number" && ping >= 0 ? ping : null;
+    out.guilds = discordClient.guilds?.cache?.size ?? null;
+    out.shards = [...(discordClient.ws?.shards?.values?.() ?? [])].map(s => ({
+      id: s.id,
+      connected: s.status === 0, // Status.Ready
+      latency_ms: typeof s.ping === "number" && s.ping >= 0 ? s.ping : null,
+    }));
+  } catch {
+    // mid-reconnect: leave out what the client can't say
+  }
+  try {
+    const guilds = /** @type {any} */ (fluxerClient.guilds);
+    out.fluxer_guilds = typeof guilds?.size === "number" ? guilds.size : (guilds?.cache?.size ?? null);
+  } catch {
+    out.fluxer_guilds = null;
+  }
+  return out;
 }
 
 /** @param {import("discord.js").Client} client */
