@@ -652,7 +652,7 @@ async function onBothReady() {
       };
 
       sendToGato();
-      setInterval(() => sendToGato(), 60 * 60 * 1000);
+      setInterval(async () => await sendToGato(), 60 * 60 * 1000);
     }
   } catch (e) {}
 
