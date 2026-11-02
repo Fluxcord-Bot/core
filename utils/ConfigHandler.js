@@ -37,6 +37,8 @@ const DefaultConfig = {
 
   InternalAssetsPrefixUrl: "https://fluxcord.jbcrn.dev/fluxcordInternalAssets",
 
+  EnableAnalytics: false,
+
   ...Config,
 };
 

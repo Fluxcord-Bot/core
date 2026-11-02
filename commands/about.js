@@ -34,7 +34,7 @@ const command = {
         new SectionBuilder()
           .addTextDisplayComponents(
             new TextDisplayBuilder()
-              .setContent(`## ${ForkDetails.isFork ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}` : `Fluxcord ${Package.version}`}
+              .setContent(`## ${ForkDetails.isFork ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}` : `Fluxcord ${Package.version}+${getCommitHash()}`}
 Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isFork && !!ForkDetails.forkDescription ? "\n" + ForkDetails.forkDescription : ""}
 
 -# Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`)
@@ -77,7 +77,7 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
         new TextDisplayBuilder({
           content:
             "-# " +
-            `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""}${DefaultConfig.EmbedFooterContent ? " - " + DefaultConfig.EmbedFooterContent : ""}`,
+            `${ForkDetails.isFork ? "Based on Fluxcord " + Package.version : ""}${DefaultConfig.EmbedFooterContent ? " - " + DefaultConfig.EmbedFooterContent : ""}`,
         })
       );
     await message.reply({

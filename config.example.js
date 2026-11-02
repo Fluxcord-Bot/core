@@ -49,6 +49,12 @@ const Config = {
   // The footer of every embed sent by Fluxcord. Optional.
   EmbedFooterContent: "",
 
+  // Enables Fluxcord Analytics. This will send your instance details every hour
+  // to our Gatolytics instance on https://gato.fluxcord.jbcrn.dev.
+  // This only sends guild counts, served user counts, total bridged messages and channels,
+  // if you use a self hosted Fluxer instance or not, and the Fluxcord version.
+  EnableAnalytics: false,
+
   // The categories that the bot will log, remove any that you don't need.
   // Categories: FLUXER, DISCORD, DB, META, VOICE, DEBUG
   LoggingCategories: ["FLUXER", "DISCORD", /*'DB',*/ "META", "VOICE"],

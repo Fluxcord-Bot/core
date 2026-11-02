@@ -1,5 +1,6 @@
 //@ts-check
 import { Events as FluxerEvents, Client as FluxerClient, ChannelType as FluxerChannelType } from "@fluxerjs/core";
+import Package from "./package.json" with { type: "json" };
 import {
   Client as DiscordClient,
   Events as DiscordEvents,
@@ -24,7 +25,7 @@ import {
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
-import { Op } from "sequelize";
+import { Op, UUID } from "sequelize";
 import { ChannelMap, GuildMap, MessageMap } from "./db/index.js";
 import {
   autoBridgeDiscordThread,
@@ -47,7 +48,8 @@ import { runStartupSync } from "./utils/StartupSync.js";
 import { registerDiscordCommands, setupDiscordCommands } from "./utils/DiscordCommands.js";
 import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgent } from "./utils/UserAgent.js";
 import { fluxerRetryPolicy, isFluxerRateLimited, noteFluxerRateLimit, withFluxerRateLimit } from "./utils/FluxerRateLimit.js";
-
+import { randomUUID } from "node:crypto";
+import getCommitHash from "./utils/GetCommitHash.js";
 
 const discordClient = new DiscordClient({
   rest: {
@@ -219,8 +221,7 @@ discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
 });
 
 discordClient.on(DiscordEvents.ChannelUpdate, async (oldChannel, newChannel) => {
-  const isForum =
-    newChannel.type === DiscordChannelType.GuildForum || newChannel.type === DiscordChannelType.GuildMedia;
+  const isForum = newChannel.type === DiscordChannelType.GuildForum || newChannel.type === DiscordChannelType.GuildMedia;
   if (!isForum) {
     try {
       await mirrorDiscordTopic(newChannel, discordClient, fluxerClient);
@@ -607,6 +608,48 @@ async function onBothReady() {
       process.exit(0);
     }
   }
+
+  try {
+    if (Config.EnableAnalytics) {
+      const jsonPath = Config.DataFolderPath + "/fluxcord.json";
+      const current = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+
+      if (!current.gatoInstanceId) {
+        current.gatoInstanceId = randomUUID();
+        fs.writeFileSync(jsonPath, JSON.stringify(current));
+      }
+
+      const sendToGato = async () => {
+        const channels = await ChannelMap.count();
+        const messages = await MessageMap.count();
+        const discordGuildCount = discordClient.guilds.cache.size;
+        const fluxerGuildCount = fluxerClient.guilds.size;
+        const discordUserCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
+        const fluxerUserCount = fluxerClient.guilds.reduce((acc, guild) => acc + (guild.memberCount ?? guild.members.size), 0);
+
+        await fetch("https://gato.fluxcord.jbcrn.dev/api/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            version: `${Package.version}+${getCommitHash()}`,
+            fluxerInstanceType:
+              fluxerClient.rest.baseUrl.includes("fluxer.app") || fluxerClient.rest.baseUrl.includes("fluxer.com")
+                ? "self-hosted"
+                : "fluxer.com",
+            bridgedChannelCount: channels,
+            bridgedMessageCount: messages,
+            discordGuildCount,
+            fluxerGuildCount,
+            discordUserCount,
+            fluxerUserCount,
+          }),
+        });
+      };
+
+      sendToGato();
+      setInterval(() => sendToGato, 60 * 60 * 1000);
+    }
+  } catch (e) {}
 
   try {
     await ensureLoadingEmojis(discordClient, fluxerClient);
