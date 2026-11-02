@@ -131,7 +131,7 @@ async function mirrorExistingThread(threadId, parentId, guildId, client, discord
   const row = await autoBridgeFluxerThread(thread, parentRow, discordClient, client);
   if (!row) return null;
   log("DEBUG", `FluxerCreate mirrored on activity thread ${thread.id} rowId=${row.id}`);
-  await backfillMirroredThread(thread, message => FluxerCreateMessageHandler(message, client, discordClient, guildId));
+  await backfillMirroredThread(thread, message => FluxerCreateMessageHandler(message, client, discordClient, guildId), parentRow.discordGuildId);
   return row;
 }
 

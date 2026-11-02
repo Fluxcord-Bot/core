@@ -2,7 +2,7 @@ import { MessageMap } from "../db/index.js";
 import { isUserOptedOut } from "./UserOptOut.js";
 
 const WAIT_INTERVAL_MS = 250;
-const WAIT_TIMEOUT_MS = 10_000;
+const WAIT_TIMEOUT_MS = 60_000;
 const MAX_REFERENCE_AGE_MS = 2 * 60 * 1000;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
