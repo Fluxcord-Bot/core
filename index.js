@@ -644,8 +644,8 @@ async function onBothReady() {
               version: `${Package.version}+${getCommitHash()}`,
               fluxerInstanceType:
                 fluxerClient.rest.baseUrl.includes("fluxer.app") || fluxerClient.rest.baseUrl.includes("fluxer.com")
-                  ? "self-hosted"
-                  : "fluxer.com",
+                  ? "fluxer.com"
+                  : "self-hosted",
             },
           }),
         });
