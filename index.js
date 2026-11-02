@@ -631,17 +631,22 @@ async function onBothReady() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            version: `${Package.version}+${getCommitHash()}`,
-            fluxerInstanceType:
-              fluxerClient.rest.baseUrl.includes("fluxer.app") || fluxerClient.rest.baseUrl.includes("fluxer.com")
-                ? "self-hosted"
-                : "fluxer.com",
-            bridgedChannelCount: channels,
-            bridgedMessageCount: messages,
-            discordGuildCount,
-            fluxerGuildCount,
-            discordUserCount,
-            fluxerUserCount,
+            instance_id: current.gatoInstanceId,
+            int_items: {
+              bridgedChannelCount: channels,
+              bridgedMessageCount: messages,
+              discordGuildCount,
+              fluxerGuildCount,
+              discordUserCount,
+              fluxerUserCount,
+            },
+            str_items: {
+              version: `${Package.version}+${getCommitHash()}`,
+              fluxerInstanceType:
+                fluxerClient.rest.baseUrl.includes("fluxer.app") || fluxerClient.rest.baseUrl.includes("fluxer.com")
+                  ? "self-hosted"
+                  : "fluxer.com",
+            },
           }),
         });
       };
