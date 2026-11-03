@@ -322,7 +322,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   const stickerMsg = stickerFallbacks.join(", ");
 
-  const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 9999000) ?? [];
+  const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 19999000) ?? [];
   const overAttachmentsStr = overAttachments.map(x => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`).join(" ");
 
   const webhook = await getDiscordWebhook(discordClient, channelMap);
