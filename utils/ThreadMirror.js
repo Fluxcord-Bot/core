@@ -7,7 +7,7 @@ import { sanitizePings } from "./SanitizePings.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 import { cloudUploadAttachments } from "./CloudUpload.js";
 import { resolveNameIndicator, withIndicator } from "./NameIndicator.js";
-import { discordEmbedToFluxer, fluxerEmbedToDiscord } from "./EmbedConverter.js";
+import { discordEmbedToFluxer, fluxerEmbedToDiscord, isPlatformPreviewEmbed } from "./EmbedConverter.js";
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
 import { isUserOptedOut } from "./UserOptOut.js";
@@ -312,7 +312,7 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
             headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
             headEmbeds = await Promise.all(
               (headMessage.embeds ?? [])
-                .filter(x => !x.url || !headContent.includes(x.url))
+                .filter(x => !isPlatformPreviewEmbed(x, headMessage.content ?? ""))
                 .map(async x => await discordEmbedToFluxer(x, fluxerClient))
             );
             const overSized = [];

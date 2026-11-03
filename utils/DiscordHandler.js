@@ -6,7 +6,7 @@ import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
-import { discordEmbedToFluxer } from "./EmbedConverter.js";
+import { discordEmbedToFluxer, isPlatformPreviewEmbed } from "./EmbedConverter.js";
 import { parseDiscordEmojiToFluxer, removeLinkEmbeds, traverseMessageLinks } from "./EmojiStickerParser.js";
 import { attemptParseBridgedMessage, parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
@@ -572,8 +572,11 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       wEmbeds.length = 0;
     }
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
+    const sourceContent = (forwardedMessage ?? message).content ?? "";
     const webhookEmbeds = await Promise.all(
-      wEmbeds.filter(x => !x.url || !webhookContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, fluxerClient))
+      wEmbeds
+        .filter(x => !isPlatformPreviewEmbed(x, sourceContent))
+        .map(async x => await discordEmbedToFluxer(x, fluxerClient))
     );
     if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
       log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
@@ -808,7 +811,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     newContent = await refreshDiscordCdnLinks(newContent, newMsg.client, newMsg.id);
 
     const newEmbeds = await Promise.all(
-      wEmbeds.filter(x => !x.url || !newContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, client))
+      wEmbeds
+        .filter(x => !isPlatformPreviewEmbed(x, newMsg.content ?? ""))
+        .map(async x => await discordEmbedToFluxer(x, client))
     );
 
     const suppressEmbeds = newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;
