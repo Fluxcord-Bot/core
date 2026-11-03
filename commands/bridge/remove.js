@@ -1,6 +1,7 @@
 import { ChannelMap, MessageMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { BridgeMap } from "../../utils/CommandHandler.js";
+import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -76,6 +77,7 @@ const command = {
         const webhooks = await channel.fetchWebhooks();
         const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
         await webhook?.delete();
+        invalidateFluxerWebhookCache(channelMap.fluxerChannelId);
       } catch {}
     }
 

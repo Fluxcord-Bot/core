@@ -22,6 +22,7 @@ import {
   DiscordDeleteMessageHandler,
   DiscordPinsUpdateHandler,
   DiscordUpdateMessageHandler,
+  invalidateFluxerWebhookCache,
 } from "./utils/DiscordHandler.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
@@ -241,6 +242,7 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
   if (type.user.id === discordClient.user?.id) return;
 
   let channelMap;
+  /** @type {string | undefined} */
   let fluxerChannelId;
   try {
     channelMap = await ChannelMap.findOne({
@@ -252,12 +254,15 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
     if (!Config.TypingIndicatorEnabled || !channelMap || !(await isBridgeToggleEnabled(channelMap, "typingEnabled"))) return;
 
     //@ts-expect-error
-    fluxerChannelId = channelMap.fluxerChannelId;
+    const channelId = /** @type {string} */ (channelMap.fluxerChannelId);
+    fluxerChannelId = channelId;
 
-    if (isFluxerRateLimited(`typing:${fluxerChannelId}`)) return;
+    if (isFluxerRateLimited(`typing:${channelId}`)) return;
 
-    const channel = await fluxerClient.channels.fetch(fluxerChannelId);
-    await withFluxerRateLimit(() => channel.sendTyping(), `typing:${fluxerChannelId}`);
+    const channel =
+      fluxerClient.channels.get(channelId) ??
+      (await withFluxerRateLimit(() => fluxerClient.channels.fetch(channelId), `typing:${channelId}`));
+    await withFluxerRateLimit(() => channel.sendTyping(), `typing:${channelId}`);
   } catch (e) {
     if (!noteFluxerRateLimit(e, fluxerChannelId ? `typing:${fluxerChannelId}` : "typing"))
       log("DISCORD", "Failed to relay typing indicator:", e);
@@ -322,6 +327,10 @@ fluxerClient.on(FluxerEvents.ChannelDelete, async chnl => {
   } catch (e) {
     log("DB", `ChannelDelete cleanup failed for fluxer channel ${chnl.id}`, e);
   }
+});
+
+fluxerClient.on(FluxerEvents.WebhooksUpdate, payload => {
+  invalidateFluxerWebhookCache(payload.channelId);
 });
 
 fluxerClient.on(FluxerEvents.ThreadCreate, async thread => {

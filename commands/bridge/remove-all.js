@@ -1,5 +1,6 @@
 import { ChannelMap, MessageMap, VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
+import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -92,6 +93,7 @@ async function unbridgeChannel(channelMap, discordClient, fluxerClient) {
     const webhooks = await channel.fetchWebhooks();
     const webhook = webhooks.find(x => x.id === channelMap.fluxerWebhookId);
     await webhook?.delete();
+    invalidateFluxerWebhookCache(channelMap.fluxerChannelId);
   } catch {}
 
   await MessageMap.destroy({ where: { channelMapId: channelMap.id } });

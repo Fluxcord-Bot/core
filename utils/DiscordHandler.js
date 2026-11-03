@@ -110,7 +110,10 @@ function isFluxerUnknownMessageError(error) {
 }
 
 async function deleteFluxerMessage(client, channelMap, messageId) {
-  await client.rest.delete(FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId));
+  await withFluxerRateLimit(
+    () => client.rest.delete(FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId)),
+    `channel:${channelMap.fluxerChannelId}`
+  );
 }
 
 async function deleteFluxerMessageIfExists(client, channelMap, messageId) {
@@ -132,23 +135,53 @@ function countCustomEmojis(content) {
 }
 
 const webhookListCache = new Map();
+const webhookListInflight = new Map();
+const webhookListGeneration = new Map();
+const WEBHOOK_CACHE_TTL_MS = 5 * 60_000;
+
+function fetchFluxerWebhookIds(fluxerClient, channelId) {
+  const existing = webhookListInflight.get(channelId);
+  if (existing) return existing;
+
+  const generation = webhookListGeneration.get(channelId) ?? 0;
+  const isCurrent = () => (webhookListGeneration.get(channelId) ?? 0) === generation;
+
+  const inflight = withFluxerRateLimit(async () => {
+    const channel = fluxerClient.channels.get(channelId) ?? (await fluxerClient.channels.fetch(channelId));
+    return /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
+  }, `webhook:${channelId}`)
+    .then(webhooks => {
+      const ids = new Set(webhooks.map(x => x.id));
+      if (isCurrent()) webhookListCache.set(channelId, { at: Date.now(), ids });
+      return ids;
+    })
+    .catch(e => {
+      if (isCurrent()) webhookListCache.set(channelId, { at: Date.now(), ids: new Set(), error: e });
+      throw e;
+    })
+    .finally(() => {
+      if (webhookListInflight.get(channelId) === inflight) webhookListInflight.delete(channelId);
+    });
+
+  webhookListInflight.set(channelId, inflight);
+  return inflight;
+}
+
+export function invalidateFluxerWebhookCache(channelId) {
+  if (!channelId) return;
+  webhookListGeneration.set(channelId, (webhookListGeneration.get(channelId) ?? 0) + 1);
+  webhookListCache.delete(channelId);
+  webhookListInflight.delete(channelId);
+}
 
 async function hasFluxerWebhook(fluxerClient, channelId, webhookId) {
   const cached = webhookListCache.get(channelId);
-  if (cached && Date.now() - cached.at < 60_000) {
+  if (cached && Date.now() - cached.at < WEBHOOK_CACHE_TTL_MS) {
     if (cached.error) throw cached.error;
-    if (cached.ids.has(webhookId)) return true;
+    return cached.ids.has(webhookId);
   }
-  try {
-    const channel = await fluxerClient.channels.fetch(channelId);
-    const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
-    const ids = new Set(webhooks.map(x => x.id));
-    webhookListCache.set(channelId, { at: Date.now(), ids });
-    return ids.has(webhookId);
-  } catch (e) {
-    webhookListCache.set(channelId, { at: Date.now(), ids: new Set(), error: e });
-    throw e;
-  }
+  const ids = await fetchFluxerWebhookIds(fluxerClient, channelId);
+  return ids.has(webhookId);
 }
 
 /**
@@ -477,7 +510,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const overAttachments = (forwardedMessage ?? message).attachments.filter(x => x.size > 24999900);
   const overAttachmentsStr = overAttachments.map(x => `[${x.name}](<${x.url ?? x.proxyURL}>)`).join(" ");
   if (webhook) {
-    const otherSideGuild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
+    const otherSideGuild = await withFluxerRateLimit(
+      () => fluxerClient.guilds.fetch(channelMap.fluxerGuildId),
+      `guild:${channelMap.fluxerGuildId}`
+    );
     const canUserPing = await checkPingPerms(message.guildId, message.author.id, client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
@@ -683,18 +719,27 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)
     ) {
       const mirrorSuppressed = newMsg.flags.has(MessageFlags.SuppressEmbeds);
-      const original = await client.rest.get(
-        FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
+      const suppressionKey = `channel:${messageExisting.channelMap.fluxerChannelId}`;
+      const original = await withFluxerRateLimit(
+        () =>
+          client.rest.get(
+            FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
+          ),
+        suppressionKey
       );
       const originalFlags = original.flags ?? 0;
       if (Boolean(originalFlags & 4) !== mirrorSuppressed) {
-        await client.rest.patch(
-          FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId),
-          {
-            body: {
-              flags: mirrorSuppressed ? originalFlags | 4 : originalFlags & ~4,
-            },
-          }
+        await withFluxerRateLimit(
+          () =>
+            client.rest.patch(
+              FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId),
+              {
+                body: {
+                  flags: mirrorSuppressed ? originalFlags | 4 : originalFlags & ~4,
+                },
+              }
+            ),
+          suppressionKey
         );
       }
     }

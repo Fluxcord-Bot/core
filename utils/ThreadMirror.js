@@ -12,6 +12,7 @@ import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHME
 import { log } from "./Logger.js";
 import { isUserOptedOut } from "./UserOptOut.js";
 import { runBackfill } from "./BackfillQueue.js";
+import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
@@ -368,9 +369,13 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
         starterMessageId = res?.id ?? null;
         if (headGone && starterMessageId) {
           try {
-            await fluxerClient.rest.delete(
-              `/webhooks/${parentMap.fluxerWebhookId}/${parentMap.fluxerWebhookToken}/messages/${starterMessageId}?thread_id=${fluxerThreadId}`,
-              { auth: false }
+            await withFluxerRateLimit(
+              () =>
+                fluxerClient.rest.delete(
+                  `/webhooks/${parentMap.fluxerWebhookId}/${parentMap.fluxerWebhookToken}/messages/${starterMessageId}?thread_id=${fluxerThreadId}`,
+                  { auth: false }
+                ),
+              `webhook:${parentMap.fluxerWebhookId}`
             );
           } catch (e) {
             log("FLUXER", `Failed to remove the deleted head placeholder of mirrored post ${fluxerThreadId}`, e);

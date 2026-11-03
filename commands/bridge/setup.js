@@ -19,6 +19,7 @@ import {
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
 import { syncBridgeTopic } from "../../utils/TopicMirror.js";
+import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -241,6 +242,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         const webhook = await currentChannel.createWebhook({
           name: `Fluxcord Bridge (${currentChannel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${channel.id} (D))`,
         });
+        invalidateFluxerWebhookCache(currentChannel.id);
         fluxerWebhookToken = webhook.token ?? "";
         fluxerWebhookId = webhook.id;
         fluxerChannelId = currentChannel.id;
@@ -259,6 +261,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         const webhook = await channel.createWebhook({
           name: `Fluxcord Bridge (${channel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${currentChannel.id} (D))`,
         });
+        invalidateFluxerWebhookCache(channel.id);
         fluxerWebhookToken = webhook.token ?? "";
         fluxerWebhookId = webhook.id;
         fluxerChannelId = channel.id;
