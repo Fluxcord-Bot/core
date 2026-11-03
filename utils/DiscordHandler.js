@@ -334,8 +334,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
 
   const nameIndicator = await resolveNameIndicator(channelMap.fluxerGuildId, message.guildId);
 
+  const isCrosspostCopy = message.flags.has(MessageFlags.IsCrosspost);
+
   let forwardedMessage;
-  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin && message.flags !== MessageFlags.IsCrosspost) {
+  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin && !isCrosspostCopy) {
     forwardedMessage = message.messageSnapshots.first();
   }
 
@@ -348,7 +350,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
 
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
-  if (message.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
+  if (!isCrosspostCopy && (message.reference || bridgeContent.isBridge || bridgeContent.isProxy)) {
     messageReference = await MessageMap.findOne({
       where: {
         [Op.or]: [
@@ -370,7 +372,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     }
   }
 
-  if (!messageReference && message.reference?.messageId && message.reference.type !== 1) {
+  if (!isCrosspostCopy && !messageReference && message.reference?.messageId && message.reference.type !== 1) {
     const referencedMessage = await resolveDiscordReference(message, client);
     if (referencedMessage) {
       messageReference = await waitForMessageMap(
@@ -384,6 +386,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   }
 
   const hasUnbridgedReference =
+    !isCrosspostCopy &&
     !forwardedMessage &&
     !messageReference &&
     message.reference?.type !== 1 &&
@@ -392,6 +395,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const stickerFiles = [];
   const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
   const stickerLottie = []; // Discord does this for some of their native stickers. Ick.
+  // i didnt know discord used lottie for their native stickers wow (its shit too in some way)
 
   for (const sticker of message.stickers.values()) {
     if (sticker.url?.endsWith("json")) {
@@ -539,6 +543,11 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     );
     parsedContent = await refreshDiscordCdnLinks(parsedContent, client, message.id);
 
+    const followNotice =
+      message.type === MessageType.ChannelFollowAdd
+        ? `**${indicatorPrefix("discord", nameIndicator)}@${message.author.tag}** followed **${parsedContent}** into this channel. Messages published there will appear here.`
+        : parsedContent;
+
     let messageReferenceOption;
     if (messageReference && !forwardedMessage) {
       messageReferenceOption = { message_id: messageReference.fluxerMessageId };
@@ -555,7 +564,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${indicatorPrefix("discord", nameIndicator)}@${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2) ? "*Components V2 message*" : "") +
-      parsedContent +
+      followNotice +
       stickerMsg +
       userJoin +
       (overAttachmentsStr ? "\n-# has attachments over 25mb: " + overAttachmentsStr : "");
@@ -751,12 +760,12 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
-
+    const isCrosspostCopy = newMsg.flags.has(MessageFlags.IsCrosspost);
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
-    if (newMsg.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
+    if (!isCrosspostCopy && (newMsg.reference || bridgeContent.isBridge || bridgeContent.isProxy)) {
       messageReference = await MessageMap.findOne({
         where: {
           [Op.or]: [
@@ -779,6 +788,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     }
 
     const hasUnbridgedReference =
+      !isCrosspostCopy &&
       !messageReference &&
       newMsg.reference?.type !== 1 &&
       Boolean(newMsg.reference?.messageId || bridgeContent.messageData?.messageId);

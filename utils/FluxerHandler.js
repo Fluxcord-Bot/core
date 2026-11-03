@@ -214,9 +214,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
+  const isCrosspostCpy = message.flags?.has?.(2) === true;
+
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
-  if (message.messageReference?.messageId) {
+  if (!isCrosspostCpy && message.messageReference?.messageId) {
     messageReference = await MessageMap.findOne({
       where: {
         [Op.or]: [
@@ -249,7 +251,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
-  if (!messageReference && message.messageReference?.messageId && message.messageReference.type !== 1) {
+  if (!isCrosspostCpy && !messageReference && message.messageReference?.messageId && message.messageReference.type !== 1) {
     const referencedMessage = await resolveFluxerReference(message, client);
     if (referencedMessage) {
       messageReference = await waitForMessageMap(
@@ -263,6 +265,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
   }
 
   const hasUnbridgedReference =
+    !isCrosspostCpy &&
     !forwardedMessage &&
     !messageReference &&
     message.messageReference?.type !== 1 &&
@@ -396,6 +399,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     )
   );
 
+  const followNotice =
+    message.type === 12
+      ? `**${indicatorPrefix("fluxer", nameIndicator)}@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""}** has added **${parsedContent}** to this channel. Its most important updates will show up here.`
+      : parsedContent;
+
   const attachmentDescs =
     (forwardedMessage ?? message).attachments
       ?.filter(x => x.size < 19999000)
@@ -437,7 +445,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${await processReplyContent(message.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
-      parsedContent +
+      followNotice +
       userJoin +
       stickerMsg +
       (overAttachmentsStr ? "\n-# has attachments over 20mb: " + overAttachmentsStr : ""),
@@ -598,12 +606,13 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
+    const isCrosspostCopy = newMessage.flags?.has?.(2) === true;
     const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, newMessage.guildId);
     const webhook = await getDiscordWebhook(client, channelMap);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
-    if (newMessage.messageReference) {
+    if (!isCrosspostCopy && newMessage.messageReference) {
       messageReference = await MessageMap.findOne({
         where: {
           [Op.or]: [
@@ -623,7 +632,10 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     }
 
     const hasUnbridgedReference =
-      !messageReference && newMessage.messageReference?.type !== 1 && Boolean(newMessage.messageReference?.messageId);
+      !isCrosspostCopy &&
+      !messageReference &&
+      newMessage.messageReference?.type !== 1 &&
+      Boolean(newMessage.messageReference?.messageId);
 
     const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
     const canUserEmbed = newMessage.webhookId
