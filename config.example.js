@@ -90,6 +90,9 @@ const Config = {
   // HealthcheckEnabled: true,
   // HealthcheckPort: 8080,
   // HealthcheckHost: "0.0.0.0",
+  // Optional. When set, a request with "Authorization: Bearer <token>" also gets the version,
+  // Discord latency, guild and shard counts, and Fluxer guild count. Without it, the response is unchanged.
+  // HealthcheckToken: "",
 
   // Enable voice channel bridging. Manage mappings with setup and unbridge commands.
   // Requires the voice repository.

@@ -34,6 +34,7 @@ const DefaultConfig = {
   HealthcheckEnabled: true,
   HealthcheckPort: 8080,
   HealthcheckHost: "0.0.0.0",
+  HealthcheckToken: "",
 
   InternalAssetsPrefixUrl: "https://fluxcord.jbcrn.dev/fluxcordInternalAssets",
 
