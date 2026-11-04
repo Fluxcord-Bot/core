@@ -48,7 +48,7 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
       ...(await Promise.all(
         embed.fields.map(async x => ({
           name: x.name,
-          value: (await parseDiscordEmojiToFluxer(x.value, fluxerClient)) ?? "",
+          value: (await parseDiscordEmojiToFluxer(x.value, fluxerClient)) ?? "\u200b",
           inline: x.inline,
         }))
       ))
@@ -113,7 +113,7 @@ export async function fluxerEmbedToDiscord(message, discordClient) {
           ...(await Promise.all(
             embed.fields.map(async x => ({
               name: x.name,
-              value: (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "",
+              value: (await parseFluxerEmojiToDiscord(x.value, discordClient)) ?? "\u200b",
               inline: x.inline,
             }))
           ))
