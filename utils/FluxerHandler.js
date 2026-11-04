@@ -166,6 +166,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
+  if (!discordClient.token) {
+    log("DEBUG", `FluxerCreate skip id=${message.id} reason=discordClientUnavailable`);
+    return;
+  }
+
   if (await isUserOptedOut("fluxer", message.author.id)) {
     log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;

@@ -805,8 +805,33 @@ setupHealthcheck(discordClient, fluxerClient);
 
 setupDiscordCommands(discordClient, fluxerClient);
 
-discordClient.login(Config.DiscordBotToken);
-fluxerClient.login(Config.FluxerBotToken);
+async function loginDiscord() {
+  if (discordClient.isReady()) return;
+  try {
+    discordClient.ws["destroyed"] = false;
+    await discordClient.login(Config.DiscordBotToken);
+  } catch (e) {
+    log("DISCORD", "Login failed retrying in 15 seconds", e);
+    setTimeout(loginDiscord, 15000);
+  }
+}
+
+discordClient.on(DiscordEvents.ShardError, (error, shardId) => {
+  log("DISCORD", `Shard  ${shardId} errored`, error);
+  if (isRecoverableRuntimeError(error)) return;
+  process.exit(1);
+});
+
+discordClient.on(DiscordEvents.ShardDisconnect, (event, shardId) => {
+  log("DISCORD", `Shard ${shardId} disconnected (code ${event?.code ?? "unknown"}), reconnecting in 15 seconds`);
+  setTimeout(loginDiscord, 15000);
+});
+
+loginDiscord();
+fluxerClient.login(Config.FluxerBotToken).catch(e => {
+  log("FLUXER", "Login failed retrying in 15 seconds", e);
+  setTimeout(resetFluxerGateway, 15000);
+});
 
 function checkIfFluxerConnected() {
   if (!fluxerEverReady) return;
