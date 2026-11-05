@@ -171,13 +171,6 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
-  if (!(await canUserBridge("fluxer", message.author.id, guildId))) {
-    const guildName = message.guild?.name ?? guildId;
-    await promptOptedOutUserOnFirstMessage(guildId, "fluxer", message.author, guildName);
-    log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
-    return;
-  }
-
   const channelMapViaUserId = await ChannelMap.findOne({
     where: {
       [Op.or]: {
@@ -255,6 +248,13 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
       "DEBUG",
       `FluxerCreate skip id=${message.id} channelId=${message.channelId} reason=${!channelMap ? "noChannelMap" : "webhookEcho"} webhookId=${message.webhookId ?? "none"}`
     );
+    return;
+  }
+
+  if (!(await canUserBridge("fluxer", message.author.id, guildId))) {
+    const guildName = message.guild?.name ?? guildId;
+    await promptOptedOutUserOnFirstMessage(guildId, "fluxer", message.author, guildName);
+    log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;
   }
 

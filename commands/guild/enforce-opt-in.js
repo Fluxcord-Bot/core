@@ -63,8 +63,7 @@ const command = {
     }
 
     await message.reply(
-      `Opt-in enforcement is enabled for this ${community}. Sent ${sent} prompt${sent === 1 ? "" : "s"} to existing globally opted-out members.` +
-        (failed > 0 ? ` ${failed} notification attempt${failed === 1 ? "" : "s"} failed; see the bot logs.` : "")
+      `Opt-in enforcement is now enabled for this ${community}. Sent ${sent} prompt${sent === 1 ? "" : "s"} to existing globally opted-out members.`
     );
   },
 };

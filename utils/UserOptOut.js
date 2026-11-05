@@ -85,7 +85,8 @@ export async function canUserBridge(userType, userId, guildId) {
 export async function promptOptedOutUserOnFirstMessage(guildId, guildType, user, guildName) {
   if (!(await isGuildOptInEnabled(guildId, guildType))) return;
   if (!(await isUserOptedOut(guildType, user.id))) return;
-  if (await getGuildOptInState(guildType, guildId, user.id)) return;
+  const consent = await getGuildOptInState(guildType, guildId, user.id);
+  if (consent?.optedIn || consent?.prompted) return;
 
   try {
     await sendGuildOptInPrompt(user, guildName, guildId, guildType);
@@ -113,8 +114,8 @@ export async function sendGuildOptInPrompt(user, guildName, guildId, guildType) 
       {
         title: "Bridging opt-in required",
         description:
-          `To bridge messages in **${guildName}**, run \`${prefix}user opt-in\` in this ${community}. ` +
-          `This opts you in for this ${community} only and doesn't change your global preference.`
+          `To have your messages bridged in **${guildName}**, run \`${prefix}user opt-in\` in this ${community}.` +
+          `That only opts you in here; your global opt-out will be respected.`
       },
     ],
   });
@@ -151,7 +152,8 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
   let sent = 0;
   let failed = 0;
   for (const userId of userIds) {
-    if (await getGuildOptInState(guildType, guildId, userId)) continue;
+    const consent = await getGuildOptInState(guildType, guildId, userId);
+    if (consent?.optedIn || consent?.prompted) continue;
 
     let member;
     try {
