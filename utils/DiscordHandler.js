@@ -31,7 +31,7 @@ import {
   waitForPendingMirror,
 } from "./ThreadMirror.js";
 import { isFluxerRateLimited, withFluxerRateLimit } from "./FluxerRateLimit.js";
-import { isUserOptedOut } from "./UserOptOut.js";
+import { canUserBridge, promptOptedOutUserOnFirstMessage } from "./UserOptOut.js";
 import { waitForMessageMap } from "./WaitForMessageMap.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -199,7 +199,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     return;
   }
 
-  if (await isUserOptedOut("discord", message.author.id)) {
+  if (!(await canUserBridge("discord", message.author.id, message.guildId))) {
+    await promptOptedOutUserOnFirstMessage(message.guildId, "discord", message.author, message.guild.name);
     log("DEBUG", `DiscordCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;
   }
@@ -345,7 +346,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         referencedMessage.id,
         channelMap.id,
         referencedMessage.author?.id,
-        referencedMessage.createdAt
+        referencedMessage.createdAt,
+        message.guildId
       );
     }
   }
@@ -659,7 +661,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     return;
   }
 
-  if (await isUserOptedOut("discord", authorId)) return;
+  if (!(await canUserBridge("discord", authorId, newMsg.guildId ?? oldMsg.guildId))) return;
 
   const messageExisting = await MessageMap.findOne({
     where: {

@@ -24,7 +24,7 @@ import { resolveDiscordThreadChannel, resolveDiscordThreadId } from "./DiscordTh
 import { autoBridgeFluxerThread, backfillMirroredThread, waitForPendingMirror } from "./ThreadMirror.js";
 import { processSticker } from "./StickerProcessor.js";
 import { maybePublishDiscordMessage } from "./AnnouncementPublish.js";
-import { isUserOptedOut } from "./UserOptOut.js";
+import { canUserBridge, promptOptedOutUserOnFirstMessage } from "./UserOptOut.js";
 import { waitForMessageMap } from "./WaitForMessageMap.js";
 
 let fluxcordBotEmojiCfg = undefined;
@@ -166,7 +166,9 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
-  if (await isUserOptedOut("fluxer", message.author.id)) {
+  if (!(await canUserBridge("fluxer", message.author.id, guildId))) {
+    const guildName = message.guild?.name ?? guildId;
+    await promptOptedOutUserOnFirstMessage(guildId, "fluxer", message.author, guildName);
     log("DEBUG", `FluxerCreate skip id=${message.id} authorId=${message.author.id} reason=userOptOut`);
     return;
   }
@@ -257,7 +259,8 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
         referencedMessage.id,
         channelMap.id,
         referencedMessage.author?.id,
-        referencedMessage.createdAt
+        referencedMessage.createdAt,
+        guildId
       );
     }
   }
@@ -555,7 +558,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     return;
   }
 
-  if (await isUserOptedOut("fluxer", newMessage.author?.id)) {
+  if (!(await canUserBridge("fluxer", newMessage.author?.id, newMessage.guildId))) {
     log("DEBUG", `FluxerUpdate skip id=${newMessage.id} authorId=${newMessage.author?.id} reason=userOptOut`);
     return;
   }

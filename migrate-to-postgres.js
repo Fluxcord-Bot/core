@@ -4,7 +4,7 @@ import { Umzug, SequelizeStorage } from "umzug";
 import Config from "./utils/ConfigHandler.js";
 import sqlite3 from "@journeyapps/sqlcipher";
 
-const TABLES = ["GuildMaps", "ChannelMaps", "MessageMaps", "UserConfigs", "VoiceChannelMaps"];
+const TABLES = ["GuildMaps", "ChannelMaps", "MessageMaps", "UserConfigs", "VoiceChannelMaps", "GuildUserOptIns"];
 
 const force = process.argv.includes("--force");
 
@@ -117,7 +117,7 @@ if (!force) {
   }
 } else {
   await target.query(
-    'TRUNCATE "MessageMaps", "ChannelMaps", "GuildMaps", "UserConfigs", "VoiceChannelMaps" RESTART IDENTITY CASCADE;'
+    'TRUNCATE "MessageMaps", "ChannelMaps", "GuildMaps", "UserConfigs", "VoiceChannelMaps", "GuildUserOptIns" RESTART IDENTITY CASCADE;'
   );
 }
 

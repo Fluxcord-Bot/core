@@ -5,19 +5,26 @@ A set-and-forget Discord <-> Fluxer bridge.
 ## Features
 
 - Basic message bridging
-- Voice bridging (in very alpha)
+- Voice bridging
 - Edit/Delete bridging
 - Reply bridging
 - Emoji bridging
 - Embed bridging
 - Attachment bridging
-- Pins bridging
+- Sticker bridging
+- Pin bridging
 - Bulk deletion bridging
-- _others soon_
+- Thread and forum bridging
+- Channel topic and forum tag synchronization
+- Typing indicator bridging
+- Announcement channel auto-publishing
+- Per-server/community opt-in enforcement for users who opted out globally
 
 ## Self hosted setup
 
 Check https://fluxcord.jbcrn.dev/self-hosting for self hosting docs
+
+The Discord bot needs the **Message Content** privileged intent enabled.
 
 ## Development
 

@@ -50,7 +50,6 @@ import { buildDiscordUserAgentSuffix, buildExtHttpUserAgent, buildFluxerUserAgen
 import { fluxerRetryPolicy, isFluxerRateLimited, noteFluxerRateLimit, withFluxerRateLimit } from "./utils/FluxerRateLimit.js";
 import { randomUUID } from "node:crypto";
 import getCommitHash from "./utils/GetCommitHash.js";
-
 const discordClient = new DiscordClient({
   rest: {
     timeout: 30_000,
@@ -464,7 +463,7 @@ function isRecoverableRuntimeError(error) {
 
   if (message.includes("Used disallowed intents")) {
     renderBox([
-      "Message Content Intent not enabled!",
+      "Message Content Intent is not enabled!",
       "On Discord Developer Portal, go to the Fluxcord bot you created,",
       'then the Bot section, then enable "Message Content Intent".',
       "",

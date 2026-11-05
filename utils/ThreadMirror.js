@@ -10,7 +10,7 @@ import { resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { discordEmbedToFluxer, fluxerEmbedToDiscord } from "./EmbedConverter.js";
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
-import { isUserOptedOut } from "./UserOptOut.js";
+import { canUserBridge } from "./UserOptOut.js";
 import { runBackfill } from "./BackfillQueue.js";
 
 const MAX_POST_TAGS = 5;
@@ -301,7 +301,7 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
         let headFiles = [];
         if (headMessage) {
           headAuthorId = headMessage.author?.id ?? "";
-          if (headAuthorId && (await isUserOptedOut("discord", headAuthorId))) {
+          if (headAuthorId && !(await canUserBridge("discord", headAuthorId, parentMap.discordGuildId))) {
             headContent = "*Thread creator opted-out*";
             headInlined = true;
             headUsername = fluxerClient.user?.username ?? "Fluxcord";
@@ -625,7 +625,7 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
         let headAvatarUrl;
         if (headMessage) {
           headAuthorId = headMessage.author?.id ?? "";
-          if (headAuthorId && (await isUserOptedOut("fluxer", headAuthorId))) {
+          if (headAuthorId && !(await canUserBridge("fluxer", headAuthorId, parentMap.fluxerGuildId))) {
             headContent = "*Thread creator opted-out*";
             headInlined = true;
             headUsername = discordClient.user?.displayName ?? discordClient.user?.username ?? "Fluxcord";

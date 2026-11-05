@@ -44,6 +44,7 @@ class MessageMap extends Model {}
 class UserConfig extends Model {}
 class GuildMap extends Model {}
 class VoiceChannelMap extends Model {}
+class GuildUserOptIn extends Model {}
 
 GuildMap.init(
   {
@@ -78,6 +79,11 @@ GuildMap.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    guildOptInEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     autoPublishEnabled: {
       type: DataTypes.BOOLEAN,
@@ -198,4 +204,19 @@ VoiceChannelMap.init(
   { sequelize, modelName: "VoiceChannelMap" }
 );
 
-export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap, VoiceChannelMap };
+GuildUserOptIn.init(
+  {
+    guildType: { type: DataTypes.ENUM("discord", "fluxer"), allowNull: false },
+    guildId: { type: DataTypes.STRING, allowNull: false },
+    userId: { type: DataTypes.STRING, allowNull: false },
+    optedIn: { type: DataTypes.BOOLEAN, allowNull: false },
+    prompted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  },
+  {
+    sequelize,
+    modelName: "GuildUserOptIn",
+    indexes: [{ unique: true, fields: ["guildType", "guildId", "userId"] }],
+  }
+);
+
+export { sequelize, ChannelMap, MessageMap, UserConfig, GuildMap, VoiceChannelMap, GuildUserOptIn };
