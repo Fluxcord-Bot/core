@@ -64,7 +64,7 @@ async function resolveFluxerReference(message, client) {
     if (channel?.isTextBased?.() && channel.messages) {
       return await channel.messages.fetch(reference.messageId);
     }
-  } catch {}
+  } catch { }
 
   return null;
 }
@@ -166,6 +166,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
+  if (!discordClient.token) {
+    log("DEBUG", `FluxerCreate skip id=${message.id} reason=discordClientUnavailable`);
+    return;
+  }
+
   if (!(await canUserBridge("fluxer", message.author.id, guildId))) {
     const guildName = message.guild?.name ?? guildId;
     await promptOptedOutUserOnFirstMessage(guildId, "fluxer", message.author, guildName);
@@ -216,9 +221,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
+  const isCrosspostCpy = message.flags?.has?.(2) === true;
+
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
-  if (message.messageReference?.messageId) {
+  if (!isCrosspostCpy && message.messageReference?.messageId) {
     messageReference = await MessageMap.findOne({
       where: {
         [Op.or]: [
@@ -251,7 +258,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     return;
   }
 
-  if (!messageReference && message.messageReference?.messageId && message.messageReference.type !== 1) {
+  if (!isCrosspostCpy && !messageReference && message.messageReference?.messageId && message.messageReference.type !== 1) {
     const referencedMessage = await resolveFluxerReference(message, client);
     if (referencedMessage) {
       messageReference = await waitForMessageMap(
@@ -266,6 +273,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
   }
 
   const hasUnbridgedReference =
+    !isCrosspostCpy &&
     !forwardedMessage &&
     !messageReference &&
     message.messageReference?.type !== 1 &&
@@ -325,7 +333,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   const stickerMsg = stickerFallbacks.join(", ");
 
-  const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 9999000) ?? [];
+  const overAttachments = (forwardedMessage ?? message).attachments?.filter(x => x.size > 19999000) ?? [];
   const overAttachmentsStr = overAttachments.map(x => `[${x.filename}](<${x.proxyUrl ?? x.url}>)`).join(" ");
 
   const webhook = await getDiscordWebhook(discordClient, channelMap);
@@ -399,6 +407,11 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     )
   );
 
+  const followNotice =
+    message.type === 12
+      ? `**${indicatorPrefix("fluxer", nameIndicator)}@${message.author.username}${message.author.discriminator !== "0000" ? `#${message.author.discriminator}` : ""}** has added **${parsedContent}** to this channel. Its most important updates will show up here.`
+      : parsedContent;
+
   const attachmentDescs =
     (forwardedMessage ?? message).attachments
       ?.filter(x => x.size < 19999000)
@@ -440,7 +453,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
       (messageReference
         ? `-# <:reply_l:${fluxcordBotEmojiCfg.discordReplyEmoji.replyL}><:reply_r:${fluxcordBotEmojiCfg.discordReplyEmoji.replyR}> ${messageReference.messageSource === "discord" ? `${indicatorPrefix("discord", nameIndicator)}<@${messageReference.authorId}>` : `${indicatorPrefix("fluxer", nameIndicator)}@${message.referencedMessage?.author.username}#${message.referencedMessage?.author.discriminator}`}: [${await processReplyContent(message.referencedMessage)}](<https://discord.com/channels/${channelMap.discordGuildId}/${channelMap.discordChannelId}/${messageReference.discordMessageId}>)\n`
         : "") +
-      parsedContent +
+      followNotice +
       userJoin +
       stickerMsg +
       (overAttachmentsStr ? "\n-# has attachments over 20mb: " + overAttachmentsStr : ""),
@@ -493,7 +506,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   try {
     await maybePublishDiscordMessage(discordClient, channelMap, msg.id);
-  } catch {}
+  } catch { }
 
   log(
     "DEBUG",
@@ -526,7 +539,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
         if (isFluxerMessageNotFoundError(e)) {
           try {
             await msg.delete();
-          } catch {}
+          } catch { }
           await bridgedMessageMap?.destroy();
           await reroutedMessageMap?.destroy();
           return;
@@ -601,12 +614,13 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
+    const isCrosspostCopy = newMessage.flags?.has?.(2) === true;
     const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, newMessage.guildId);
     const webhook = await getDiscordWebhook(client, channelMap);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
-    if (newMessage.messageReference) {
+    if (!isCrosspostCopy && newMessage.messageReference) {
       messageReference = await MessageMap.findOne({
         where: {
           [Op.or]: [
@@ -626,7 +640,10 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
     }
 
     const hasUnbridgedReference =
-      !messageReference && newMessage.messageReference?.type !== 1 && Boolean(newMessage.messageReference?.messageId);
+      !isCrosspostCopy &&
+      !messageReference &&
+      newMessage.messageReference?.type !== 1 &&
+      Boolean(newMessage.messageReference?.messageId);
 
     const canUserPing = await checkPingPerms(newMessage.guildId, newMessage.author.id, client);
     const canUserEmbed = newMessage.webhookId
@@ -813,10 +830,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
 
       try {
         await channel.bulkDelete(messagesExisting.map(x => x.discordMessageId));
-      } catch {}
+      } catch { }
 
       await reply.delete();
-    } catch {}
+    } catch { }
 
     await Promise.all(messagesExisting.map(async x => await x.destroy()));
   }

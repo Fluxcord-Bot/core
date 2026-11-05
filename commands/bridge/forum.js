@@ -12,6 +12,7 @@ import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
 import { log } from "../../utils/Logger.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
+import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
 
 function isDiscordForumLike(channel) {
   return channel?.type === ChannelType.GuildForum || channel?.type === ChannelType.GuildMedia;
@@ -195,6 +196,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       const fluxerWebhook = await fluxerForum.createWebhook({
         name: `Fluxcord Bridge (${fluxerForum.id} (F) <-> ${discordForum.id} (D))`,
       });
+      invalidateFluxerWebhookCache(fluxerForum.id);
 
       const fluxerGuildMap = await GuildMap.findOrCreate({
         where: {

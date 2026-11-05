@@ -7,11 +7,12 @@ import { sanitizePings } from "./SanitizePings.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 import { cloudUploadAttachments } from "./CloudUpload.js";
 import { resolveNameIndicator, withIndicator } from "./NameIndicator.js";
-import { discordEmbedToFluxer, fluxerEmbedToDiscord } from "./EmbedConverter.js";
+import { discordEmbedToFluxer, fluxerEmbedToDiscord, isPlatformPreviewEmbed } from "./EmbedConverter.js";
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
 import { canUserBridge } from "./UserOptOut.js";
 import { runBackfill } from "./BackfillQueue.js";
+import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
@@ -311,7 +312,7 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
             headContent = headMessage.content ? sanitizePings(headMessage.content) : "";
             headEmbeds = await Promise.all(
               (headMessage.embeds ?? [])
-                .filter(x => !x.url || !headContent.includes(x.url))
+                .filter(x => !isPlatformPreviewEmbed(x, headMessage.content ?? ""))
                 .map(async x => await discordEmbedToFluxer(x, fluxerClient))
             );
             const overSized = [];
@@ -368,9 +369,13 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
         starterMessageId = res?.id ?? null;
         if (headGone && starterMessageId) {
           try {
-            await fluxerClient.rest.delete(
-              `/webhooks/${parentMap.fluxerWebhookId}/${parentMap.fluxerWebhookToken}/messages/${starterMessageId}?thread_id=${fluxerThreadId}`,
-              { auth: false }
+            await withFluxerRateLimit(
+              () =>
+                fluxerClient.rest.delete(
+                  `/webhooks/${parentMap.fluxerWebhookId}/${parentMap.fluxerWebhookToken}/messages/${starterMessageId}?thread_id=${fluxerThreadId}`,
+                  { auth: false }
+                ),
+              `webhook:${parentMap.fluxerWebhookId}`
             );
           } catch (e) {
             log("FLUXER", `Failed to remove the deleted head placeholder of mirrored post ${fluxerThreadId}`, e);

@@ -1,11 +1,32 @@
+import ExpiryMap from "expiry-map";
 import { Events as DiscordEvents, Routes as DiscordRoutes } from "discord.js";
 import { Events as FluxerEvents, Routes as FluxerRoutes } from "@fluxerjs/core";
 import { MessageMap } from "../db/index.js";
 import { log } from "./Logger.js";
-import { getFluxEmojis, getDiscordEmojis } from "./EmojiCache.js";
+import { getFluxEmojis, getDiscordEmojis, getBotEmojis } from "./EmojiCache.js";
 import { DEFAULT_INFO_EMOJI, getInfoReactionEmoji, isInfoReactionEmoji, sendBridgeInfo } from "./MessageBridgeInfo.js";
 import { ensureFluxerEmojis, ensureDiscordEmojis, isFluxerEmojiRateLimited, isDiscordEmojiRateLimited, } from "./EmojiStickerParser.js";
 import { isFluxerRateLimitError, withFluxerRateLimit } from "./FluxerRateLimit.js";
+
+const FLUX_EMOJI_META_TTL = 10 * 60 * 1000;
+
+/** @type {ExpiryMap<string, { name: string, animated: boolean }>} */
+const fluxEmojiMeta = new ExpiryMap(FLUX_EMOJI_META_TTL);
+
+/**
+ * @param {string} emojiId
+ * @param {import("@fluxerjs/core").Client} fluxerClient
+ */
+async function getFluxEmojiMeta(emojiId, fluxerClient) {
+  const cached = fluxEmojiMeta.get(emojiId);
+  if (cached) return cached;
+  const meta = await withFluxerRateLimit(
+    () => fluxerClient.fetchEmojiMetadata(emojiId),
+    `emoji-meta:${emojiId}`
+  );
+  fluxEmojiMeta.set(emojiId, meta);
+  return meta;
+}
 
 /**
  * Upload a Discord custom emoji to the Fluxer temp guild (or find existing).
@@ -28,7 +49,13 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
   }
 
   const originId = emojiName?.match(/^ea?(\d{17,19})$/)?.[1] ?? null;
-  if (originId) return `${emojiName}:${originId}`;
+  if (originId) {
+    try {
+      const meta = await getFluxEmojiMeta(originId, fluxerClient);
+      if (meta?.name) return `${meta.name}:${originId}`;
+    } catch {}
+    return `${emojiName}:${originId}`;
+  }
 
   const token = `${animated ? "a" : ""}${discordEmojiId}`;
   const ensured = await ensureFluxerEmojis(fluxerClient, [token]);
@@ -41,7 +68,7 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
  * Return "storeName:discordEmojiId" || null on failure.
  *
  * @param {string} fluxerEmojiId
- * @param {boolean} animated
+ * @param {boolean | undefined} animated
  * @param {import("discord.js").Client} discordClient
  * @param {string} targetDiscordGuildId
  * @param {string | null} emojiName
@@ -59,10 +86,74 @@ async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient
   const originId = emojiName?.match(/^ea?(\d{17,19})$/)?.[1] ?? null;
   if (originId) return `${emojiName}:${originId}`;
 
+  if (animated === undefined) {
+    try {
+      const appEmojis = await getBotEmojis(discordClient);
+      animated = [...appEmojis.values()].some(x => x.name === `ea${fluxerEmojiId}`);
+    } catch {
+      animated = false;
+    }
+  }
+
   const token = `${animated ? "a" : ""}${fluxerEmojiId}`;
   const ensured = await ensureDiscordEmojis(discordClient, [token]);
   const emoji = ensured.get(token);
   return emoji?.id ? `${emoji.name}:${emoji.id}` : null;
+}
+
+const REACTION_STATE_TTL = 12 * 60 * 60 * 1000;
+
+/**
+ * @type {ExpiryMap<string, { users: Set<string>, seeded: boolean, ready: Promise<void> | null }>}
+ */
+const reactionState = new ExpiryMap(REACTION_STATE_TTL);
+
+function reactionStateKey(side, messageId, emoji) {
+  return `${side}:${messageId}:${emoji.id ?? emoji.name}`;
+}
+
+function getReactionState(key) {
+  let state = reactionState.get(key);
+  if (!state) {
+    state = { users: new Set(), seeded: false, ready: null };
+    reactionState.set(key, state);
+  }
+  return state;
+}
+
+/**
+ * @param {{ users: Set<string>, seeded: boolean, ready: Promise<void> | null }} state
+ * @param {() => Promise<string[]>} seed
+ */
+async function seedReactionState(state, seed) {
+  if (state.seeded) return;
+  if (!state.ready) {
+    state.ready = (async () => {
+      try {
+        for (const id of await seed()) state.users.add(id);
+      } catch {}
+      state.seeded = true;
+      state.ready = null;
+    })();
+  }
+  await state.ready;
+}
+
+/**
+ * @param {string} key
+ * @param {string | undefined} userId
+ * @param {"add" | "remove"} action
+ * @param {() => Promise<string[]>} seed
+ */
+async function trackReactionState(key, userId, action, seed) {
+  const state = getReactionState(key);
+  await seedReactionState(state, seed);
+  if (userId) {
+    if (action === "add") state.users.add(userId);
+    else state.users.delete(userId);
+  }
+  reactionState.set(key, state);
+  return state.users.size > 0;
 }
 
 /**
@@ -86,6 +177,17 @@ async function relayDiscordReaction(reaction, user, action, fluxerClient) {
   if (channelMap.bridgeType === "fluxer2discord") return;
 
   const emoji = reaction.emoji;
+  const stillPresent = await trackReactionState(
+    reactionStateKey("discord", reaction.message.id, emoji),
+    user.id,
+    action,
+    async () => {
+      const users = await reaction.users.fetch({ limit: 100 });
+      return [...users.values()].filter(u => !u.bot).map(u => u.id);
+    }
+  );
+  if (action === "remove" && stillPresent) return;
+
   let emojiStr;
 
   if (!emoji.id) {
@@ -133,6 +235,21 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
   if (channelMap.bridgeType === "discord2fluxer") return;
 
   const emoji = reaction.emoji;
+  const stillPresent = await trackReactionState(
+    reactionStateKey("fluxer", reaction.messageId, emoji),
+    user?.id,
+    action,
+    async () => {
+      const message = reaction.message ?? (await reaction.fetchMessage());
+      const users = await withFluxerRateLimit(
+        () => message.fetchReactionUsers(reaction.emoji, { limit: 100 }),
+        `reaction:${message.channelId}`
+      );
+      return users.filter(u => u.id !== fluxerClient.user?.id).map(u => u.id);
+    }
+  );
+  if (action === "remove" && stillPresent) return;
+
   let emojiStr;
 
   if (!emoji.id) {
@@ -140,7 +257,7 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
   } else {
     emojiStr = await mirrorFluxerEmojiToDiscord(
       emoji.id,
-      emoji.animated ?? false,
+      emoji.animated,
       discordClient,
       channelMap.discordGuildId,
       emoji.name

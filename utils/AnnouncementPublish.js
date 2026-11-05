@@ -2,6 +2,7 @@ import { ChannelType as DiscordChannelType } from "discord.js";
 import { ChannelType as FluxerChannelType } from "@fluxerjs/core";
 import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 import { log } from "./Logger.js";
+import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 export function isVoiceChannel(channel) {
   if (!channel) return false;
@@ -70,7 +71,12 @@ export async function maybePublishFluxerMessage(fluxerClient, channelMap, messag
   if (!enabled || !messageId) return false;
   let channel = null;
   try {
-    channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
+    channel =
+      fluxerClient.channels.get(channelMap.fluxerChannelId) ??
+      (await withFluxerRateLimit(
+        () => fluxerClient.channels.fetch(channelMap.fluxerChannelId),
+        `channel:${channelMap.fluxerChannelId}`
+      ));
   } catch {
     return false;
   }
@@ -81,7 +87,7 @@ export async function maybePublishFluxerMessage(fluxerClient, channelMap, messag
   ];
   for (const path of paths) {
     try {
-      await fluxerClient.rest.post(path, { body: {} });
+      await withFluxerRateLimit(() => fluxerClient.rest.post(path, { body: {} }), `channel:${channelMap.fluxerChannelId}`);
       return true;
     } catch (e) {
       const status = e?.status ?? e?.statusCode ?? e?.cause?.statusCode;

@@ -40,3 +40,4 @@ config.ts
 config.js
 
 data/fluxcord*
+data/fluxer-ratelimit.json

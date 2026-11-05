@@ -16,6 +16,7 @@ import {
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { syncBridgeTopic } from "../../utils/TopicMirror.js";
+import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
 
 function normalizeChannelName(name) {
   return name
@@ -281,6 +282,7 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, disco
     const webhook = await fluxerChannel.createWebhook({
       name: `Fluxcord Bridge (${fluxerChannel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${discordChannel.id} (D))`,
     });
+    invalidateFluxerWebhookCache(fluxerChannel.id);
     fluxerWebhookToken = webhook.token ?? "";
     fluxerWebhookId = webhook.id;
     fluxerChannelId = fluxerChannel.id;

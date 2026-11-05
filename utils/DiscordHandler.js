@@ -6,7 +6,7 @@ import { CommandHandler } from "./CommandHandler.js";
 import { Op } from "sequelize";
 import truncate from "truncate";
 import { readFileSync } from "node:fs";
-import { discordEmbedToFluxer } from "./EmbedConverter.js";
+import { discordEmbedToFluxer, isPlatformPreviewEmbed } from "./EmbedConverter.js";
 import { parseDiscordEmojiToFluxer, removeLinkEmbeds, traverseMessageLinks } from "./EmojiStickerParser.js";
 import { attemptParseBridgedMessage, parseMentions } from "./MessageContentParser.js";
 import { sanitizePings } from "./SanitizePings.js";
@@ -110,7 +110,10 @@ function isFluxerUnknownMessageError(error) {
 }
 
 async function deleteFluxerMessage(client, channelMap, messageId) {
-  await client.rest.delete(FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId));
+  await withFluxerRateLimit(
+    () => client.rest.delete(FluxerRoutes.channelMessage(channelMap.fluxerChannelId, messageId)),
+    `channel:${channelMap.fluxerChannelId}`
+  );
 }
 
 async function deleteFluxerMessageIfExists(client, channelMap, messageId) {
@@ -132,23 +135,53 @@ function countCustomEmojis(content) {
 }
 
 const webhookListCache = new Map();
+const webhookListInflight = new Map();
+const webhookListGeneration = new Map();
+const WEBHOOK_CACHE_TTL_MS = 5 * 60_000;
+
+function fetchFluxerWebhookIds(fluxerClient, channelId) {
+  const existing = webhookListInflight.get(channelId);
+  if (existing) return existing;
+
+  const generation = webhookListGeneration.get(channelId) ?? 0;
+  const isCurrent = () => (webhookListGeneration.get(channelId) ?? 0) === generation;
+
+  const inflight = withFluxerRateLimit(async () => {
+    const channel = fluxerClient.channels.get(channelId) ?? (await fluxerClient.channels.fetch(channelId));
+    return /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
+  }, `webhook:${channelId}`)
+    .then(webhooks => {
+      const ids = new Set(webhooks.map(x => x.id));
+      if (isCurrent()) webhookListCache.set(channelId, { at: Date.now(), ids });
+      return ids;
+    })
+    .catch(e => {
+      if (isCurrent()) webhookListCache.set(channelId, { at: Date.now(), ids: new Set(), error: e });
+      throw e;
+    })
+    .finally(() => {
+      if (webhookListInflight.get(channelId) === inflight) webhookListInflight.delete(channelId);
+    });
+
+  webhookListInflight.set(channelId, inflight);
+  return inflight;
+}
+
+export function invalidateFluxerWebhookCache(channelId) {
+  if (!channelId) return;
+  webhookListGeneration.set(channelId, (webhookListGeneration.get(channelId) ?? 0) + 1);
+  webhookListCache.delete(channelId);
+  webhookListInflight.delete(channelId);
+}
 
 async function hasFluxerWebhook(fluxerClient, channelId, webhookId) {
   const cached = webhookListCache.get(channelId);
-  if (cached && Date.now() - cached.at < 60_000) {
+  if (cached && Date.now() - cached.at < WEBHOOK_CACHE_TTL_MS) {
     if (cached.error) throw cached.error;
-    if (cached.ids.has(webhookId)) return true;
+    return cached.ids.has(webhookId);
   }
-  try {
-    const channel = await fluxerClient.channels.fetch(channelId);
-    const webhooks = await /** @type {import("@fluxerjs/core").GuildChannel} */ (channel).fetchWebhooks();
-    const ids = new Set(webhooks.map(x => x.id));
-    webhookListCache.set(channelId, { at: Date.now(), ids });
-    return ids.has(webhookId);
-  } catch (e) {
-    webhookListCache.set(channelId, { at: Date.now(), ids: new Set(), error: e });
-    throw e;
-  }
+  const ids = await fetchFluxerWebhookIds(fluxerClient, channelId);
+  return ids.has(webhookId);
 }
 
 /**
@@ -302,8 +335,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
 
   const nameIndicator = await resolveNameIndicator(channelMap.fluxerGuildId, message.guildId);
 
+  const isCrosspostCopy = message.flags.has(MessageFlags.IsCrosspost);
+
   let forwardedMessage;
-  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin && message.flags !== MessageFlags.IsCrosspost) {
+  if (message.reference?.type === 1 && message.type !== MessageType.UserJoin && !isCrosspostCopy) {
     forwardedMessage = message.messageSnapshots.first();
   }
 
@@ -316,7 +351,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
 
   /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
   let messageReference;
-  if (message.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
+  if (!isCrosspostCopy && (message.reference || bridgeContent.isBridge || bridgeContent.isProxy)) {
     messageReference = await MessageMap.findOne({
       where: {
         [Op.or]: [
@@ -338,7 +373,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     }
   }
 
-  if (!messageReference && message.reference?.messageId && message.reference.type !== 1) {
+  if (!isCrosspostCopy && !messageReference && message.reference?.messageId && message.reference.type !== 1) {
     const referencedMessage = await resolveDiscordReference(message, client);
     if (referencedMessage) {
       messageReference = await waitForMessageMap(
@@ -353,6 +388,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   }
 
   const hasUnbridgedReference =
+    !isCrosspostCopy &&
     !forwardedMessage &&
     !messageReference &&
     message.reference?.type !== 1 &&
@@ -361,6 +397,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const stickerFiles = [];
   const stickerFallbacks = []; // Throw the cdn in the message if something unexpected happens
   const stickerLottie = []; // Discord does this for some of their native stickers. Ick.
+  // i didnt know discord used lottie for their native stickers wow (its shit too in some way)
 
   for (const sticker of message.stickers.values()) {
     if (sticker.url?.endsWith("json")) {
@@ -479,7 +516,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const overAttachments = (forwardedMessage ?? message).attachments.filter(x => x.size > 24999900);
   const overAttachmentsStr = overAttachments.map(x => `[${x.name}](<${x.url ?? x.proxyURL}>)`).join(" ");
   if (webhook) {
-    const otherSideGuild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
+    const otherSideGuild = await withFluxerRateLimit(
+      () => fluxerClient.guilds.fetch(channelMap.fluxerGuildId),
+      `guild:${channelMap.fluxerGuildId}`
+    );
     const canUserPing = await checkPingPerms(message.guildId, message.author.id, client);
     const everyonePingsEnabled = await isBridgeToggleEnabled(channelMap, "everyonePingEnabled");
     const canBridgePing = canUserPing && everyonePingsEnabled;
@@ -505,6 +545,11 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     );
     parsedContent = await refreshDiscordCdnLinks(parsedContent, client, message.id);
 
+    const followNotice =
+      message.type === MessageType.ChannelFollowAdd
+        ? `**${indicatorPrefix("discord", nameIndicator)}@${message.author.tag}** followed **${parsedContent}** into this channel. Messages published there will appear here.`
+        : parsedContent;
+
     let messageReferenceOption;
     if (messageReference && !forwardedMessage) {
       messageReferenceOption = { message_id: messageReference.fluxerMessageId };
@@ -521,7 +566,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
         ? `-# <${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyL}><${fluxcordBotEmojiCfg.fluxerReplyEmoji.replyR}> ${indicatorPrefix("discord", nameIndicator)}@${interactingUser.tag} used \`/${message.interaction?.commandName}\`\n`
         : "") +
       (message.flags.has(MessageFlags.IsComponentsV2) ? "*Components V2 message*" : "") +
-      parsedContent +
+      followNotice +
       stickerMsg +
       userJoin +
       (overAttachmentsStr ? "\n-# has attachments over 25mb: " + overAttachmentsStr : "");
@@ -538,8 +583,11 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       wEmbeds.length = 0;
     }
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
+    const sourceContent = (forwardedMessage ?? message).content ?? "";
     const webhookEmbeds = await Promise.all(
-      wEmbeds.filter(x => !x.url || !webhookContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, fluxerClient))
+      wEmbeds
+        .filter(x => !isPlatformPreviewEmbed(x, sourceContent))
+        .map(async x => await discordEmbedToFluxer(x, fluxerClient))
     );
     if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
       log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
@@ -685,18 +733,27 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
       newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)
     ) {
       const mirrorSuppressed = newMsg.flags.has(MessageFlags.SuppressEmbeds);
-      const original = await client.rest.get(
-        FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
+      const suppressionKey = `channel:${messageExisting.channelMap.fluxerChannelId}`;
+      const original = await withFluxerRateLimit(
+        () =>
+          client.rest.get(
+            FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId)
+          ),
+        suppressionKey
       );
       const originalFlags = original.flags ?? 0;
       if (Boolean(originalFlags & 4) !== mirrorSuppressed) {
-        await client.rest.patch(
-          FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId),
-          {
-            body: {
-              flags: mirrorSuppressed ? originalFlags | 4 : originalFlags & ~4,
-            },
-          }
+        await withFluxerRateLimit(
+          () =>
+            client.rest.patch(
+              FluxerRoutes.channelMessage(messageExisting.channelMap.fluxerChannelId, messageExisting.fluxerMessageId),
+              {
+                body: {
+                  flags: mirrorSuppressed ? originalFlags | 4 : originalFlags & ~4,
+                },
+              }
+            ),
+          suppressionKey
         );
       }
     }
@@ -705,12 +762,12 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
-
+    const isCrosspostCopy = newMsg.flags.has(MessageFlags.IsCrosspost);
     const bridgeContent = await attemptParseBridgedMessage(newMsg);
 
     /** @type {import("../db/models/MessageMap.js").MessageMap | null} */
     let messageReference;
-    if (newMsg.reference || bridgeContent.isBridge || bridgeContent.isProxy) {
+    if (!isCrosspostCopy && (newMsg.reference || bridgeContent.isBridge || bridgeContent.isProxy)) {
       messageReference = await MessageMap.findOne({
         where: {
           [Op.or]: [
@@ -733,6 +790,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     }
 
     const hasUnbridgedReference =
+      !isCrosspostCopy &&
       !messageReference &&
       newMsg.reference?.type !== 1 &&
       Boolean(newMsg.reference?.messageId || bridgeContent.messageData?.messageId);
@@ -765,7 +823,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     newContent = await refreshDiscordCdnLinks(newContent, newMsg.client, newMsg.id);
 
     const newEmbeds = await Promise.all(
-      wEmbeds.filter(x => !x.url || !newContent.includes(x.url)).map(async x => await discordEmbedToFluxer(x, client))
+      wEmbeds
+        .filter(x => !isPlatformPreviewEmbed(x, newMsg.content ?? ""))
+        .map(async x => await discordEmbedToFluxer(x, client))
     );
 
     const suppressEmbeds = newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;

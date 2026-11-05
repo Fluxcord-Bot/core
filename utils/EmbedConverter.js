@@ -2,6 +2,37 @@ import { EmbedBuilder as FluxerEmbedBuilder } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import { parseDiscordEmojiToFluxer, parseFluxerEmojiToDiscord } from "./EmojiStickerParser.js";
 
+const EMBED_URL_PATTERN = /https?:\/\/[^\s<>()]+/g;
+
+function parseUrl(value) {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeSameLink(a, b) {
+  if (!a || !b) return false;
+  if (a.href === b.href) return true;
+
+  const aPath = a.pathname.replace(/\/+$/, "");
+  return aPath !== "" && aPath === b.pathname.replace(/\/+$/, "");
+}
+
+export function isPlatformPreviewEmbed(embed, content = "") {
+  if (embed.type && embed.type !== "rich") return true;
+  if (embed.provider || embed.video || embed.audio || embed.html || (embed.children?.length ?? 0) > 0) return true;
+
+  const embedUrl = parseUrl(embed.url);
+  if (!embedUrl) return false;
+
+  for (const match of (content ?? "").matchAll(EMBED_URL_PATTERN)) {
+    if (looksLikeSameLink(embedUrl, parseUrl(match[0].replace(/[.,;:!?]+$/, "")))) return true;
+  }
+  return false;
+}
+
 /**
  * @param {DiscordEmbed} embed
  * @param {FluxerClient} fluxerClient
@@ -64,7 +95,7 @@ export async function discordEmbedToFluxer(embed, fluxerClient) {
  */
 export async function fluxerEmbedToDiscord(message, discordClient) {
   const content = message.content ?? "";
-  const embeds = (message.embeds ?? []).filter(embed => !embed.url || !content.includes(embed.url));
+  const embeds = (message.embeds ?? []).filter(embed => !isPlatformPreviewEmbed(embed, content));
 
   if (!embeds) return undefined;
 
