@@ -15,6 +15,7 @@ const DefaultConfig = {
   BotPrefix: "fc!",
   FluxerBioStart: "",
   DiscordBioStart: "",
+  AutomaticBioEnabled: true,
   DatabaseEncryptionToken: "",
   PostgresConnectionString: "",
   /** @type {({ text: string, emoji: string | { fluxer: { name: string, id: string }, discord: string }| undefined } | { nontrinsic: true })[]} */
