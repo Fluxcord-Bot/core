@@ -12,7 +12,7 @@ const command = {
   topLevelAliases: ["optin", "opt-in"],
   description: "Resume bridging globally or opt in to this server/community only",
   requireElevated: false,
-  params: "[global]",
+  params: "[global] [confirm]",
   slashOptions: [
     {
       name: "scope",
@@ -24,7 +24,7 @@ const command = {
     const isFluxer = message instanceof FluxerMessage;
     const userType = isFluxer ? "fluxer" : "discord";
     const community = isFluxer ? "community" : "server";
-    const scope = params[0]?.toLowerCase();
+    const scope = params.find(param => param.toLowerCase() !== "confirm")?.toLowerCase();
 
     if (!message.guildId) {
       await message.reply(`Fluxcord commands cannot be used in DMs. Run \`user opt-in\` in the ${community} where you want bridging enabled.`);
