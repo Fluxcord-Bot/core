@@ -10,7 +10,7 @@ const command = {
   name: "opt-out",
   aliases: ["optout"],
   topLevelAliases: ["optout", "opt-out"],
-  description: "Stop bridging globally or in this server/community only",
+  description: "Stop bridging globally or in this guild/community only",
   requireElevated: false,
   params: "[global] [confirm]",
   slashOptions: [
@@ -26,7 +26,7 @@ const command = {
     const userType = isFluxer ? "fluxer" : "discord";
     const scope = params.find(param => param.toLowerCase() !== "confirm")?.toLowerCase();
     const confirmed = params.some(param => param.toLowerCase() === "confirm");
-    const community = isFluxer ? "community" : "server";
+    const community = isFluxer ? "community" : "guild";
     const otherSide = isFluxer ? "Discord" : "Fluxer";
     const platform = isFluxer ? "Fluxer" : "Discord";
 
@@ -59,7 +59,7 @@ const command = {
                   `- Replies to your messages will show an *Unbridged message* on ${otherSide}. Your author information and message content won't be visible.\n` +
                   `- Forum threads you create will still show their title, but your message won't be bridged.\n` +
                   "- Already bridged messages will stay, but edits won't be bridged. Deletions will be bridged regardless.\n" +
-                  `- This only affects your current account on ${platform}; it won't change your global preference or other ${community === "community" ? "communities" : "servers"}.\n` +
+                  `- This only affects your current account on ${platform}; it won't change your global preference or other ${community === "community" ? "communities" : "guilds"}.\n` +
                   "- **This will not apply on voice bridges.**\n\n" +
                   `To confirm, run \`${prefix}user opt-out confirm\` in this ${community}.`,
               },

@@ -1,6 +1,5 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { isUserOptedOut, setUserOptedOut } from "../../utils/UserOptOut.js";
-import { isGuildOptInEnabled, setGuildOptInState } from "../../utils/UserOptOut.js";
+import { getGuildOptInState, isUserOptedOut, setGuildOptInState, setUserOptedOut } from "../../utils/UserOptOut.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -10,7 +9,7 @@ const command = {
   name: "opt-in",
   aliases: ["optin"],
   topLevelAliases: ["optin", "opt-in"],
-  description: "Resume bridging globally or opt in to this server/community only",
+  description: "Resume bridging globally or opt in to this guild/community only",
   requireElevated: false,
   params: "[global] [confirm]",
   slashOptions: [
@@ -23,7 +22,7 @@ const command = {
   async run(params, message) {
     const isFluxer = message instanceof FluxerMessage;
     const userType = isFluxer ? "fluxer" : "discord";
-    const community = isFluxer ? "community" : "server";
+    const community = isFluxer ? "community" : "guild";
     const scope = params.find(param => param.toLowerCase() !== "confirm")?.toLowerCase();
 
     if (!message.guildId) {
@@ -36,20 +35,26 @@ const command = {
       return;
     }
 
-    if (scope !== "global" && (await isGuildOptInEnabled(message.guildId, userType))) {
-      await setGuildOptInState(userType, message.guildId, message.author.id, true);
-      await message.reply(`Done. Your opt-in for this ${community} is saved; your global preference is unchanged.`);
+    if (scope === "global") {
+      if (!(await isUserOptedOut(userType, message.author.id))) {
+        await message.reply("You are not currently opted out of bridging.");
+        return;
+      }
+
+      await setUserOptedOut(userType, message.author.id, false);
+
+      await message.reply("Done, Your messages will be bridged again.");
       return;
     }
 
-    if (!(await isUserOptedOut(userType, message.author.id))) {
-      await message.reply("You are not currently opted out of bridging.");
+    const existing = await getGuildOptInState(userType, message.guildId, message.author.id);
+    if (existing?.optedIn === true) {
+      await message.reply(`You are already opted in to bridging in this ${community}.`);
       return;
     }
 
-    await setUserOptedOut(userType, message.author.id, false);
-
-    await message.reply("Done. Your messages will be bridged again.");
+    await setGuildOptInState(userType, message.guildId, message.author.id, true);
+    await message.reply(`Done, Your opt-in for this ${community} was saved.`);
   },
 };
 
