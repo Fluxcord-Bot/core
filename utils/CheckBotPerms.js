@@ -1,5 +1,5 @@
 import { ChannelType as DiscordChannelType, GuildMember as DiscordGuildMember } from "discord.js";
-import { ChannelType as FluxerChannelType, GuildMember as FluxerGuildMember } from "@fluxerjs/core";
+import { Channel, ChannelType as FluxerChannelType, GuildMember as FluxerGuildMember, GuildChannel } from "@fluxerjs/core";
 
 export function checkBotPermissions(botMember, channel) {
   const isFluxer = botMember instanceof FluxerGuildMember;
@@ -7,9 +7,6 @@ export function checkBotPermissions(botMember, channel) {
     ? channel.type === FluxerChannelType.GuildVoice
     : channel.type === DiscordChannelType.GuildVoice || channel.type === DiscordChannelType.GuildStageVoice;
   const perms = isFluxer ? botMember.permissionsIn(channel) : channel.permissionsFor(botMember);
-  const missingGuildCritical = isFluxer
-    ? botMember.permissions.missing(["ManageRoles", "ManageExpressions", "CreateExpressions"])
-    : [];
   const missingCritical = perms.missing([
     "ViewChannel",
     "SendMessages",
@@ -37,9 +34,9 @@ export function checkBotPermissions(botMember, channel) {
         ]
   );
   return {
-    missingGuildCritical,
+    missingGuildCritical: [],
     missingCritical,
-    missingOptional,
-    hasAllCritical: missingGuildCritical.length === 0 && missingCritical.length === 0,
+    missingOptional: [...missingOptional],
+    hasAllCritical: missingCritical.length === 0,
   };
 }
