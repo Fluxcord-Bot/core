@@ -92,74 +92,74 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
           await message.reply("Backfill cancelled before it started.");
           return;
         }
-      const collected = [];
-      let before = undefined;
-      while (collected.length < numOfMessages + 2) {
-        /** @type {import("@fluxerjs/collection").Collection<string, import("@fluxerjs/core").Message> | Collection<import("discord.js").Snowflake, Message>} */
-        const page = await message.channel.messages.fetch({
-          limit: Math.min(fetchPageSize, numOfMessages + 2 - collected.length),
-          ...(before ? { before } : {}),
-        });
-        const values = [...page.values()];
-        if (values.length === 0) break;
-        collected.push(...values);
-        before = values[values.length - 1].id;
-        if (values.length < fetchPageSize) break;
-      }
+        const collected = [];
+        let before = undefined;
+        while (collected.length < numOfMessages + 2) {
+          /** @type {import("@fluxerjs/collection").Collection<string, import("@fluxerjs/core").Message> | Collection<import("discord.js").Snowflake, Message>} */
+          const page = await message.channel.messages.fetch({
+            limit: Math.min(fetchPageSize, numOfMessages + 2 - collected.length),
+            ...(before ? { before } : {}),
+          });
+          const values = [...page.values()];
+          if (values.length === 0) break;
+          collected.push(...values);
+          before = values[values.length - 1].id;
+          if (values.length < fetchPageSize) break;
+        }
 
-      const msgs = collected.slice(0, numOfMessages + 2);
-      const ids = msgs.map(x => x.id);
-      const alrBridged = await MessageMap.findAll({
-        where: {
-          [Op.or]: {
-            discordMessageId: {
-              [Op.in]: ids,
-            },
-            fluxerMessageId: {
-              [Op.in]: ids,
+        const msgs = collected.slice(0, numOfMessages + 2);
+        const ids = msgs.map(x => x.id);
+        const alrBridged = await MessageMap.findAll({
+          where: {
+            [Op.or]: {
+              discordMessageId: {
+                [Op.in]: ids,
+              },
+              fluxerMessageId: {
+                [Op.in]: ids,
+              },
             },
           },
-        },
-      });
+        });
 
-      const matchedIds = new Set(alrBridged.flatMap(row => [row.discordMessageId, row.fluxerMessageId]));
-      const unbridgedMsgs = msgs.filter(msg => !matchedIds.has(msg.id));
+        const matchedIds = new Set(alrBridged.flatMap(row => [row.discordMessageId, row.fluxerMessageId]));
+        const unbridgedMsgs = msgs.filter(msg => !matchedIds.has(msg.id));
 
-      const statusMsg = await message.reply(`Getting ${unbridgedMsgs.length} messages and trying to bridge them...`);
+        const statusMsg = await message.reply(`Getting ${unbridgedMsgs.length} messages and trying to bridge them...`);
 
-      let success = 0;
-      for (const [i, msg] of unbridgedMsgs.reverse().entries()) {
-        if (state.cancelled) break;
-        try {
+        let success = 0;
+        for (const [i, msg] of unbridgedMsgs.reverse().entries()) {
+          if (state.cancelled) break;
+          try {
+            await statusMsg.edit({
+              content: `Trying to backfill message ID ${msg.id}... (${i + 1}/${unbridgedMsgs.length}, ${success} successful)`,
+            });
+          } catch {}
+          try {
+            if (msg instanceof FluxerMessage) {
+              await FluxerCreateMessageHandler(msg, fluxerClient, discordClient, message.guild.id);
+            } else {
+              await DiscordCreateMessageHandler(msg, discordClient, fluxerClient, true);
+            }
+            success++;
+          } catch {}
+          await sleep(2000);
+        }
+
+        if (state.cancelled) {
           await statusMsg.edit({
-            content: `Trying to backfill message ID ${msg.id}... (${i + 1}/${unbridgedMsgs.length}, ${success} successful)`,
+            content: `Backfill cancelled after ${success} messages.`,
           });
-        } catch {}
-        try {
-          if (msg instanceof FluxerMessage) {
-            await FluxerCreateMessageHandler(msg, fluxerClient, discordClient, message.guild.id);
-          } else {
-            await DiscordCreateMessageHandler(msg, discordClient, fluxerClient, true);
-          }
-          success++;
-        } catch {}
-        await sleep(2000);
+        } else {
+          await statusMsg.edit({
+            content: `🎉 Successfully backfilled ${success} messages to ${!isFluxer ? "Fluxer" : "Discord"}!`,
+          });
+        }
+      } finally {
+        if (activeBackfills.get(message.channelId) === state) {
+          activeBackfills.delete(message.channelId);
+        }
       }
-
-      if (state.cancelled) {
-        await statusMsg.edit({
-          content: `Backfill cancelled after ${success} messages.`,
-        });
-      } else {
-        await statusMsg.edit({
-          content: `🎉 Successfully backfilled ${success} messages to ${!isFluxer ? "Fluxer" : "Discord"}!`,
-        });
-      }
-    } finally {
-      if (activeBackfills.get(message.channelId) === state) {
-        activeBackfills.delete(message.channelId);
-      }
-    }
     });
   },
 };

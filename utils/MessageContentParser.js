@@ -106,8 +106,7 @@ async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGu
   if (guild) {
     const roles = await getFluxerGuildRoles(guild);
     const channels = await getFluxerGuildChannels(guild);
-    const otherRoles =
-      otherSideGuild.roles.cache.size > 0 ? otherSideGuild.roles.cache : await otherSideGuild.roles.fetch();
+    const otherRoles = otherSideGuild.roles.cache.size > 0 ? otherSideGuild.roles.cache : await otherSideGuild.roles.fetch();
     const whitelist = [];
 
     roles.forEach(v => {

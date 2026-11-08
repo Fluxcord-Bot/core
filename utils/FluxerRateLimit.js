@@ -172,11 +172,7 @@ export function noteFluxerRateLimit(error, key = "message") {
     const until = now + waitMs;
     state.nextAt = Math.max(state.nextAt, until);
     persistHolds();
-    logHold(
-      state,
-      until,
-      `Fluxer backend is returning errors (${key}), backing off for ${Math.ceil(waitMs / 1000)} seconds`
-    );
+    logHold(state, until, `Fluxer backend is returning errors (${key}), backing off for ${Math.ceil(waitMs / 1000)} seconds`);
     return true;
   }
 
@@ -188,10 +184,7 @@ export function noteFluxerRateLimit(error, key = "message") {
 
   const strikes = recordStrike(state, now);
   const escalate = globalLimit || strikes >= STRIKE_ESCALATION_THRESHOLD;
-  const waitMs = clampHold(
-    escalate ? Math.max(requestedMs, FALLBACK_RETRY_AFTER_MS) : requestedMs,
-    MIN_RATE_LIMIT_HOLD_MS
-  );
+  const waitMs = clampHold(escalate ? Math.max(requestedMs, FALLBACK_RETRY_AFTER_MS) : requestedMs, MIN_RATE_LIMIT_HOLD_MS);
   const until = now + waitMs;
 
   state.nextAt = Math.max(state.nextAt, until);

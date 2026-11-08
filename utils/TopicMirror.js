@@ -3,8 +3,7 @@ import { ChannelType as DiscordChannelType } from "discord.js";
 import { log } from "./Logger.js";
 
 export async function mirrorDiscordTopic(newChannel, discordClient, fluxerClient) {
-  if (newChannel.type !== DiscordChannelType.GuildText && newChannel.type !== DiscordChannelType.GuildAnnouncement)
-    return;
+  if (newChannel.type !== DiscordChannelType.GuildText && newChannel.type !== DiscordChannelType.GuildAnnouncement) return;
   const row = await ChannelMap.findOne({ where: { discordChannelId: newChannel.id }, raw: true });
   if (!row || row.autoMirrored || row.bridgeType === "fluxer2discord") return;
   let target;
@@ -34,11 +33,7 @@ export async function mirrorFluxerTopic(newChannel, discordClient, fluxerClient)
   } catch {
     return;
   }
-  if (
-    !target ||
-    (target.type !== DiscordChannelType.GuildText && target.type !== DiscordChannelType.GuildAnnouncement)
-  )
-    return;
+  if (!target || (target.type !== DiscordChannelType.GuildText && target.type !== DiscordChannelType.GuildAnnouncement)) return;
   const topic = newChannel.topic ?? null;
   if ((target.topic ?? null) === topic) return;
   try {

@@ -100,9 +100,9 @@ export async function checkEmbedPerms(guildId, channelId, userId, client) {
 
   try {
     return Boolean(
-      member?.permissionsIn(/** @type {import("discord.js").GuildChannelResolvable} */ (channel)).has(
-        PermissionFlagsBits.EmbedLinks
-      )
+      member
+        ?.permissionsIn(/** @type {import("discord.js").GuildChannelResolvable} */ (channel))
+        .has(PermissionFlagsBits.EmbedLinks)
     );
   } catch {
     return false;

@@ -10,7 +10,7 @@ import { runBackfill } from "./BackfillQueue.js";
 let ran = false;
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -32,56 +32,52 @@ async function sweepSide(channel, map, cutoff, idColumn, side, discordClient, fl
     return 0;
   }
 
-return runBackfill(map.discordGuildId, async () => {
-  const collected = [];
-  let before = undefined;
-  while (true) {
-    const page = await channel.messages.fetch({
-      limit: 100,
-      ...(before ? { before } : {}),
+  return runBackfill(map.discordGuildId, async () => {
+    const collected = [];
+    let before = undefined;
+    while (true) {
+      const page = await channel.messages.fetch({
+        limit: 100,
+        ...(before ? { before } : {}),
+      });
+      const values = [...page.values()];
+      if (values.length === 0) break;
+      collected.push(...values);
+      if (new Date(values[values.length - 1].createdAt).getTime() < cutoff) break;
+      before = values[values.length - 1].id;
+    }
+    if (collected.length === 0) return 0;
+
+    const ids = collected.map(x => x.id);
+    const alreadyBridged = await MessageMap.findAll({
+      where: {
+        [idColumn]: { [Op.in]: ids },
+      },
     });
-    const values = [...page.values()];
-    if (values.length === 0) break;
-    collected.push(...values);
-    if (new Date(values[values.length - 1].createdAt).getTime() < cutoff) break;
-    before = values[values.length - 1].id;
-  }
-  if (collected.length === 0) return 0;
+    const bridgedIds = new Set(alreadyBridged.map(x => x[idColumn]));
+    const skipIds = new Set(
+      [discordClient.user?.id, fluxerClient.user?.id, map.discordWebhookId, map.fluxerWebhookId].filter(Boolean)
+    );
+    const missed = collected
+      .filter(
+        m => new Date(m.createdAt).getTime() >= cutoff && !bridgedIds.has(m.id) && !skipIds.has(m.author?.id) && !m.webhookId
+      )
+      .reverse();
 
-  const ids = collected.map(x => x.id);
-  const alreadyBridged = await MessageMap.findAll({
-    where: {
-      [idColumn]: { [Op.in]: ids },
-    },
+    let success = 0;
+    for (const msg of missed) {
+      try {
+        if (side === "fluxer") {
+          await FluxerCreateMessageHandler(msg, fluxerClient, discordClient, map.fluxerGuildId);
+        } else {
+          await DiscordCreateMessageHandler(msg, discordClient, fluxerClient, true);
+        }
+        success++;
+      } catch {}
+      await sleep(500);
+    }
+    return success;
   });
-  const bridgedIds = new Set(alreadyBridged.map(x => x[idColumn]));
-  const skipIds = new Set(
-    [discordClient.user?.id, fluxerClient.user?.id, map.discordWebhookId, map.fluxerWebhookId].filter(Boolean)
-  );
-  const missed = collected
-    .filter(
-      m =>
-        new Date(m.createdAt).getTime() >= cutoff &&
-        !bridgedIds.has(m.id) &&
-        !skipIds.has(m.author?.id) &&
-        !m.webhookId
-    )
-    .reverse();
-
-  let success = 0;
-  for (const msg of missed) {
-    try {
-      if (side === "fluxer") {
-        await FluxerCreateMessageHandler(msg, fluxerClient, discordClient, map.fluxerGuildId);
-      } else {
-        await DiscordCreateMessageHandler(msg, discordClient, fluxerClient, true);
-      }
-      success++;
-    } catch { }
-    await sleep(500);
-  }
-  return success;
-});
 }
 
 export async function runStartupSync(discordClient, fluxerClient) {

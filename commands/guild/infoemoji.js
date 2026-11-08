@@ -23,13 +23,7 @@ const command = {
     const guildType = isFluxer ? "fluxer" : "discord";
 
     if (!params[0]) {
-      const { current } = await applyBridgeValue(
-        message.guildId,
-        guildType,
-        "infoReactionEmoji",
-        undefined,
-        null
-      );
+      const { current } = await applyBridgeValue(message.guildId, guildType, "infoReactionEmoji", undefined, null);
       await message.reply(`Info reaction is currently ${current ?? DEFAULT_INFO_EMOJI}.`);
       return;
     }

@@ -5,7 +5,12 @@ import { MessageMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import { getFluxEmojis, getDiscordEmojis, getBotEmojis } from "./EmojiCache.js";
 import { DEFAULT_INFO_EMOJI, getInfoReactionEmoji, isInfoReactionEmoji, sendBridgeInfo } from "./MessageBridgeInfo.js";
-import { ensureFluxerEmojis, ensureDiscordEmojis, isFluxerEmojiRateLimited, isDiscordEmojiRateLimited, } from "./EmojiStickerParser.js";
+import {
+  ensureFluxerEmojis,
+  ensureDiscordEmojis,
+  isFluxerEmojiRateLimited,
+  isDiscordEmojiRateLimited,
+} from "./EmojiStickerParser.js";
 import { isFluxerRateLimitError, withFluxerRateLimit } from "./FluxerRateLimit.js";
 
 const FLUX_EMOJI_META_TTL = 10 * 60 * 1000;
@@ -20,10 +25,7 @@ const fluxEmojiMeta = new ExpiryMap(FLUX_EMOJI_META_TTL);
 async function getFluxEmojiMeta(emojiId, fluxerClient) {
   const cached = fluxEmojiMeta.get(emojiId);
   if (cached) return cached;
-  const meta = await withFluxerRateLimit(
-    () => fluxerClient.fetchEmojiMetadata(emojiId),
-    `emoji-meta:${emojiId}`
-  );
+  const meta = await withFluxerRateLimit(() => fluxerClient.fetchEmojiMetadata(emojiId), `emoji-meta:${emojiId}`);
   fluxEmojiMeta.set(emojiId, meta);
   return meta;
 }
@@ -255,13 +257,7 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
   if (!emoji.id) {
     emojiStr = emoji.name;
   } else {
-    emojiStr = await mirrorFluxerEmojiToDiscord(
-      emoji.id,
-      emoji.animated,
-      discordClient,
-      channelMap.discordGuildId,
-      emoji.name
-    );
+    emojiStr = await mirrorFluxerEmojiToDiscord(emoji.id, emoji.animated, discordClient, channelMap.discordGuildId, emoji.name);
   }
 
   if (!emojiStr) return;
@@ -315,9 +311,7 @@ export function setupReactionHandling(discordClient, fluxerClient) {
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {
     const { reaction, user } = payload;
     const infoEmoji = await getInfoReactionEmoji(reaction.guildId).catch(() => DEFAULT_INFO_EMOJI);
-    const emojiName = reaction.emoji.id
-      ? reaction.emoji.name
-      : await normalizeFluxerEmojiName(fluxerClient, reaction.emoji.name);
+    const emojiName = reaction.emoji.id ? reaction.emoji.name : await normalizeFluxerEmojiName(fluxerClient, reaction.emoji.name);
     if (isInfoReactionEmoji(reaction.emoji.id, emojiName, infoEmoji)) {
       const message = await reaction.fetchMessage();
       try {

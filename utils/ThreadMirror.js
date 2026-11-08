@@ -8,7 +8,12 @@ import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
 import { cloudUploadAttachments } from "./CloudUpload.js";
 import { resolveNameIndicator, withIndicator } from "./NameIndicator.js";
 import { discordEmbedToFluxer, fluxerEmbedToDiscord, isPlatformPreviewEmbed } from "./EmbedConverter.js";
-import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment, SPOILER_ATTACHMENT_FLAG, toDiscordSpoilerFilename } from "./SpoilerAttachments.js";
+import {
+  isDiscordSpoilerAttachment,
+  isFluxerSpoilerAttachment,
+  SPOILER_ATTACHMENT_FLAG,
+  toDiscordSpoilerFilename,
+} from "./SpoilerAttachments.js";
 import { log } from "./Logger.js";
 import { canUserBridge } from "./UserOptOut.js";
 import { runBackfill } from "./BackfillQueue.js";
@@ -165,9 +170,7 @@ export async function mapTagsToFluxer(anchorRow, tagIds, discordParent, fluxerPa
     if (!entry) {
       const sourceTag = sourceTags.find(t => t.id === id);
       if (!sourceTag) continue;
-      const fluxerTag = (fluxerParent.availableTags ?? []).find(
-        t => t.name.toLowerCase() === sourceTag.name.toLowerCase()
-      );
+      const fluxerTag = (fluxerParent.availableTags ?? []).find(t => t.name.toLowerCase() === sourceTag.name.toLowerCase());
       entry = {
         name: sourceTag.name,
         discordId: id,
@@ -195,9 +198,7 @@ export async function mapTagsToDiscord(anchorRow, tagIds, fluxerParent, discordP
     if (!entry) {
       const sourceTag = sourceTags.find(t => t.id === id);
       if (!sourceTag) continue;
-      const discordTag = (discordParent.availableTags ?? []).find(
-        t => t.name.toLowerCase() === sourceTag.name.toLowerCase()
-      );
+      const discordTag = (discordParent.availableTags ?? []).find(t => t.name.toLowerCase() === sourceTag.name.toLowerCase());
       entry = {
         name: sourceTag.name,
         discordId: discordTag?.id ?? null,
@@ -664,9 +665,7 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
             if (headMessage.author) {
               let guildUser;
               try {
-                guildUser = await (await fluxerClient.guilds.fetch(parentMap.fluxerGuildId)).fetchMember(
-                  headMessage.author.id
-                );
+                guildUser = await (await fluxerClient.guilds.fetch(parentMap.fluxerGuildId)).fetchMember(headMessage.author.id);
               } catch {}
               headUsername = withIndicator(
                 guildUser?.displayName ?? headMessage.author.globalName ?? headMessage.author.username,
@@ -712,7 +711,12 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
       }
     } else if (!discordThreadId && discordParent.type === DiscordChannelType.GuildAnnouncement) {
       let resolveSelfCreate;
-      markSelfCreate("discord:" + discordParent.id, new Promise(r => { resolveSelfCreate = r; }));
+      markSelfCreate(
+        "discord:" + discordParent.id,
+        new Promise(r => {
+          resolveSelfCreate = r;
+        })
+      );
       try {
         const created = await discordParent.threads.create({
           name: thread.name.slice(0, 100),
@@ -724,7 +728,12 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
       }
     } else if (!discordThreadId) {
       let resolveSelfCreate;
-      markSelfCreate("discord:" + discordParent.id, new Promise(r => { resolveSelfCreate = r; }));
+      markSelfCreate(
+        "discord:" + discordParent.id,
+        new Promise(r => {
+          resolveSelfCreate = r;
+        })
+      );
       try {
         const created = await discordParent.threads.create({
           name: thread.name.slice(0, 100),
@@ -833,7 +842,8 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
   const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
   const archivedChanged = oldThread.archived !== newThread.archived;
   const lockedChanged = oldThread.locked !== newThread.locked;
-  const pinChanged = ((oldThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG);
+  const pinChanged =
+    ((oldThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG);
   if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged && !pinChanged) return;
   const row = /** @type {any} */ (
     await ChannelMap.findOne({
@@ -861,7 +871,7 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
       } catch {}
       let fluxerForum = null;
       try {
-        fluxerForum = await fluxerClient.channels.fetch((/** @type {any} */ (parentRow)).fluxerChannelId);
+        fluxerForum = await fluxerClient.channels.fetch(/** @type {any} */ (parentRow).fluxerChannelId);
       } catch {}
       const sourceIds = newThread.appliedTags ?? [];
       const mapped = await mapTagsToFluxer(parentRow, sourceIds, discordParent, fluxerForum);
@@ -933,7 +943,7 @@ export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClie
       } catch {}
       let discordForum = null;
       try {
-        discordForum = await discordClient.channels.fetch((/** @type {any} */ (parentRow)).discordChannelId);
+        discordForum = await discordClient.channels.fetch(/** @type {any} */ (parentRow).discordChannelId);
       } catch {}
       const sourceIds = newThread.appliedTags ?? [];
       const mapped = await mapTagsToDiscord(parentRow, sourceIds, fluxerParent, discordForum);

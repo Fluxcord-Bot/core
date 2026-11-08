@@ -95,7 +95,11 @@ export async function promptOptedOutUserOnFirstMessage(guildId, guildType, user,
       defaults: { optedIn: false, prompted: true },
     });
   } catch (error) {
-    log(guildType === "discord" ? "DISCORD" : "FLUXER", `Failed first-message opt-in prompt for user ${user.id} in ${guildId}`, error);
+    log(
+      guildType === "discord" ? "DISCORD" : "FLUXER",
+      `Failed first-message opt-in prompt for user ${user.id} in ${guildId}`,
+      error
+    );
   }
 }
 
@@ -115,7 +119,7 @@ export async function sendGuildOptInPrompt(user, guildName, guildId, guildType) 
         title: "Bridging opt-in required",
         description:
           `To have your messages bridged in **${guildName}**, run \`${prefix}user opt-in\` in this ${community}.` +
-          `That only opts you in here; your global opt-out will be respected.`
+          `That only opts you in here; your global opt-out will be respected.`,
       },
     ],
   });
@@ -140,10 +144,7 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
 
   let guild;
   try {
-    guild =
-      guildType === "discord"
-        ? await discordClient.guilds.fetch(guildId)
-        : await fluxerClient.guilds.fetch(guildId);
+    guild = guildType === "discord" ? await discordClient.guilds.fetch(guildId) : await fluxerClient.guilds.fetch(guildId);
   } catch (error) {
     log(guildType === "discord" ? "DISCORD" : "FLUXER", `Failed to fetch guild ${guildId} for opt-in notifications`, error);
     return { sent: 0, failed: 1 };
@@ -170,11 +171,7 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
         error?.statusCode === 404;
       if (!unknownMember) {
         failed += 1;
-        log(
-          guildType === "discord" ? "DISCORD" : "FLUXER",
-          `Failed to find opted-out user ${userId} in guild ${guildId}`,
-          error
-        );
+        log(guildType === "discord" ? "DISCORD" : "FLUXER", `Failed to find opted-out user ${userId} in guild ${guildId}`, error);
       }
       continue;
     }
@@ -188,11 +185,7 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
       sent += 1;
     } catch (error) {
       failed += 1;
-      log(
-        guildType === "discord" ? "DISCORD" : "FLUXER",
-        `Failed to DM opted-out user ${userId} for guild ${guildId}`,
-        error
-      );
+      log(guildType === "discord" ? "DISCORD" : "FLUXER", `Failed to DM opted-out user ${userId} for guild ${guildId}`, error);
     }
   }
 

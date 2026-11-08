@@ -20,7 +20,10 @@ const emojiGuildLocks = new Map();
 function withEmojiGuildLock(key, fn) {
   const prevTail = emojiGuildLocks.get(key) ?? Promise.resolve();
   const run = prevTail.then(fn, fn);
-  emojiGuildLocks.set(key, run.catch(() => {}));
+  emojiGuildLocks.set(
+    key,
+    run.catch(() => {})
+  );
   return run;
 }
 
@@ -47,7 +50,11 @@ function isMaxEmojisFailure(error) {
 function startFluxerCooldown(e) {
   const retryAfter = Number(e?.retryAfter) > 0 ? Number(e.retryAfter) : 30;
   fluxerEmojiCooldownUntil = Date.now() + retryAfter * 1000 + 1000;
-  log("FLUXER", `Cannot convert Discord emoji to Fluxer (guild ${Config.FluxerTempEmojiGuildId}), using emoji links until the rate limit resets`, e);
+  log(
+    "FLUXER",
+    `Cannot convert Discord emoji to Fluxer (guild ${Config.FluxerTempEmojiGuildId}), using emoji links until the rate limit resets`,
+    e
+  );
 }
 
 function startDiscordCooldown(e) {
@@ -430,7 +437,7 @@ async function createFluxerEmojis(fluxerClient, tokens) {
       }
     }
 
-    if (payloads.size > 0) log("FLUXER", `Uploading ${payloads.size} new emoji(s) to Fluxer temp guild`)
+    if (payloads.size > 0) log("FLUXER", `Uploading ${payloads.size} new emoji(s) to Fluxer temp guild`);
 
     const pass1 = await bulkCreateFluxerEmojis(fluxerClient, [...payloads.entries()], out);
     if (pass1.rateLimited) return settleEmojiResults(out, tokens);
@@ -444,7 +451,11 @@ async function createFluxerEmojis(fluxerClient, tokens) {
         if (isRateLimitError(e)) startFluxerCooldown(e);
         return settleEmojiResults(out, tokens);
       }
-      await bulkCreateFluxerEmojis(fluxerClient, pass1.maxEmojis.map(t => [t, payloads.get(t)]).filter(([, p]) => p), out);
+      await bulkCreateFluxerEmojis(
+        fluxerClient,
+        pass1.maxEmojis.map(t => [t, payloads.get(t)]).filter(([, p]) => p),
+        out
+      );
     }
   } catch (e) {
     if (isRateLimitError(e)) startFluxerCooldown(e);
@@ -544,9 +555,7 @@ async function createDiscordEmoji(discordClient, token) {
   const mediaBase = await getFluxerMediaBaseUrl();
   if (!mediaBase) return null;
 
-  const res = await fetch(
-    `${mediaBase}/emojis/${rawId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`
-  );
+  const res = await fetch(`${mediaBase}/emojis/${rawId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`);
   if (!res.ok) return null;
 
   const created = await discordClient.application?.emojis.create({

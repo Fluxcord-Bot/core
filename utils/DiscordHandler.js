@@ -197,7 +197,11 @@ async function mirrorExistingThread(threadId, parentId, discordClient, fluxerCli
   const row = await autoBridgeDiscordThread(thread, parentRow, discordClient, fluxerClient);
   if (!row) return null;
   log("DEBUG", `DiscordCreate mirrored on activity thread ${thread.id} rowId=${row.id}`);
-  await backfillMirroredThread(thread, message => DiscordCreateMessageHandler(message, discordClient, fluxerClient, true), parentRow.discordGuildId);
+  await backfillMirroredThread(
+    thread,
+    message => DiscordCreateMessageHandler(message, discordClient, fluxerClient, true),
+    parentRow.discordGuildId
+  );
   return row;
 }
 
@@ -223,6 +227,8 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     log("DEBUG", `DiscordCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`);
     return;
   }
+
+  const initialMessage = message.content;
 
   const guildPrefix = await getGuildPrefix(message.guildId);
   if (message.content.startsWith(guildPrefix)) {
@@ -471,7 +477,11 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
   const canUserEmbed = message.webhookId
     ? true
     : await checkEmbedPerms(message.guildId, message.channelId, message.author.id, client);
-  if (customEmojiCount >= earlyBridgeEmojiThreshold && !earlyFluxerMsgId && !isFluxerRateLimited(`webhook:${channelMap.fluxerWebhookId}`)) {
+  if (
+    customEmojiCount >= earlyBridgeEmojiThreshold &&
+    !earlyFluxerMsgId &&
+    !isFluxerRateLimited(`webhook:${channelMap.fluxerWebhookId}`)
+  ) {
     const loadingEmoji = fluxcordBotEmojiCfg.fluxerLoadingEmoji ? `<${fluxcordBotEmojiCfg.fluxerLoadingEmoji}>` : "⏳";
     const loadingText =
       sourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) ||
@@ -585,9 +595,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
     if (typeof bridgeContent.excludeEmbed === "number") wEmbeds.splice(bridgeContent.excludeEmbed, 1);
     const sourceContent = (forwardedMessage ?? message).content ?? "";
     const webhookEmbeds = await Promise.all(
-      wEmbeds
-        .filter(x => !isPlatformPreviewEmbed(x, sourceContent))
-        .map(async x => await discordEmbedToFluxer(x, fluxerClient))
+      wEmbeds.filter(x => !isPlatformPreviewEmbed(x, sourceContent)).map(async x => await discordEmbedToFluxer(x, fluxerClient))
     );
     if (!webhookContent.trim() && webhookFiles.length === 0 && webhookEmbeds.length === 0) {
       log("WARN", `[DiscordHandler] Webhook content is empty and no files or embeds are present for message ${message.id}.`);
@@ -663,7 +671,10 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       try {
         const channel = await message.channel.fetch();
         if (channel.isSendable()) {
-          await channel.messages.fetch(message.id);
+          const fetchedMsg = await channel.messages.fetch(message.id);
+          if (fetchedMsg.content !== initialMessage || fetchedMsg.editedAt) {
+            await DiscordUpdateMessageHandler(fetchedMsg, fetchedMsg, fluxerClient);
+          }
         }
       } catch (e) {
         if (isDiscordUnknownMessageError(e)) {
@@ -823,9 +834,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
     newContent = await refreshDiscordCdnLinks(newContent, newMsg.client, newMsg.id);
 
     const newEmbeds = await Promise.all(
-      wEmbeds
-        .filter(x => !isPlatformPreviewEmbed(x, newMsg.content ?? ""))
-        .map(async x => await discordEmbedToFluxer(x, client))
+      wEmbeds.filter(x => !isPlatformPreviewEmbed(x, newMsg.content ?? "")).map(async x => await discordEmbedToFluxer(x, client))
     );
 
     const suppressEmbeds = newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;

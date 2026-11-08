@@ -31,7 +31,9 @@ const command = {
     const platform = isFluxer ? "Fluxer" : "Discord";
 
     if (scope && scope !== "global") {
-      await message.reply(`Usage: \`user opt-out\` for this ${community} only, or \`user opt-out global\` to stop bridging globally.`);
+      await message.reply(
+        `Usage: \`user opt-out\` for this ${community} only, or \`user opt-out global\` to stop bridging globally.`
+      );
       return;
     }
 
@@ -48,29 +50,29 @@ const command = {
 
       if (!confirmed) {
         const prefix = await getGuildPrefix(message.guildId ?? "");
-        await message.reply(
-          {
-            embeds: [
-              {
-                title: `Opting out of Fluxcord bridging in this ${community}`,
-                description:
-                  `This will stop your new messages from being bridged to ${otherSide} in this ${community} only.\n\n` +
-                  "Before continuing, note that:\n" +
-                  `- Replies to your messages will show an *Unbridged message* on ${otherSide}. Your author information and message content won't be visible.\n` +
-                  `- Forum threads you create will still show their title, but your message won't be bridged.\n` +
-                  "- Already bridged messages will stay, but edits won't be bridged. Deletions will be bridged regardless.\n" +
-                  `- This only affects your current account on ${platform}; it won't change your global preference or other ${community === "community" ? "communities" : "guilds"}.\n` +
-                  "- **This will not apply on voice bridges.**\n\n" +
-                  `To confirm, run \`${prefix}user opt-out confirm\` in this ${community}.`,
-              },
-            ],
-          }
-        );
+        await message.reply({
+          embeds: [
+            {
+              title: `Opting out of Fluxcord bridging in this ${community}`,
+              description:
+                `This will stop your new messages from being bridged to ${otherSide} in this ${community} only.\n\n` +
+                "Before continuing, note that:\n" +
+                `- Replies to your messages will show an *Unbridged message* on ${otherSide}. Your author information and message content won't be visible.\n` +
+                `- Forum threads you create will still show their title, but your message won't be bridged.\n` +
+                "- Already bridged messages will stay, but edits won't be bridged. Deletions will be bridged regardless.\n" +
+                `- This only affects your current account on ${platform}; it won't change your global preference or other ${community === "community" ? "communities" : "guilds"}.\n` +
+                "- **This will not apply on voice bridges.**\n\n" +
+                `To confirm, run \`${prefix}user opt-out confirm\` in this ${community}.`,
+            },
+          ],
+        });
         return;
       }
 
       await setGuildOptInState(userType, message.guildId, message.author.id, false);
-      await message.reply(`Done. Your messages will no longer be bridged in that ${community}; your global preference is unchanged.`);
+      await message.reply(
+        `Done. Your messages will no longer be bridged in that ${community}; your global preference is unchanged.`
+      );
       return;
     }
 

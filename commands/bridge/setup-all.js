@@ -188,7 +188,14 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
             });
           } catch {}
           try {
-            const result = await bridgeChannel(matchedChannel, channel[1], setup, setup.silent || silentRequested, discordClient, fluxerClient);
+            const result = await bridgeChannel(
+              matchedChannel,
+              channel[1],
+              setup,
+              setup.silent || silentRequested,
+              discordClient,
+              fluxerClient
+            );
             results.push(result);
           } catch (e) {
             console.error(e);

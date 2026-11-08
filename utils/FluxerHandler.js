@@ -64,7 +64,7 @@ async function resolveFluxerReference(message, client) {
     if (channel?.isTextBased?.() && channel.messages) {
       return await channel.messages.fetch(reference.messageId);
     }
-  } catch { }
+  } catch {}
 
   return null;
 }
@@ -131,7 +131,11 @@ async function mirrorExistingThread(threadId, parentId, guildId, client, discord
   const row = await autoBridgeFluxerThread(thread, parentRow, discordClient, client);
   if (!row) return null;
   log("DEBUG", `FluxerCreate mirrored on activity thread ${thread.id} rowId=${row.id}`);
-  await backfillMirroredThread(thread, message => FluxerCreateMessageHandler(message, client, discordClient, guildId), parentRow.discordGuildId);
+  await backfillMirroredThread(
+    thread,
+    message => FluxerCreateMessageHandler(message, client, discordClient, guildId),
+    parentRow.discordGuildId
+  );
   return row;
 }
 
@@ -157,6 +161,8 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     log("DEBUG", `FluxerCreate skip id=${message.id} reason=unsupportedGuildOrType type=${message.type}`);
     return;
   }
+
+  const initialMessage = message.content;
 
   const guildPrefix = await getGuildPrefix(guildId);
   if (message.content.startsWith(guildPrefix)) {
@@ -506,7 +512,7 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
 
   try {
     await maybePublishDiscordMessage(discordClient, channelMap, msg.id);
-  } catch { }
+  } catch {}
 
   log(
     "DEBUG",
@@ -534,12 +540,15 @@ export async function FluxerCreateMessageHandler(message, client, discordClient,
     const channel = message.channel;
     if (channel?.isTextBased() && channel.messages) {
       try {
-        await channel.messages.fetch(message.id);
+        const fetchedMsg = await channel.messages.fetch(message.id);
+        if (fetchedMsg.content !== initialMessage || fetchedMsg.editedAt) {
+          await FluxerUpdateMessageHandler(fetchedMsg, fetchedMsg, discordClient);
+        }
       } catch (e) {
         if (isFluxerMessageNotFoundError(e)) {
           try {
             await msg.delete();
-          } catch { }
+          } catch {}
           await bridgedMessageMap?.destroy();
           await reroutedMessageMap?.destroy();
           return;
@@ -830,10 +839,10 @@ export async function FluxerBulkDeleteMessageHandler(msgs, client) {
 
       try {
         await channel.bulkDelete(messagesExisting.map(x => x.discordMessageId));
-      } catch { }
+      } catch {}
 
       await reply.delete();
-    } catch { }
+    } catch {}
 
     await Promise.all(messagesExisting.map(async x => await x.destroy()));
   }

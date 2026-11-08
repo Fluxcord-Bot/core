@@ -26,12 +26,16 @@ const command = {
     const scope = params.find(param => param.toLowerCase() !== "confirm")?.toLowerCase();
 
     if (!message.guildId) {
-      await message.reply(`Fluxcord commands cannot be used in DMs. Run \`user opt-in\` in the ${community} where you want bridging enabled.`);
+      await message.reply(
+        `Fluxcord commands cannot be used in DMs. Run \`user opt-in\` in the ${community} where you want bridging enabled.`
+      );
       return;
     }
 
     if (scope && scope !== "global") {
-      await message.reply(`Usage: \`user opt-in\` for this ${community} only, or \`user opt-in global\` to resume bridging globally.`);
+      await message.reply(
+        `Usage: \`user opt-in\` for this ${community} only, or \`user opt-in global\` to resume bridging globally.`
+      );
       return;
     }
 
