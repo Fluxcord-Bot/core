@@ -46,6 +46,9 @@ const Config = {
   FluxerBioStart: "",
   DiscordBioStart: "",
 
+  // Set to false to keep the bio you set on the bot's application page.
+  AutomaticBioEnabled: true,
+
   // The footer of every embed sent by Fluxcord. Optional.
   EmbedFooterContent: "",
 

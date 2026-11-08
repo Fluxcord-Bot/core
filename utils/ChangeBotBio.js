@@ -22,6 +22,20 @@ export default async function changeBotBio(guild) {
   } catch (e) {
     console.error(e);
   }
+
+  if (!DefaultConfig.AutomaticBioEnabled) {
+    try {
+      if (guild instanceof Guild) {
+        await guild.members.me.edit({ bio: null });
+      } else {
+        await guild.members.editMe({ bio: null });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return;
+  }
+
   if (guild instanceof Guild) {
     try {
       await guild.members.me.edit({

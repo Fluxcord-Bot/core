@@ -450,7 +450,7 @@ export async function autoBridgeDiscordThread(thread, parentMap, discordClient, 
       }
     }
     const siblingRow = await ChannelMap.findOne({
-      where: { [Op.or]: [{ discordChannelId: thread.id }, { fluxerChannelId: thread.id }] },
+      where: { [Op.or]: [{ discordChannelId: thread.id }, { fluxerChannelId: fluxerThreadId }] },
       raw: true,
     });
     if (siblingRow) {
@@ -711,22 +711,34 @@ export async function autoBridgeFluxerThread(thread, parentMap, discordClient, f
         }
       }
     } else if (!discordThreadId && discordParent.type === DiscordChannelType.GuildAnnouncement) {
-      const created = await discordParent.threads.create({
-        name: thread.name.slice(0, 100),
-        type: DiscordChannelType.AnnouncementThread,
-      });
-      discordThreadId = created.id;
+      let resolveSelfCreate;
+      markSelfCreate("discord:" + discordParent.id, new Promise(r => { resolveSelfCreate = r; }));
+      try {
+        const created = await discordParent.threads.create({
+          name: thread.name.slice(0, 100),
+          type: DiscordChannelType.AnnouncementThread,
+        });
+        discordThreadId = created.id;
+      } finally {
+        resolveSelfCreate(discordThreadId ?? null);
+      }
     } else if (!discordThreadId) {
-      const created = await discordParent.threads.create({
-        name: thread.name.slice(0, 100),
-        type: DiscordChannelType.PublicThread,
-        autoArchiveDuration: 1440,
-      });
-      discordThreadId = created.id;
+      let resolveSelfCreate;
+      markSelfCreate("discord:" + discordParent.id, new Promise(r => { resolveSelfCreate = r; }));
+      try {
+        const created = await discordParent.threads.create({
+          name: thread.name.slice(0, 100),
+          type: DiscordChannelType.PublicThread,
+          autoArchiveDuration: 1440,
+        });
+        discordThreadId = created.id;
+      } finally {
+        resolveSelfCreate(discordThreadId ?? null);
+      }
     }
 
     const siblingRow = await ChannelMap.findOne({
-      where: { [Op.or]: [{ discordChannelId: thread.id }, { fluxerChannelId: thread.id }] },
+      where: { [Op.or]: [{ fluxerChannelId: thread.id }, { discordChannelId: discordThreadId }] },
       raw: true,
     });
     if (siblingRow) {

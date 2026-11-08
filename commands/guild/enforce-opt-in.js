@@ -9,7 +9,7 @@ const command = {
   groupNames: ["guild", "g", "server", "s", "community", "c"],
   name: "enforce-opt-in",
   aliases: ["enforce-optin", "enforceoptin"],
-  description: "Require globally opted-out members to opt in to bridging in this server/community",
+  description: "Require globally opted-out members to opt in to bridging in this guild/community",
   requireElevated: true,
   params: "[on|off]",
   slashOptions: [
@@ -23,7 +23,7 @@ const command = {
     },
   ],
   async run(params, message, discordClient, fluxerClient) {
-    const community = message instanceof FluxerMessage ? "community" : "server";
+    const community = message instanceof FluxerMessage ? "community" : "guild";
     if (!message.guildId) {
       await message.reply(`This command can only be used in a ${community}.`);
       return;
@@ -63,7 +63,7 @@ const command = {
     }
 
     await message.reply(
-      `Opt-in enforcement is now enabled for this ${community}. Sent ${sent} prompt${sent === 1 ? "" : "s"} to existing globally opted-out members.`
+      `Opt-in enforcement is now enabled for this ${community}. Sent ${sent} DM${sent === 1 ? "" : "s"} to existing globally opted-out members.`
     );
   },
 };

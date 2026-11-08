@@ -70,7 +70,7 @@ export async function canUserBridge(userType, userId, guildId) {
   if (guildId) {
     const state = await getGuildOptInState(userType, guildId, userId);
     if (state?.optedIn === false && !state.prompted) return false;
-    if (state?.optedIn === true && (await isGuildOptInEnabled(guildId, userType))) return true;
+    if (state?.optedIn === true) return true;
   }
 
   return !(await isUserOptedOut(userType, userId));
@@ -107,7 +107,7 @@ export async function promptOptedOutUserOnFirstMessage(guildId, guildType, user,
  */
 export async function sendGuildOptInPrompt(user, guildName, guildId, guildType) {
   const prefix = await getGuildPrefix(guildId);
-  const community = guildType === "fluxer" ? "community" : "server";
+  const community = guildType === "fluxer" ? "community" : "guild";
   const dm = await user.createDM();
   await dm.send({
     embeds: [

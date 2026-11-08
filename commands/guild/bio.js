@@ -47,7 +47,7 @@ const command = {
         await message.reply("Failed to reset the bio.");
         return;
       }
-      await message.reply("Bio reset to the automatic one!");
+      await message.reply(Config.AutomaticBioEnabled ? "Bio reset to the automatic one!" : "Bio reset to the bot's default one!");
       return;
     }
 
