@@ -251,7 +251,7 @@ export function sanitizeLinks(str) {
  * @returns {Promise<string>}
  */
 export async function traverseMessageLinks(str) {
-  let result = str;
+  if (!str) return str;
 
   const webAppUrl = await getFluxerWebappUrl();
   const webApp = new URL(webAppUrl);
@@ -260,62 +260,61 @@ export async function traverseMessageLinks(str) {
     "g"
   );
 
-  let m;
-  while ((m = regex.exec(result)) !== null) {
-    if (m.index === regex.lastIndex) {
-      regex.lastIndex++;
-    }
+  const matches = new Map();
+  for (const m of str.matchAll(regex)) {
+    if (m[1] && m[2] && m[3] && !matches.has(m[0])) matches.set(m[0], m);
+  }
+  if (matches.size === 0) return str;
 
+  /** @type {Map<string, string>} */
+  const rewrites = new Map();
+
+  for (const [url, m] of matches) {
     try {
-      if (m[1] && m[2] && m[3]) {
-        if (m[4]) {
-          const message = await MessageMap.findOne({
-            where: {
-              [Op.or]: {
-                discordMessageId: m[4],
-                fluxerMessageId: m[4],
-              },
+      const isDiscordSide = m[1].startsWith("discord.com");
+
+      if (m[4]) {
+        const message = await MessageMap.findOne({
+          where: {
+            [Op.or]: {
+              discordMessageId: m[4],
+              fluxerMessageId: m[4],
             },
-            include: ["channelMap"],
-          });
-          if (message) {
-            if (!m[1].includes("discord.com")) {
-              result = result.replaceAll(
-                m[0],
-                `https://discord.com/channels/${message.channelMap.discordGuildId}/${message.channelMap.discordChannelId}/${message.discordMessageId}`
-              );
-            } else {
-              result = result.replaceAll(
-                m[0],
-                `${webAppUrl}/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`
-              );
-            }
-          }
-        } else {
-          const channel = await ChannelMap.findOne({
-            where: {
-              [Op.or]: {
-                discordChannelId: m[3],
-                fluxerChannelId: m[3],
-              },
+          },
+          include: ["channelMap"],
+        });
+        if (!message?.channelMap) continue;
+
+        rewrites.set(
+          url,
+          isDiscordSide
+            ? `${webAppUrl}/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`
+            : `https://discord.com/channels/${message.channelMap.discordGuildId}/${message.channelMap.discordChannelId}/${message.discordMessageId}`
+        );
+      } else {
+        const channel = await ChannelMap.findOne({
+          where: {
+            [Op.or]: {
+              discordChannelId: m[3],
+              fluxerChannelId: m[3],
             },
-          });
-          if (channel) {
-            if (!m[1].startsWith("discord.com")) {
-              result = result.replaceAll(
-                m[0],
-                `https://discord.com/channels/${channel.discordGuildId}/${channel.discordChannelId}`
-              );
-            } else {
-              result = result.replaceAll(m[0], `${webAppUrl}/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`);
-            }
-          }
-        }
+          },
+        });
+        if (!channel) continue;
+
+        rewrites.set(
+          url,
+          isDiscordSide
+            ? `${webAppUrl}/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`
+            : `https://discord.com/channels/${channel.discordGuildId}/${channel.discordChannelId}`
+        );
       }
     } catch {}
   }
 
-  return result;
+  if (rewrites.size === 0) return str;
+
+  return str.replace(regex, url => rewrites.get(url) ?? url);
 }
 
 export async function ensureFluxerEmojis(fluxerClient, tokens) {
