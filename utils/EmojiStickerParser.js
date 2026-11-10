@@ -243,7 +243,24 @@ export function removeLinkEmbeds(str) {
  * @returns {string}
  */
 export function sanitizeLinks(str) {
-  return str.replace(/https?:\/\/[^\s]+/g, url => `*${new URL(url).hostname}*`);
+  return str.replace(/https?:\/\/[^\s]+/g, url => {
+    const [, trimmed, suffix] = url.match(/^(.*?)([…)\]>.,;:!?'"]*)$/);
+    try {
+      return `*${new URL(trimmed).hostname}*${suffix}`;
+    } catch {
+      return "*link*";
+    }
+  });
+}
+
+/**
+ * @param {string} str
+ * @returns {string}
+ */
+export function flattenMarkdownLinks(str) {
+  return str
+    .replace(/\[([^\]]*)\]\(\s*<?([^)\s]*?)>?\s*\)/g, (_, label, target) => (label ? `${label} (${target})` : target))
+    .replace(/[[\]]/g, "");
 }
 
 /**
