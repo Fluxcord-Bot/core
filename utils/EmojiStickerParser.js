@@ -307,6 +307,7 @@ export function flattenMarkdownLinks(str) {
 
 export async function traverseMessageLinks(str) {
   if (!str) return str;
+  if (!str) return str;
 
   const webAppUrl = await getFluxerWebappUrl();
   const webApp = new URL(webAppUrl);
@@ -354,6 +355,9 @@ export async function traverseMessageLinks(str) {
     } catch {}
   }
 
+  if (rewrites.size === 0) return str;
+
+  return str.replace(regex, url => rewrites.get(url) ?? url);
   if (rewrites.size === 0) return str;
 
   return str.replace(regex, url => rewrites.get(url) ?? url);
