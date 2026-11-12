@@ -1,16 +1,27 @@
 export function normalizeFcJson(json) {
-  let j = json;
-  /** @type {string} */
-  let l = j.fluxerReplyEmoji.replyL;
-  /** @type {string} */
-  let r = j.fluxerReplyEmoji.replyR;
-  if (!l.startsWith(":")) l = ":" + l;
-  if (!r.startsWith(":")) r = ":" + r;
+  const raw = json?.fluxerReplyEmoji;
+  let map = {};
+  if (raw && typeof raw === "object") {
+    if (raw.replyL || raw.replyR) {
+      map.default = normalizeReplyEntry(raw);
+    } else {
+      for (const [instanceId, entry] of Object.entries(raw)) {
+        map[instanceId] = normalizeReplyEntry(entry);
+      }
+    }
+  }
   return {
-    ...j,
-    fluxerReplyEmoji: {
-      replyL: l,
-      replyR: r,
-    },
+    ...json,
+    fluxerReplyEmoji: map,
   };
+}
+
+function normalizeReplyEntry(entry) {
+  /** @type {string} */
+  let l = entry?.replyL ?? "";
+  /** @type {string} */
+  let r = entry?.replyR ?? "";
+  if (l && !l.startsWith(":")) l = ":" + l;
+  if (r && !r.startsWith(":")) r = ":" + r;
+  return { replyL: l, replyR: r };
 }

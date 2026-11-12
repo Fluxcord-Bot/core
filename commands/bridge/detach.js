@@ -1,7 +1,7 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { MessageMap } from "../../db/index.js";
+import { MessageLink } from "../../db/index.js";
 import Config from "../../utils/ConfigHandler.js";
-import { Op } from "sequelize";
+import { detachMessageGroup } from "../../utils/SetupHelper.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -30,46 +30,18 @@ Or reply to the bridged message and run \`${Config.BotPrefix}detach\`.`);
       return;
     }
 
-    const messageMap = await MessageMap.findOne({
-      where: {
-        [Op.or]: [{ discordMessageId: messageId }, { fluxerMessageId: messageId }],
-      },
-      include: ["channelMap"],
-    });
-
-    if (!messageMap) {
+    const row = await MessageLink.findOne({ where: { messageId }, include: ["endpoint"] });
+    if (!row) {
       await message.reply("That message is not a bridged message.");
       return;
     }
 
-    const channelMap = messageMap.channelMap;
-    if (!channelMap || (channelMap.discordChannelId !== message.channelId && channelMap.fluxerChannelId !== message.channelId)) {
+    if (row.endpoint?.channelId !== message.channelId) {
       await message.reply("That message is not bridged in this channel.");
       return;
     }
 
-    const repliers = await MessageMap.findAll({
-      where: {
-        [Op.or]: [
-          { fluxerReplyId: messageMap.fluxerMessageId },
-          { fluxerReplyId: messageMap.discordMessageId },
-          { discordReplyId: messageMap.fluxerMessageId },
-          { discordReplyId: messageMap.discordMessageId },
-        ],
-      },
-    });
-
-    for (const reply of repliers) {
-      if (reply.fluxerReplyId === messageMap.fluxerMessageId || reply.fluxerReplyId === messageMap.discordMessageId) {
-        reply.fluxerReplyId = null;
-      }
-      if (reply.discordReplyId === messageMap.fluxerMessageId || reply.discordReplyId === messageMap.discordMessageId) {
-        reply.discordReplyId = null;
-      }
-      await reply.save();
-    }
-
-    await messageMap.destroy();
+    await detachMessageGroup(row.linkGroup);
 
     await message.reply("Message detached. It will stay on both sides, but edits, deletes and pins will no longer sync for it.");
   },

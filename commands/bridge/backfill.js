@@ -1,12 +1,10 @@
 import Config from "../../utils/ConfigHandler.js";
-import { BridgeMap } from "../../utils/CommandHandler.js";
-import { Collection, GuildChannel as DiscordGuildChannel, Message } from "discord.js";
-import { Message as FluxerMessage, Channel as FluxerChannel } from "@fluxerjs/core";
-import { ChannelMap, MessageMap } from "../../db/index.js";
+import { BridgeEndpoint, MessageLink } from "../../db/index.js";
 import { Op } from "sequelize";
-import { FluxerCreateMessageHandler } from "../../utils/FluxerHandler.js";
-import { DiscordCreateMessageHandler } from "../../utils/DiscordHandler.js";
+import { Message as FluxerMessage } from "@fluxerjs/core";
+import { pipelineCreate } from "../../utils/pipeline/adapters.js";
 import { pendingBackfills, runBackfill } from "../../utils/BackfillQueue.js";
+import { resolveFluxerClient } from "../../utils/FluxerClients.js";
 
 const activeBackfills = new Map();
 const fetchPageSize = 100;
@@ -62,16 +60,11 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
       return;
     }
 
-    const channelMap = await ChannelMap.findOne({
-      where: {
-        [Op.or]: {
-          discordChannelId: message.channelId,
-          fluxerChannelId: message.channelId,
-        },
-      },
+    const endpoints = await BridgeEndpoint.findAll({
+      where: { channelId: message.channelId },
+      raw: true,
     });
-
-    if (!channelMap) {
+    if (endpoints.length === 0) {
       await message.reply(
         "This channel is not bridged. Run `" +
           Config.BotPrefix +
@@ -83,10 +76,11 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
     const state = { cancelled: false };
     activeBackfills.set(message.channelId, state);
 
-    const ahead = pendingBackfills(channelMap.discordGuildId);
+    const guildId = message.guild.id;
+    const ahead = pendingBackfills(guildId);
     if (ahead > 0) await message.reply(`Queued behind ${ahead} backfill(s) in this guild.`);
 
-    await runBackfill(channelMap.discordGuildId, async () => {
+    await runBackfill(guildId, async () => {
       try {
         if (state.cancelled) {
           await message.reply("Backfill cancelled before it started.");
@@ -95,7 +89,7 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
         const collected = [];
         let before = undefined;
         while (collected.length < numOfMessages + 2) {
-          /** @type {import("@fluxerjs/collection").Collection<string, import("@fluxerjs/core").Message> | Collection<import("discord.js").Snowflake, Message>} */
+          /** @type {import("@fluxerjs/collection").Collection<string, import("@fluxerjs/core").Message> | import("@discordjs/collection").Collection<string, import("discord.js").Message>} */
           const page = await message.channel.messages.fetch({
             limit: Math.min(fetchPageSize, numOfMessages + 2 - collected.length),
             ...(before ? { before } : {}),
@@ -109,20 +103,14 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
 
         const msgs = collected.slice(0, numOfMessages + 2);
         const ids = msgs.map(x => x.id);
-        const alrBridged = await MessageMap.findAll({
+        const endpointIds = endpoints.map(e => e.id);
+        const alrBridged = await MessageLink.findAll({
           where: {
-            [Op.or]: {
-              discordMessageId: {
-                [Op.in]: ids,
-              },
-              fluxerMessageId: {
-                [Op.in]: ids,
-              },
-            },
+            messageId: { [Op.in]: ids },
+            endpointId: { [Op.in]: endpointIds },
           },
         });
-
-        const matchedIds = new Set(alrBridged.flatMap(row => [row.discordMessageId, row.fluxerMessageId]));
+        const matchedIds = new Set(alrBridged.map(row => row.messageId));
         const unbridgedMsgs = msgs.filter(msg => !matchedIds.has(msg.id));
 
         const statusMsg = await message.reply(`Getting ${unbridgedMsgs.length} messages and trying to bridge them...`);
@@ -137,9 +125,13 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
           } catch {}
           try {
             if (msg instanceof FluxerMessage) {
-              await FluxerCreateMessageHandler(msg, fluxerClient, discordClient, message.guild.id);
+              const endpoint = endpoints.find(e => e.platform === "fluxer") ?? endpoints[0];
+              await pipelineCreate(msg, {
+                instanceId: endpoint.instanceId,
+                execCommands: false,
+              });
             } else {
-              await DiscordCreateMessageHandler(msg, discordClient, fluxerClient, true);
+              await pipelineCreate(msg, { execCommands: false });
             }
             success++;
           } catch {}
@@ -152,7 +144,7 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
           });
         } else {
           await statusMsg.edit({
-            content: `🎉 Successfully backfilled ${success} messages to ${!isFluxer ? "Fluxer" : "Discord"}!`,
+            content: `🎉 Successfully backfilled ${success} messages!`,
           });
         }
       } finally {

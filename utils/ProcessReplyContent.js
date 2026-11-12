@@ -1,5 +1,5 @@
 import truncate from "truncate";
-import { removeLinkEmbeds, sanitizeLinks, traverseMessageLinks } from "./EmojiStickerParser.js";
+import { flattenMarkdownLinks, removeLinkEmbeds, sanitizeLinks, traverseMessageLinks } from "./EmojiStickerParser.js";
 import { sanitizePings } from "./SanitizePings.js";
 import { parseMentions } from "./MessageContentParser.js";
 
@@ -12,9 +12,16 @@ export async function processReplyContent(message) {
     else if (message.attachments.size > 0) return "*Attachment*";
     else return "*Empty message*";
   const firstProcess = (await traverseMessageLinks(await parseMentions(message))).split("\n")[0];
-  let secondProcess = sanitizeLinks(truncate(sanitizePings(firstProcess), 35));
+  const cleaned = flattenMarkdownLinks(sanitizeLinks(sanitizePings(firstProcess))).replace(/<a?:([^:\s]+):\d+>/g, ":$1:");
+  const truncated = truncate(cleaned, 35);
+  let secondProcess = truncated;
+  if (truncated !== cleaned) {
+    secondProcess = secondProcess.replace(/<[^<>]*…$/, "").replace(/[\s\u200b]+$/, "");
+    if (!secondProcess.endsWith("…")) secondProcess += "…";
+  }
   if (!secondProcess.endsWith("…") && message.content.split("\n").length > 1) {
     secondProcess += "…";
   }
+  secondProcess = secondProcess.replace(/^[\s\u200b]*@+[\s\u200b]*/, "");
   return secondProcess;
 }

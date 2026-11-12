@@ -1,6 +1,6 @@
 import { Client, EmbedBuilder } from "@fluxerjs/core";
 import Config from "../config.js";
-import { ChannelMap } from "../db/index.js";
+import { BridgeEndpoint } from "../db/index.js";
 import Package from "../package.json" with { type: "json" };
 import getCommitHash from "../utils/GetCommitHash.js";
 import {
@@ -15,6 +15,7 @@ import {
 } from "discord.js";
 import ForkDetails from "../utils/Fork.js";
 import DefaultConfig from "../utils/ConfigHandler.js";
+import { embedFooterForMessage } from "../utils/PerInstance.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -25,7 +26,7 @@ const command = {
   requireElevated: false,
   allowDM: true,
   async run(params, message, discordClient, fluxerClient) {
-    const channels = await ChannelMap.findAll();
+    const channels = await BridgeEndpoint.count({ where: { kind: "channel" } });
 
     const container = new ContainerBuilder({
       accent_color: 0x5865f2,
@@ -37,7 +38,7 @@ const command = {
               .setContent(`## ${ForkDetails.isFork ? `${ForkDetails.forkName} ${ForkDetails.forkVersion}` : `Fluxcord ${Package.version}+${getCommitHash()}`}
 Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isFork && !!ForkDetails.forkDescription ? "\n" + ForkDetails.forkDescription : ""}
 
--# Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`)
+-# Currently bridging ${channels} channel${channels === 1 ? "" : "s"}`)
           )
           .setThumbnailAccessory(
             new ThumbnailBuilder().setDescription("Fluxcord logo").setURL("https://party.jbc.lol/fluxcord.png")
@@ -77,7 +78,7 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
         new TextDisplayBuilder({
           content:
             "-# " +
-            `${ForkDetails.isFork ? "Based on Fluxcord " + Package.version : ""}${DefaultConfig.EmbedFooterContent ? " - " + DefaultConfig.EmbedFooterContent : ""}`,
+            `${ForkDetails.isFork ? "Based on Fluxcord " + Package.version : ""}${embedFooterForMessage(message) ? " - " + embedFooterForMessage(message) : ""}`,
         })
       );
     await message.reply({
@@ -112,14 +113,14 @@ Fluxcord is a simple, set-and-forget Discord <-> Fluxer bridge.${ForkDetails.isF
                       : "")
                 )
                 .setFooter(
-                  Config.EmbedFooterContent
+                  embedFooterForMessage(message)
                     ? {
                         text:
-                          `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"} - ` +
-                          Config.EmbedFooterContent,
+                          `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels} channel${channels === 1 ? "" : "s"} - ` +
+                          embedFooterForMessage(message),
                       }
                     : {
-                        text: `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels.length} channel${channels.length === 1 ? "" : "s"}`,
+                        text: `Commit hash ${getCommitHash()}${ForkDetails.isFork ? ", Based on Fluxcord " + Package.version : ""} - Currently bridging ${channels} channel${channels === 1 ? "" : "s"}`,
                       }
                 ),
             ],

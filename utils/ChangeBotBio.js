@@ -1,6 +1,7 @@
 import { Guild } from "@fluxerjs/core";
 import { GuildMap } from "../db/index.js";
 import DefaultConfig from "./ConfigHandler.js";
+import { bioStartForGuild } from "./PerInstance.js";
 
 /**
  * @param {import("@fluxerjs/core").Guild | import("discord.js").Guild} guild
@@ -40,7 +41,7 @@ export default async function changeBotBio(guild) {
     try {
       await guild.members.me.edit({
         bio:
-          (DefaultConfig.FluxerBioStart ? DefaultConfig.FluxerBioStart + "\n\n" : "") +
+          (bioStartForGuild(guild) ? bioStartForGuild(guild) + "\n\n" : "") +
           `Currently bridging ${guild.channels.filter(c => !c.isThread()).size} channel${guild.channels.filter(c => !c.isThread()).size != 1 ? "s" : ""} of this community to Discord\n\n` +
           "[Docs](https://fluxcord.jbcrn.dev/) // [Support](https://fluxer.gg/jbcrn)",
       });

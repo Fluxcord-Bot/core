@@ -1,9 +1,10 @@
 import { log } from "./Logger.js";
 import Config from "../utils/ConfigHandler.js";
-import { ChannelMap, MessageMap } from "../db/index.js";
+import { MessageLink } from "../db/index.js";
 import { Op } from "sequelize";
 import { getFluxEmojis, getDiscordEmojis, getBotEmojis, clearFluxEmojiCache, clearBotEmojiCache } from "./EmojiCache.js";
 import { getFluxerMediaBaseUrl, getFluxerWebappUrl } from "./GetFluxerUrls.js";
+import { fluxerConfigOfClient, tempEmojiGuildFor } from "./PerInstance.js";
 
 const EMOJI_DELETE_BATCH = 10;
 const EMOJI_DELETE_MARGIN = 2;
@@ -47,12 +48,12 @@ function isMaxEmojisFailure(error) {
   return error === "MAX_EMOJIS" || /maximum number of emojis/i.test(error ?? "");
 }
 
-function startFluxerCooldown(e) {
+function startFluxerCooldown(e, tempGuildId) {
   const retryAfter = Number(e?.retryAfter) > 0 ? Number(e.retryAfter) : 30;
   fluxerEmojiCooldownUntil = Date.now() + retryAfter * 1000 + 1000;
   log(
     "FLUXER",
-    `Cannot convert Discord emoji to Fluxer (guild ${Config.FluxerTempEmojiGuildId}), using emoji links until the rate limit resets`,
+    `Cannot convert Discord emoji to Fluxer (guild ${tempGuildId}), using emoji links until the rate limit resets`,
     e
   );
 }
@@ -74,10 +75,10 @@ function discordEmojiLink(token, name) {
   return name ? `[${name}](${url})` : url;
 }
 
-async function fluxerEmojiLink(token, name) {
+async function fluxerEmojiLink(token, name, instanceId = "default") {
   const animated = token.startsWith("a");
   const rawId = animated ? token.slice(1) : token;
-  const mediaBase = await getFluxerMediaBaseUrl();
+  const mediaBase = await getFluxerMediaBaseUrl(instanceId);
   if (!mediaBase) return `:${token}:`;
   const url = `${mediaBase}/emojis/${rawId}.webp${animated ? "?animated=true&" : "?"}size=48`;
   return name ? `[${name}](${url})` : url;
@@ -97,12 +98,66 @@ function settleEmojiResults(out, tokens) {
   return out;
 }
 
-/**
- * @param {string | null} content Message content
- * @param {FluxerClient} fluxerClient Fluxer client instance
- * @param {string | null} targetFluxerGuildId Target fluxer guild (emoji check)
- */
-export async function parseDiscordEmojiToFluxer(content, fluxerClient, targetFluxerGuildId) {
+export async function parseFluxerEmojiToFluxer(content, targetFluxerClient, sourceInstanceId = "default", tempGuildId) {
+  if (!content) return content;
+
+  const emojiIdNameMap = new Map();
+  let result = content.replace(/<(a?):([\w\-\_]+):(\d+)>/g, (_, animated, name, id) => {
+    emojiIdNameMap.set(`${animated}${id}`, name);
+    return `:${animated}${id}:`;
+  });
+  result = result.replace(/:e(a?\d+):/g, ":$1:");
+
+  const tokens = [...new Set([...result.matchAll(/:(a?\d+):/g)].map(m => m[1]))].filter(isValidEmojiToken);
+  if (tokens.length === 0) return result;
+
+  const tempGuildIdForTarget =
+    tempGuildId ?? fluxerConfigOfClient(targetFluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId;
+  const sourceMediaBase = await getFluxerMediaBaseUrl(sourceInstanceId).catch(() => undefined);
+
+  const replacements = new Map();
+  if (isFluxerEmojiRateLimited()) {
+    for (const token of tokens) {
+      replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token), sourceInstanceId));
+    }
+    return applyEmojiReplacements(result, replacements);
+  }
+
+  const staged = [];
+  const targetEmojis = await getFluxEmojis(tempGuildIdForTarget, targetFluxerClient).catch(() => null);
+  for (const token of tokens) {
+    const hit = targetEmojis?.find(x => x.name === `e${token}`);
+    if (hit) {
+      replacements.set(token, `<:${hit.name}:${hit.id}>`);
+      continue;
+    }
+    staged.push(token);
+  }
+
+  if (staged.length > 0) {
+    const ensured = await Promise.race([
+      ensureFluxerEmojis(targetFluxerClient, staged, tempGuildIdForTarget, sourceMediaBase),
+      new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
+    ]);
+    for (const token of staged) {
+      const emoji = ensured?.get(token);
+      if (emoji?.id) {
+        replacements.set(token, `<:${emoji.name}:${emoji.id}>`);
+      } else {
+        replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token), sourceInstanceId));
+      }
+    }
+  }
+
+  return applyEmojiReplacements(result, replacements);
+}
+
+export async function parseDiscordEmojiToFluxer(
+  content,
+  fluxerClient,
+  targetFluxerGuildId,
+  tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId
+) {
   if (!content) return content;
 
   const emojiIdNameMap = new Map();
@@ -146,7 +201,7 @@ export async function parseDiscordEmojiToFluxer(content, fluxerClient, targetFlu
 
   if (staged.length > 0) {
     const ensured = await Promise.race([
-      ensureFluxerEmojis(fluxerClient, staged),
+      ensureFluxerEmojis(fluxerClient, staged, tempGuildId),
       new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
     ]);
     for (const token of staged) {
@@ -162,12 +217,7 @@ export async function parseDiscordEmojiToFluxer(content, fluxerClient, targetFlu
   return applyEmojiReplacements(result, replacements);
 }
 
-/**
- * @param {string | null} content
- * @param {DiscordClient} discordClient
- * @param {string | null} targetDiscordGuildId
- */
-export async function parseFluxerEmojiToDiscord(content, discordClient, targetDiscordGuildId) {
+export async function parseFluxerEmojiToDiscord(content, discordClient, targetDiscordGuildId, sourceInstanceId = "default") {
   if (!content) return content;
 
   const emojiIdNameMap = new Map();
@@ -184,7 +234,7 @@ export async function parseFluxerEmojiToDiscord(content, discordClient, targetDi
 
   if (isDiscordEmojiRateLimited()) {
     for (const token of tokens) {
-      replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token)));
+      replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token), sourceInstanceId));
     }
     return applyEmojiReplacements(result, replacements);
   }
@@ -220,7 +270,7 @@ export async function parseFluxerEmojiToDiscord(content, discordClient, targetDi
       if (emoji?.id) {
         replacements.set(token, `<${token.startsWith("a") ? "a" : ""}:${emoji.name}:${emoji.id}>`);
       } else {
-        replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token)));
+        replacements.set(token, await fluxerEmojiLink(token, emojiIdNameMap.get(token), sourceInstanceId));
       }
     }
   }
@@ -228,30 +278,35 @@ export async function parseFluxerEmojiToDiscord(content, discordClient, targetDi
   return applyEmojiReplacements(result, replacements);
 }
 
-/**
- * @param {string} str
- * @returns {string}
- */
 export function removeLinkEmbeds(str) {
   const regex =
     /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(\([-a-zA-Z0-9@:%_+.~#?&/=]*\)|[-a-zA-Z0-9@:%_+.~#?&/=])*)/g;
   return str.replace(regex, "<$1>");
 }
 
-/**
- * @param {string} str
- * @returns {string}
- */
 export function sanitizeLinks(str) {
-  return str.replace(/https?:\/\/[^\s]+/g, url => `*${new URL(url).hostname}*`);
+  return str.replace(/https?:\/\/[^\s]+/g, url => {
+    const [, trimmed, suffix] = url.match(/^(.*?)([…)\]>.,;:!?'"]*)$/);
+    try {
+      return `*${new URL(trimmed).hostname}*${suffix}`;
+    } catch {
+      return "*link*";
+    }
+  });
 }
 
 /**
  * @param {string} str
- * @returns {Promise<string>}
+ * @returns {string}
  */
+export function flattenMarkdownLinks(str) {
+  return str
+    .replace(/\[([^\]]*)\]\(\s*<?([^)\s]*?)>?\s*\)/g, (_, label, target) => (label ? `${label} (${target})` : target))
+    .replace(/[[\]]/g, "");
+}
+
 export async function traverseMessageLinks(str) {
-  let result = str;
+  if (!str) return str;
 
   const webAppUrl = await getFluxerWebappUrl();
   const webApp = new URL(webAppUrl);
@@ -260,65 +315,56 @@ export async function traverseMessageLinks(str) {
     "g"
   );
 
-  let m;
-  while ((m = regex.exec(result)) !== null) {
-    if (m.index === regex.lastIndex) {
-      regex.lastIndex++;
-    }
+  const matches = new Map();
+  for (const m of str.matchAll(regex)) {
+    if (m[1] && m[2] && m[3] && !matches.has(m[0])) matches.set(m[0], m);
+  }
+  if (matches.size === 0) return str;
 
+  /** @type {Map<string, string>} */
+  const rewrites = new Map();
+
+  for (const [url, m] of matches) {
     try {
-      if (m[1] && m[2] && m[3]) {
-        if (m[4]) {
-          const message = await MessageMap.findOne({
-            where: {
-              [Op.or]: {
-                discordMessageId: m[4],
-                fluxerMessageId: m[4],
-              },
-            },
-            include: ["channelMap"],
-          });
-          if (message) {
-            if (!m[1].includes("discord.com")) {
-              result = result.replaceAll(
-                m[0],
-                `https://discord.com/channels/${message.channelMap.discordGuildId}/${message.channelMap.discordChannelId}/${message.discordMessageId}`
-              );
-            } else {
-              result = result.replaceAll(
-                m[0],
-                `${webAppUrl}/channels/${message.channelMap.fluxerGuildId}/${message.channelMap.fluxerChannelId}/${message.fluxerMessageId}`
-              );
-            }
-          }
-        } else {
-          const channel = await ChannelMap.findOne({
-            where: {
-              [Op.or]: {
-                discordChannelId: m[3],
-                fluxerChannelId: m[3],
-              },
-            },
-          });
-          if (channel) {
-            if (!m[1].startsWith("discord.com")) {
-              result = result.replaceAll(
-                m[0],
-                `https://discord.com/channels/${channel.discordGuildId}/${channel.discordChannelId}`
-              );
-            } else {
-              result = result.replaceAll(m[0], `${webAppUrl}/channels/${channel.fluxerGuildId}/${channel.fluxerChannelId}`);
-            }
-          }
-        }
+      const id = m[4] ?? m[3];
+      const row = await MessageLink.findOne({ where: { messageId: id }, include: ["endpoint"] });
+      if (!row) continue;
+      const siblings = await MessageLink.findAll({ where: { linkGroup: row.linkGroup }, include: ["endpoint"] });
+      const isSourceDiscord = m[1].includes("discord.com");
+      const target = siblings.find(x =>
+        isSourceDiscord ? x.endpoint?.platform === "fluxer" : x.endpoint?.platform === "discord"
+      );
+      if (!target?.endpoint) continue;
+      if (target.endpoint.platform === "fluxer") {
+        const webapp = await getFluxerWebappUrl(target.endpoint.instanceId ?? "default");
+        rewrites.set(
+          url,
+          m[4]
+            ? `${webapp}/channels/${target.endpoint.guildId}/${target.endpoint.channelId}/${target.messageId}`
+            : `${webapp}/channels/${target.endpoint.guildId}/${target.endpoint.channelId}`
+        );
+      } else {
+        rewrites.set(
+          url,
+          m[4]
+            ? `https://discord.com/channels/${target.endpoint.guildId}/${target.endpoint.channelId}/${target.messageId}`
+            : `https://discord.com/channels/${target.endpoint.guildId}/${target.endpoint.channelId}`
+        );
       }
     } catch {}
   }
 
-  return result;
+  if (rewrites.size === 0) return str;
+
+  return str.replace(regex, url => rewrites.get(url) ?? url);
 }
 
-export async function ensureFluxerEmojis(fluxerClient, tokens) {
+export async function ensureFluxerEmojis(
+  fluxerClient,
+  tokens,
+  tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId,
+  sourceMediaBase = null
+) {
   const resolved = new Map();
 
   if (isFluxerEmojiRateLimited()) {
@@ -327,9 +373,9 @@ export async function ensureFluxerEmojis(fluxerClient, tokens) {
 
   let existing;
   try {
-    existing = await getFluxEmojis(Config.FluxerTempEmojiGuildId, fluxerClient);
+    existing = await getFluxEmojis(tempGuildId, fluxerClient);
   } catch (e) {
-    if (isRateLimitError(e)) startFluxerCooldown(e);
+    if (isRateLimitError(e)) startFluxerCooldown(e, tempGuildId);
     return settleEmojiResults(resolved, tokens);
   }
 
@@ -350,7 +396,9 @@ export async function ensureFluxerEmojis(fluxerClient, tokens) {
   }
 
   if (toCreate.length > 0) {
-    const batch = withEmojiGuildLock(`fluxer:${Config.FluxerTempEmojiGuildId}`, () => createFluxerEmojis(fluxerClient, toCreate));
+    const batch = withEmojiGuildLock(`fluxer:${tempGuildId}`, () =>
+      createFluxerEmojis(fluxerClient, toCreate, tempGuildId, sourceMediaBase)
+    );
     for (const token of toCreate) {
       const entry = batch.then(results => results.get(token) ?? null);
       fluxerEmojiInflight.set(token, entry);
@@ -416,7 +464,12 @@ export async function ensureDiscordEmojis(discordClient, tokens) {
   return resolved;
 }
 
-async function createFluxerEmojis(fluxerClient, tokens) {
+async function createFluxerEmojis(
+  fluxerClient,
+  tokens,
+  tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId,
+  sourceMediaBase = null
+) {
   const out = new Map();
   if (isFluxerEmojiRateLimited()) return settleEmojiResults(out, tokens);
   try {
@@ -425,7 +478,10 @@ async function createFluxerEmojis(fluxerClient, tokens) {
       const animated = token.startsWith("a");
       const rawId = animated ? token.slice(1) : token;
       try {
-        const res = await fetch(`https://cdn.discordapp.com/emojis/${rawId}${animated ? ".gif" : ".webp"}`);
+        const imageUrl = sourceMediaBase
+          ? `${sourceMediaBase.replace(/\/$/, "")}/emojis/${rawId}.webp${animated ? "?animated=true" : ""}`
+          : `https://cdn.discordapp.com/emojis/${rawId}${animated ? ".gif" : ".webp"}`;
+        const res = await fetch(imageUrl);
         if (!res.ok) continue;
         const buf = new Uint8Array(await res.arrayBuffer());
         payloads.set(token, {
@@ -439,37 +495,38 @@ async function createFluxerEmojis(fluxerClient, tokens) {
 
     if (payloads.size > 0) log("FLUXER", `Uploading ${payloads.size} new emoji(s) to Fluxer temp guild`);
 
-    const pass1 = await bulkCreateFluxerEmojis(fluxerClient, [...payloads.entries()], out);
+    const pass1 = await bulkCreateFluxerEmojis(fluxerClient, [...payloads.entries()], out, tempGuildId);
     if (pass1.rateLimited) return settleEmojiResults(out, tokens);
 
     if (pass1.maxEmojis.length > 0) {
       const deleteCount = Math.min(pass1.maxEmojis.length + EMOJI_DELETE_MARGIN, EMOJI_DELETE_BATCH);
       log("FLUXER", `Fluxer temp guild is full, deleting ${deleteCount} oldest emoji(s) and retrying`);
       try {
-        await deleteOldestEmojisFluxer(fluxerClient, deleteCount);
+        await deleteOldestEmojisFluxer(fluxerClient, deleteCount, tempGuildId);
       } catch (e) {
-        if (isRateLimitError(e)) startFluxerCooldown(e);
+        if (isRateLimitError(e)) startFluxerCooldown(e, tempGuildId);
         return settleEmojiResults(out, tokens);
       }
       await bulkCreateFluxerEmojis(
         fluxerClient,
         pass1.maxEmojis.map(t => [t, payloads.get(t)]).filter(([, p]) => p),
-        out
+        out,
+        tempGuildId
       );
     }
   } catch (e) {
-    if (isRateLimitError(e)) startFluxerCooldown(e);
+    if (isRateLimitError(e)) startFluxerCooldown(e, tempGuildId);
     else log("FLUXER", "Cannot convert Discord emoji to Fluxer: " + e);
   }
   return settleEmojiResults(out, tokens);
 }
 
-async function bulkCreateFluxerEmojis(fluxerClient, entries, out) {
+async function bulkCreateFluxerEmojis(fluxerClient, entries, out, tempGuildId) {
   const maxEmojis = [];
   for (let i = 0; i < entries.length; i += EMOJI_BULK_LIMIT) {
     const chunk = entries.slice(i, i + EMOJI_BULK_LIMIT);
     try {
-      const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
+      const guild = await fluxerClient.guilds.fetch(tempGuildId);
       const res = await guild?.createEmojisBulk(chunk.map(([, payload]) => payload));
       let createdAny = false;
       for (const created of res?.success ?? []) {
@@ -484,10 +541,10 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out) {
           maxEmojis.push(chunk.find(([t]) => `e${t}` === failed.name)[0]);
         }
       }
-      if (createdAny) clearFluxEmojiCache(Config.FluxerTempEmojiGuildId);
+      if (createdAny) clearFluxEmojiCache(tempGuildId);
     } catch (e) {
       if (isRateLimitError(e)) {
-        startFluxerCooldown(e);
+        startFluxerCooldown(e, tempGuildId);
         return { rateLimited: true, maxEmojis };
       }
       if (isMaxEmojisError(e)) {
@@ -569,12 +626,12 @@ async function createDiscordEmoji(discordClient, token) {
   return null;
 }
 
-/**
- * @param {FluxerClient} fluxerClient
- * @param {number} count
- */
-async function deleteOldestEmojisFluxer(fluxerClient, count) {
-  const guild = await fluxerClient.guilds.fetch(Config.FluxerTempEmojiGuildId);
+async function deleteOldestEmojisFluxer(
+  fluxerClient,
+  count,
+  tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId
+) {
+  const guild = await fluxerClient.guilds.fetch(tempGuildId);
   if (!guild) return;
   try {
     const emojis = (await guild.fetchEmojis())
@@ -589,16 +646,12 @@ async function deleteOldestEmojisFluxer(fluxerClient, count) {
       }
     }
   } catch (e) {
-    log("FLUXER", `Cannot delete oldest emojis on Fluxer (guild ${Config.FluxerTempEmojiGuildId}): ` + e);
+    log("FLUXER", `Cannot delete oldest emojis on Fluxer (guild ${tempGuildId}): ` + e);
     throw e;
   }
-  clearFluxEmojiCache(Config.FluxerTempEmojiGuildId);
+  clearFluxEmojiCache(tempGuildId);
 }
 
-/**
- * @param {import("discord.js").Client} discordClient
- * @param {number} count
- */
 async function deleteOldestEmojisDiscord(discordClient, count) {
   const app = await discordClient.application?.fetch();
   if (!app) return;

@@ -3,7 +3,7 @@ import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
 import { genAuthLink } from "../../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap, VoiceChannelMap } from "../../db/index.js";
+import { VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import { ChannelType, GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
@@ -15,8 +15,10 @@ import {
   resolveChannelVoiceText,
 } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
-import { syncBridgeTopic } from "../../utils/TopicMirror.js";
-import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
+import { createBridgeGroup } from "../../utils/SetupHelper.js";
+import { mirrorTopicFromEndpoint } from "../../utils/TopicMirror.js";
+import { instanceIdOfClient } from "../../utils/FluxerClients.js";
+import { embedFooterForMessage } from "../../utils/PerInstance.js";
 
 function normalizeChannelName(name) {
   return name
@@ -108,9 +110,9 @@ Execute that to the other side to continue setting up bridging for all channels!
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!${optionalWarning}`
             )
             .setFooter(
-              Config.EmbedFooterContent
+              embedFooterForMessage(message)
                 ? {
-                    text: Config.EmbedFooterContent,
+                    text: embedFooterForMessage(message),
                   }
                 : null
             ),
@@ -194,7 +196,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
               setup,
               setup.silent || silentRequested,
               discordClient,
-              fluxerClient
+              instanceIdOfClient(fluxerClient) ?? "default"
             );
             results.push(result);
           } catch (e) {
@@ -219,23 +221,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
   },
 };
 
-async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, discordClient, fluxerClient) {
-  const channelMap = await ChannelMap.findOne({
-    where: {
-      [Op.or]: {
-        discordChannelId: discordChannel.id,
-        fluxerChannelId: fluxerChannel.id,
-      },
-    },
-  });
-
-  if (channelMap) {
-    return {
-      success: false,
-      errorType: "CHANNEL_ALREADY_BRIDGED",
-    };
-  }
-
+async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, discordClient, fluxerInstanceId) {
   const discordUnsupported =
     typeof discordChannel.isThread === "function" && discordChannel.isThread()
       ? true
@@ -276,70 +262,30 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, disco
     };
   }
 
-  let fluxerWebhookId = "";
-  let fluxerWebhookToken = "";
-  let fluxerChannelId = "";
-  let fluxerGuildId = "";
-  let discordWebhookId = "";
-  let discordWebhookToken = "";
-  let discordChannelId = "";
-  let discordGuildId = "";
+  const bridgeType =
+    setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both";
 
-  if (fluxerChannel instanceof FluxerGuildChannel && setup.direction !== "f2d") {
-    const webhook = await fluxerChannel.createWebhook({
-      name: `Fluxcord Bridge (${fluxerChannel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${discordChannel.id} (D))`,
-    });
-    invalidateFluxerWebhookCache(fluxerChannel.id);
-    fluxerWebhookToken = webhook.token ?? "";
-    fluxerWebhookId = webhook.id;
-    fluxerChannelId = fluxerChannel.id;
-    fluxerGuildId = fluxerChannel.guildId;
+  const { endpoints } = await createBridgeGroup(bridgeType, [
+    { platform: "fluxer", instanceId: fluxerInstanceId, channel: fluxerChannel },
+    { platform: "discord", instanceId: "default", channel: discordChannel },
+  ]);
+
+  for (const endpoint of endpoints) {
+    try {
+      const sourceChannel = endpoint.platform === "fluxer" ? fluxerChannel : discordChannel;
+      await mirrorTopicFromEndpoint(endpoint, sourceChannel.topic ?? null, discordClient);
+    } catch {}
   }
-
-  if (discordChannel instanceof DiscordGuildChannel && setup.direction !== "d2f") {
-    const webhook = await discordChannel.createWebhook({
-      name: `Fluxcord Bridge (${discordChannel.id} (D) ${setup.direction === "both" ? "<->" : "<--"} ${fluxerChannel.id} (F))`,
-    });
-    discordWebhookToken = webhook.token;
-    discordWebhookId = webhook.id;
-    discordChannelId = discordChannel.id;
-    discordGuildId = discordChannel.guildId;
-  }
-
-  const fluxerGuildMap = await GuildMap.findOrCreate({
-    where: {
-      guildId: fluxerGuildId,
-      guildType: "fluxer",
-    },
-  });
-  const discordGuildMap = await GuildMap.findOrCreate({
-    where: {
-      guildId: discordGuildId,
-      guildType: "discord",
-    },
-  });
-
-  const bridgeRow = await ChannelMap.create({
-    fluxerChannelId,
-    discordChannelId,
-    fluxerGuildId,
-    discordGuildId,
-    fluxerWebhookId,
-    discordWebhookId,
-    fluxerWebhookToken,
-    discordWebhookToken,
-    fluxerGuildMapId: fluxerGuildMap[0].id,
-    discordGuildMapId: discordGuildMap[0].id,
-    bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
-  });
-  await syncBridgeTopic(bridgeRow, discordClient, fluxerClient, setup.isFluxer ? "fluxer" : "discord");
 
   if (isFluxerVoice && isDiscordVoice) {
+    const discordEndpoint = endpoints.find(e => e.platform === "discord");
+    const fluxerEndpoint = endpoints.find(e => e.platform === "fluxer");
     await VoiceChannelMap.create({
-      discordGuildId,
-      discordChannelId,
-      fluxerGuildId,
-      fluxerChannelId,
+      discordGuildId: discordEndpoint.guildId,
+      discordChannelId: discordEndpoint.channelId,
+      fluxerGuildId: fluxerEndpoint.guildId,
+      fluxerChannelId: fluxerEndpoint.channelId,
+      fluxerInstanceId: fluxerEndpoint.instanceId,
     });
   }
 

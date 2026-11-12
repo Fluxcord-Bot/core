@@ -1,6 +1,5 @@
-//@ts-check
 import Config from "../../utils/ConfigHandler.js";
-import { VoiceChannelMap, ChannelMap } from "../../db/index.js";
+import { VoiceChannelMap, BridgeEndpoint } from "../../db/index.js";
 import { ChannelType } from "discord.js";
 
 /**
@@ -58,9 +57,22 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
       return;
     }
 
-    const guildBridge = await ChannelMap.findOne({
-      where: { discordGuildId: discordChannel.guildId, fluxerGuildId: fluxerChannel.guildId },
-    });
+    const discordEndpoints = /** @type {any} */ (
+      await BridgeEndpoint.findAll({
+        where: { platform: "discord", guildId: discordChannel.guildId, kind: "channel" },
+        attributes: ["groupId"],
+        raw: true,
+      })
+    );
+    const fluxerEndpoints = /** @type {any} */ (
+      await BridgeEndpoint.findAll({
+        where: { platform: "fluxer", guildId: fluxerChannel.guildId, kind: "channel" },
+        attributes: ["groupId"],
+        raw: true,
+      })
+    );
+    const discordGroups = new Set(discordEndpoints.map(/** @param {any} e */ e => e.groupId));
+    const guildBridge = fluxerEndpoints.some(/** @param {any} e */ e => discordGroups.has(e.groupId));
     if (!guildBridge) {
       await message.reply("These guilds are not bridged. Set up a text channel bridge between them first.");
       return;

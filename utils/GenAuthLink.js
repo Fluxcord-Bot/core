@@ -2,13 +2,13 @@ import { getFluxerWebappUrl } from "./GetFluxerUrls.js";
 
 const discordLink = clientId =>
   `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=7600357521222736&integration_type=0&scope=bot+applications.commands`;
-const fluxerLink = async clientId => {
-  const webappUrl = await getFluxerWebappUrl();
+const fluxerLink = async (clientId, instanceId = "default") => {
+  const webappUrl = await getFluxerWebappUrl(instanceId);
   return `${webappUrl}/oauth2/authorize?client_id=${clientId}&scope=bot&permissions=6764730026290257`;
 };
 
-export async function genAuthLink(clientId, fluxer) {
-  return !fluxer ? discordLink(clientId) : fluxerLink(clientId);
+export async function genAuthLink(clientId, fluxer, instanceId = "default") {
+  return !fluxer ? discordLink(clientId) : fluxerLink(clientId, instanceId);
 }
 
 export function renderBox(lines) {

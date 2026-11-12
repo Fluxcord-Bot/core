@@ -3,16 +3,20 @@ import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
 import { genAuthLink } from "../../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap, MessageMap } from "../../db/index.js";
+import { BridgeEndpoint, MessageLink } from "../../db/index.js";
 import { syncForumTags } from "../../utils/ThreadMirror.js";
 import { Op } from "sequelize";
+import { createBridgeGroup } from "../../utils/SetupHelper.js";
+import { newLinkGroup } from "../../utils/Bridging.js";
+import { instanceIdOfClient } from "../../utils/FluxerClients.js";
 import { ChannelType } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
 import { log } from "../../utils/Logger.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
-import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
+import { invalidateFluxerWebhookCache } from "../../utils/Webhooks.js";
+import { embedFooterForMessage } from "../../utils/PerInstance.js";
 
 function isDiscordForumLike(channel) {
   return channel?.type === ChannelType.GuildForum || channel?.type === ChannelType.GuildMedia;
@@ -74,12 +78,10 @@ silent - skip the "this forum is now bridged" messages on both sides`,
     }
 
     if (!directionOrCode || directionOrCode.length !== 6) {
-      const existing = await ChannelMap.findOne({
+      const existing = await BridgeEndpoint.findOne({
         where: {
-          [Op.or]: {
-            discordChannelId: forum.id,
-            fluxerChannelId: forum.id,
-          },
+          [Op.or]: [{ platform: "discord", channelId: forum.id }, { platform: "fluxer", channelId: forum.id }],
+          kind: "channel",
         },
       });
 
@@ -115,9 +117,9 @@ Execute that inside a post on the other side's forum to continue setting up foru
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`
             )
             .setFooter(
-              Config.EmbedFooterContent
+              embedFooterForMessage(message)
                 ? {
-                    text: Config.EmbedFooterContent,
+                    text: embedFooterForMessage(message),
                   }
                 : null
             ),
@@ -162,14 +164,15 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      const existing = await ChannelMap.findOne({
+      const existing = await BridgeEndpoint.findOne({
         where: {
           [Op.or]: [
-            { discordChannelId: forum.id },
-            { fluxerChannelId: forum.id },
-            { discordChannelId: otherForum.id },
-            { fluxerChannelId: otherForum.id },
+            { platform: "discord", channelId: forum.id },
+            { platform: "fluxer", channelId: forum.id },
+            { platform: "discord", channelId: otherForum.id },
+            { platform: "fluxer", channelId: otherForum.id },
           ],
+          kind: "channel",
         },
       });
 
@@ -190,66 +193,59 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       const discordForum = isFluxer ? otherForum : forum;
       const fluxerForum = isFluxer ? forum : otherForum;
 
-      const discordWebhook = await discordForum.createWebhook({
-        name: `Fluxcord Bridge (${discordForum.id} (D) <-> ${fluxerForum.id} (F))`,
-      });
-      const fluxerWebhook = await fluxerForum.createWebhook({
-        name: `Fluxcord Bridge (${fluxerForum.id} (F) <-> ${discordForum.id} (D))`,
-      });
-      invalidateFluxerWebhookCache(fluxerForum.id);
+      const fluxerInstanceId = instanceIdOfClient(fluxerClient) ?? "default";
+      const { endpoints } = await createBridgeGroup("both", [
+        { platform: "discord", instanceId: "default", channel: discordForum },
+        { platform: "fluxer", instanceId: fluxerInstanceId, channel: fluxerForum },
+      ]);
 
-      const fluxerGuildMap = await GuildMap.findOrCreate({
-        where: {
-          guildId: fluxerForum.guildId,
-          guildType: "fluxer",
-        },
-      });
-      const discordGuildMap = await GuildMap.findOrCreate({
-        where: {
-          guildId: discordForum.guildId,
-          guildType: "discord",
-        },
-      });
-
-      const row = await ChannelMap.create({
-        discordChannelId: discordForum.id,
-        fluxerChannelId: fluxerForum.id,
-        discordGuildId: discordForum.guildId,
-        fluxerGuildId: fluxerForum.guildId,
-        discordWebhookId: discordWebhook.id,
-        discordWebhookToken: discordWebhook.token,
-        fluxerWebhookId: fluxerWebhook.id,
-        fluxerWebhookToken: fluxerWebhook.token ?? "",
-        bridgeType: "both",
-        fluxerGuildMapId: fluxerGuildMap[0].id,
-        discordGuildMapId: discordGuildMap[0].id,
-        autoMirrored: false,
-      });
+      const discordForumEndpoint = endpoints.find(e => e.platform === "discord");
+      const fluxerForumEndpoint = endpoints.find(e => e.platform === "fluxer");
 
       const discordPostId = isFluxer ? setup.postId : message.channelId;
       const fluxerPostId = isFluxer ? message.channelId : setup.postId;
       if (discordPostId && fluxerPostId) {
-        const postRow = await ChannelMap.create({
-          discordChannelId: discordPostId,
-          fluxerChannelId: fluxerPostId,
-          discordGuildId: discordForum.guildId,
-          fluxerGuildId: fluxerForum.guildId,
-          discordWebhookId: discordWebhook.id,
-          discordWebhookToken: discordWebhook.token,
-          fluxerWebhookId: fluxerWebhook.id,
-          fluxerWebhookToken: fluxerWebhook.token ?? "",
-          bridgeType: "both",
-          fluxerGuildMapId: fluxerGuildMap[0].id,
-          discordGuildMapId: discordGuildMap[0].id,
+        const discordPostEndpoint = await BridgeEndpoint.create({
+          platform: "discord",
+          instanceId: "default",
+          channelId: discordPostId,
+          guildId: discordForum.guildId,
+          webhookId: discordForumEndpoint.webhookId,
+          webhookToken: discordForumEndpoint.webhookToken,
+          kind: "thread",
           autoMirrored: true,
-          parentChannelMapId: row.id,
+          parentEndpointId: discordForumEndpoint.id,
+          tagMap: null,
+          groupId: discordForumEndpoint.groupId,
         });
-        await MessageMap.create({
-          messageSource: "discord",
-          discordMessageId: discordPostId,
-          fluxerMessageId: fluxerPostId,
-          channelMapId: postRow.id,
+        const fluxerPostEndpoint = await BridgeEndpoint.create({
+          platform: "fluxer",
+          instanceId: fluxerInstanceId,
+          channelId: fluxerPostId,
+          guildId: fluxerForum.guildId,
+          webhookId: fluxerForumEndpoint.webhookId,
+          webhookToken: fluxerForumEndpoint.webhookToken,
+          kind: "thread",
+          autoMirrored: true,
+          parentEndpointId: fluxerForumEndpoint.id,
+          tagMap: null,
+          groupId: fluxerForumEndpoint.groupId,
+        });
+
+        const linkGroup = newLinkGroup();
+        await MessageLink.create({
+          linkGroup,
+          messageId: discordPostId,
+          replyId: null,
           authorId: "",
+          endpointId: discordPostEndpoint.id,
+        });
+        await MessageLink.create({
+          linkGroup,
+          messageId: fluxerPostId,
+          replyId: null,
+          authorId: "",
+          endpointId: fluxerPostEndpoint.id,
         });
       }
 

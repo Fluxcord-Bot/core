@@ -160,8 +160,8 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
     try {
       member =
         guildType === "discord"
-          ? await /** @type {import("discord.js").Guild} */ (guild).members.fetch(userId)
-          : await /** @type {import("@fluxerjs/core").Guild} */ (guild).fetchMember(userId);
+          ? await  (guild).members.fetch(userId)
+          : await  (guild).fetchMember(userId);
     } catch (error) {
       const unknownMember =
         error?.code === 10007 ||

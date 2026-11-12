@@ -3,6 +3,7 @@ import Config from "../utils/ConfigHandler.js";
 import { getCommands } from "../utils/CommandHandler.js";
 import { getGuildPrefix } from "../utils/GetGuildPrefix.js";
 import { checkManageServerPerms } from "../utils/CheckManageServerPerms.js";
+import { embedFooterForMessage } from "../utils/PerInstance.js";
 
 /**
  * @param {import('../utils/CommandSchema.d.ts').CommandSchema} cmd
@@ -62,9 +63,9 @@ const command = {
                   (command.additionalInfo ? `\n\n` + command.additionalInfo : "")
               )
               .setFooter(
-                Config.EmbedFooterContent
+                embedFooterForMessage(message)
                   ? {
-                      text: Config.EmbedFooterContent,
+                      text: embedFooterForMessage(message),
                     }
                   : null
               ),
@@ -137,9 +138,9 @@ const command = {
             )
             .addFields(...fields)
             .setFooter(
-              Config.EmbedFooterContent
+              embedFooterForMessage(message)
                 ? {
-                    text: Config.EmbedFooterContent,
+                    text: embedFooterForMessage(message),
                   }
                 : null
             ),

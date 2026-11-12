@@ -1,9 +1,10 @@
 import { EmbedBuilder, Routes as FluxerRoutes, Message } from "@fluxerjs/core";
 import { Routes } from "discord.js";
-import { ChannelMap, MessageMap } from "../db/index.js";
+import { BridgeEndpoint, MessageLink } from "../db/index.js";
 import { getDuration } from "../utils/GetDuration.js";
 import { botStartingTime } from "../index.js";
 import Config from "../utils/ConfigHandler.js";
+import { embedFooterForMessage } from "../utils/PerInstance.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -27,8 +28,8 @@ const command = {
     await discordClient.rest.get(Routes.currentApplication());
     const discordRestLatency = Date.now() - discordRestStart;
 
-    const messagesBridged = await MessageMap.count();
-    const channelsBridged = await ChannelMap.count();
+    const messagesBridged = await MessageLink.count();
+    const channelsBridged = await BridgeEndpoint.count({ where: { kind: "channel" } });
     const discordGuildCount = discordClient.guilds.cache.size;
     const fluxerGuildCount = fluxerClient.guilds.size;
     const discordMemberCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
@@ -126,7 +127,7 @@ const command = {
               inline: true,
             }
           )
-          .setFooter(Config.EmbedFooterContent ? { text: Config.EmbedFooterContent } : null),
+          .setFooter(embedFooterForMessage(message) ? { text: embedFooterForMessage(message) } : null),
       ],
     });
   },

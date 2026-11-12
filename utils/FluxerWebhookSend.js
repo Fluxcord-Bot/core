@@ -25,7 +25,8 @@ function toAttachmentPayload(file, id) {
  * @param {string} webhookId
  * @param {string} webhookToken
  * @param {import("@fluxerjs/core").Client} fluxerClient
- * @param {import("@fluxerjs/core").WebhookSendOptions & FileOptions} params
+ * @param {any} params
+ * @returns {Promise<any>}
  */
 export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, params) {
   const attachments = [];
@@ -79,6 +80,30 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
       fluxerClient.rest.post(`/webhooks/${webhookId}/${webhookToken}${query}`, {
         body: jsonPayload,
         files: resolvedFiles,
+        auth: false,
+      }),
+    `webhook:${webhookId}`
+  );
+}
+
+/**
+ * @param {string} webhookId
+ * @param {string} webhookToken
+ * @param {import("@fluxerjs/core").Client} fluxerClient
+ * @param {string} messageId
+ * @param {any} params
+ * @param {{ threadId?: string }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function editFluxerWebhook(webhookId, webhookToken, fluxerClient, messageId, params, opts = {}) {
+  const { files, threadId, ...jsonPayload } = params;
+  let path = `/webhooks/${webhookId}/${webhookToken}/messages/${messageId}`;
+  if (opts.threadId) path = `${path}?thread_id=${opts.threadId}`;
+
+  return await withFluxerRateLimit(
+    () =>
+      fluxerClient.rest.patch(path, {
+        body: jsonPayload,
         auth: false,
       }),
     `webhook:${webhookId}`

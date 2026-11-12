@@ -1,25 +1,19 @@
-import { EmbedBuilder, Message as FluxerMessage, GuildChannel as FluxerGuildChannel } from "@fluxerjs/core";
+import { EmbedBuilder, Message as FluxerMessage } from "@fluxerjs/core";
 import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
 import { genAuthLink } from "../../utils/GenAuthLink.js";
-import { ChannelMap, GuildMap, VoiceChannelMap } from "../../db/index.js";
+import { VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
-import { GuildChannel as DiscordGuildChannel } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
-import { resolveDiscordParentChannel } from "../../utils/DiscordThreadResolver.js";
-import {
-  isAnnouncementPairAllowed,
-  isDiscordAnnouncementChannel,
-  isFluxerAnnouncementChannel,
-  isVoiceChannel,
-  resolveChannelVoiceText,
-} from "../../utils/AnnouncementPublish.js";
+import { isAnnouncementPairAllowed, isVoiceChannel, resolveChannelVoiceText } from "../../utils/AnnouncementPublish.js";
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { resolveChannelNsfw } from "../../utils/ChannelNsfw.js";
-import { syncBridgeTopic } from "../../utils/TopicMirror.js";
-import { invalidateFluxerWebhookCache } from "../../utils/DiscordHandler.js";
+import { setupBridgePair } from "../../utils/SetupHelper.js";
+import { mirrorTopicFromEndpoint } from "../../utils/TopicMirror.js";
+import { instanceIdOfClient, resolveFluxerClient } from "../../utils/FluxerClients.js";
+import { embedFooterForMessage } from "../../utils/PerInstance.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -40,9 +34,6 @@ both|discord2fluxer|fluxer2discord|d2f|f2d - the direction of the bridge, defaul
 silent - skip the "this channel is now bridged" messages on both sides`,
   async run(params, message, discordClient, fluxerClient) {
     let isFluxer = message instanceof FluxerMessage;
-    /**
-     * @type {string & {length: 6} | "both" | "discord2fluxer" | "fluxer2discord" | "d2f" | "f2d" | "template"}
-     */
     const silentRequested = hasSilentFlag(params);
     const directionOrCode = stripSilentFlag(params)[0] ?? "both";
 
@@ -63,22 +54,6 @@ silent - skip the "this channel is now bridged" messages on both sides`,
         : "";
 
     if (directionOrCode.length !== 6) {
-      const channelMap = await ChannelMap.findOne({
-        where: {
-          [Op.or]: {
-            discordChannelId: message.channelId,
-            fluxerChannelId: message.channelId,
-          },
-        },
-      });
-
-      if (channelMap) {
-        await message.reply(
-          "This channel is already bridged. Run `" + Config.BotPrefix + "bridge remove` to unbridge, then run bridge setup again."
-        );
-        return;
-      }
-
       const code = RandomString(6);
 
       let isVoice = isVoiceChannel(message.channel);
@@ -88,6 +63,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
         channelId: message.channelId,
         isVoice,
         isFluxer,
+        instanceId: isFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default",
         silent: silentRequested,
         direction: directionOrCode.startsWith("f") ? "f2d" : directionOrCode.startsWith("d") ? "d2f" : "both",
       });
@@ -128,9 +104,9 @@ Execute that to the other side to continue setting up bridging! Code will expire
 ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`
             )
             .setFooter(
-              Config.EmbedFooterContent
+              embedFooterForMessage(message)
                 ? {
-                    text: Config.EmbedFooterContent,
+                    text: embedFooterForMessage(message),
                   }
                 : null
             ),
@@ -145,17 +121,14 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       }
 
       const setup = PendingSetup.get(directionOrCode);
+      const sourceIsFluxer = setup.isFluxer ?? !isFluxer;
+      const sourceInstanceId = setup.instanceId ?? "default";
+      const otherClient = sourceIsFluxer ? resolveFluxerClient(sourceInstanceId) : discordClient;
 
       if (!setup) {
         await message.reply(
           `Code can't be found or is expired already. Run \`${Config.BotPrefix}bridge setup\` again on the other side.`
         );
-        return;
-      }
-
-      if (setup.isFluxer === isFluxer) {
-        await message.reply(`We don't support Fluxer <-> Fluxer or Discord <-> Discord currently.`);
-        PendingSetup.delete(directionOrCode);
         return;
       }
 
@@ -168,37 +141,12 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      const channelMap = await ChannelMap.findOne({
-        where: {
-          [Op.or]: {
-            discordChannelId: message.channelId,
-            fluxerChannelId: message.channelId,
-          },
-        },
-      });
-
-      if (channelMap) {
-        await message.reply(
-          "This channel is already bridged. Run `" + Config.BotPrefix + "bridge remove` to unbridge, then run this command again."
-        );
-        return;
-      }
-
       let channel;
       let currentChannel;
       try {
-        channel = await (isFluxer ? discordClient : fluxerClient).channels.fetch(setup.channelId);
+        channel = await otherClient.channels.fetch(setup.channelId);
         currentChannel = await message.client.channels.fetch(message.channelId);
       } catch {
-        await message.reply("Channel not found. Maybe invite the bot?");
-        PendingSetup.delete(directionOrCode);
-        return;
-      }
-
-      const currentWebhookChannel = isFluxer ? currentChannel : await resolveDiscordParentChannel(discordClient, currentChannel);
-      const channelWebhookChannel = isFluxer ? await resolveDiscordParentChannel(discordClient, channel) : channel;
-
-      if (!currentWebhookChannel || !channelWebhookChannel) {
         await message.reply("Channel not found. Maybe invite the bot?");
         PendingSetup.delete(directionOrCode);
         return;
@@ -215,107 +163,68 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       }
 
       const bridgesAnnouncement =
-        isDiscordAnnouncementChannel(discordSideChannel) || isFluxerAnnouncementChannel(fluxerSideChannel);
+        (typeof discordSideChannel.isAnnouncement === "function" && discordSideChannel.isAnnouncement()) ||
+        (typeof fluxerSideChannel.isAnnouncement === "function" && fluxerSideChannel.isAnnouncement());
       const announcementNote = bridgesAnnouncement
         ? `\n\nBridged announcement messages are auto published. Toggle with \`${Config.BotPrefix}guild autopublish on|off\`.`
         : "";
 
       const [currentNsfw, channelNsfw] = await Promise.all([
-        resolveChannelNsfw(isFluxer ? fluxerClient : discordClient, currentWebhookChannel),
-        resolveChannelNsfw(isFluxer ? discordClient : fluxerClient, channelWebhookChannel),
+        resolveChannelNsfw(isFluxer ? fluxerClient : discordClient, currentChannel),
+        resolveChannelNsfw(otherClient, channel),
       ]);
       if ((currentNsfw && !channelNsfw) || (!currentNsfw && channelNsfw)) {
         await message.reply("Both channels needs to be set as NSFW to bridge them.");
         return;
       }
 
-      let fluxerWebhookId = "";
-      let fluxerWebhookToken = "";
-      let fluxerChannelId = "";
-      let fluxerGuildId = "";
-      let discordWebhookId = "";
-      let discordWebhookToken = "";
-      let discordChannelId = "";
-      let discordGuildId = "";
+      const bridgeType = setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both";
 
-      if (currentChannel instanceof FluxerGuildChannel && setup.direction !== "f2d") {
-        const webhook = await currentChannel.createWebhook({
-          name: `Fluxcord Bridge (${currentChannel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${channel.id} (D))`,
-        });
-        invalidateFluxerWebhookCache(currentChannel.id);
-        fluxerWebhookToken = webhook.token ?? "";
-        fluxerWebhookId = webhook.id;
-        fluxerChannelId = currentChannel.id;
-        fluxerGuildId = currentChannel.guildId;
-      } else if (setup.direction !== "d2f") {
-        const webhook = await currentWebhookChannel.createWebhook({
-          name: `Fluxcord Bridge (${currentChannel.id} (D) ${setup.direction === "both" ? "<->" : "<--"} ${channel.id} (F))`,
-        });
-        discordWebhookToken = webhook.token;
-        discordWebhookId = webhook.id;
-        discordChannelId = currentChannel.id;
-        discordGuildId = currentChannel.guildId;
+      const currentIsFluxer = isFluxer;
+      const { endpoints, merged } = await setupBridgePair(
+        bridgeType,
+        {
+          platform: currentIsFluxer ? "fluxer" : "discord",
+          instanceId: currentIsFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default",
+          channel: currentChannel,
+        },
+        {
+          platform: sourceIsFluxer ? "fluxer" : "discord",
+          instanceId: sourceIsFluxer ? sourceInstanceId : "default",
+          channel,
+        },
+        discordClient
+      );
+      const mergedNote =
+        merged > 0 ? `\n\nFolded into an existing fanout bridge (merged ${merged} group${merged === 1 ? "" : "s"}).` : "";
+
+      for (const endpoint of endpoints) {
+        try {
+          const sourceChannel =
+            endpoint.channelId === currentChannel.id ? currentChannel : endpoint.channelId === channel.id ? channel : null;
+          if (!sourceChannel) continue;
+          await mirrorTopicFromEndpoint(endpoint, sourceChannel.topic ?? null, discordClient);
+        } catch {}
       }
 
-      if (channel instanceof FluxerGuildChannel && setup.direction !== "f2d") {
-        const webhook = await channel.createWebhook({
-          name: `Fluxcord Bridge (${channel.id} (F) ${setup.direction === "both" ? "<->" : "<--"} ${currentChannel.id} (D))`,
-        });
-        invalidateFluxerWebhookCache(channel.id);
-        fluxerWebhookToken = webhook.token ?? "";
-        fluxerWebhookId = webhook.id;
-        fluxerChannelId = channel.id;
-        fluxerGuildId = channel.guildId;
-      } else if (channelWebhookChannel instanceof DiscordGuildChannel && setup.direction !== "d2f") {
-        const webhook = await channelWebhookChannel.createWebhook({
-          name: `Fluxcord Bridge (${channel.id} (D) ${setup.direction === "both" ? "<->" : "<--"} ${currentChannel.id} (F))`,
-        });
-        discordWebhookToken = webhook.token;
-        discordWebhookId = webhook.id;
-        discordChannelId = channel.id;
-        discordGuildId = channel.guildId;
-      }
-
-      const fluxerGuildMap = await GuildMap.findOrCreate({
-        where: {
-          guildId: fluxerGuildId,
-          guildType: "fluxer",
-        },
-      });
-      const discordGuildMap = await GuildMap.findOrCreate({
-        where: {
-          guildId: discordGuildId,
-          guildType: "discord",
-        },
-      });
-
-      const bridgeRow = await ChannelMap.create({
-        fluxerChannelId,
-        discordChannelId,
-        fluxerGuildId,
-        discordGuildId,
-        fluxerWebhookId,
-        discordWebhookId,
-        fluxerWebhookToken,
-        discordWebhookToken,
-        fluxerGuildMapId: fluxerGuildMap[0].id,
-        discordGuildMapId: discordGuildMap[0].id,
-        bridgeType: setup.direction === "d2f" ? "discord2fluxer" : setup.direction === "f2d" ? "fluxer2discord" : "both",
-      });
-      await syncBridgeTopic(bridgeRow, discordClient, fluxerClient, setup.isFluxer ? "fluxer" : "discord");
-
-      if (isVoice && setup.isVoice) {
-        await VoiceChannelMap.destroy({
-          where: {
-            [Op.or]: [{ discordChannelId }, { fluxerChannelId }],
-          },
-        });
-        await VoiceChannelMap.create({
-          discordGuildId,
-          discordChannelId,
-          fluxerGuildId,
-          fluxerChannelId,
-        });
+      const platformsDiffer = (sourceIsFluxer ? "fluxer" : "discord") !== (currentIsFluxer ? "fluxer" : "discord");
+      if (isVoice && setup.isVoice && platformsDiffer) {
+        const discordEndpoint = endpoints.find(e => e.platform === "discord");
+        const fluxerEndpoint = endpoints.find(e => e.platform === "fluxer");
+        if (discordEndpoint && fluxerEndpoint) {
+          await VoiceChannelMap.destroy({
+            where: {
+              [Op.or]: [{ discordChannelId: discordEndpoint.channelId }, { fluxerChannelId: fluxerEndpoint.channelId }],
+            },
+          });
+          await VoiceChannelMap.create({
+            discordGuildId: discordEndpoint.guildId,
+            discordChannelId: discordEndpoint.channelId,
+            fluxerGuildId: fluxerEndpoint.guildId,
+            fluxerChannelId: fluxerEndpoint.channelId,
+            fluxerInstanceId: fluxerEndpoint.instanceId,
+          });
+        }
       }
 
       PendingSetup.delete(directionOrCode);
@@ -324,9 +233,7 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       let remoteOptionalWarning = "";
       try {
-        const remoteMember = isFluxer
-          ? await (await discordClient.guilds.fetch(discordGuildId)).members.fetchMe()
-          : await (await fluxerClient.guilds.fetch(fluxerGuildId)).members.fetchMe();
+        const remoteMember = await (await otherClient.guilds.fetch(channel.guildId)).members.fetchMe();
         const remotePerms = checkBotPermissions(remoteMember, channel);
         if (remotePerms.missingOptional.length > 0) {
           remoteOptionalWarning = isFluxer
@@ -337,25 +244,11 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       if (!silent) {
         await channel.send({
-          content:
-            "🎉 This " +
-            voiceText +
-            " channel is now bridged to " +
-            (isFluxer ? "Fluxer" : "Discord") +
-            "!" +
-            remoteOptionalWarning +
-            announcementNote,
+          content: "🎉 This " + voiceText + " channel is now bridged!" + remoteOptionalWarning + announcementNote + mergedNote,
         });
 
         await message.reply({
-          content:
-            "🎉 This " +
-            voiceText +
-            " channel is now bridged to " +
-            (!isFluxer ? "Fluxer" : "Discord") +
-            "!" +
-            optionalWarning +
-            announcementNote,
+          content: "🎉 This " + voiceText + " channel is now bridged!" + optionalWarning + announcementNote + mergedNote,
         });
       }
 

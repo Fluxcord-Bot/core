@@ -1,7 +1,8 @@
-import { ChannelMap } from "../../db/index.js";
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { Op } from "sequelize";
+import { BridgeEndpoint, BridgeGroup } from "../../db/index.js";
 import { cloudUploadAttachments } from "../../utils/CloudUpload.js";
+import { resolveFluxerClient } from "../../utils/FluxerClients.js";
 
 /**
  * @type {import('../../utils/CommandSchema.d.ts').CommandSchema}
@@ -13,47 +14,47 @@ const command = {
   description: "List of bridged channels on this server/community",
   requireElevated: true,
   async run(params, message, discordClient, fluxerClient) {
-    const allBridgedChannels = await ChannelMap.findAll({
-      where: {
-        [Op.or]: {
-          discordGuildId: message.guildId,
-          fluxerGuildId: message.guildId,
-        },
-      },
+    const endpoints = await BridgeEndpoint.findAll({
+      where: { guildId: message.guildId, kind: "channel" },
+      raw: true,
     });
 
-    const mappedChannels = await Promise.all(
-      allBridgedChannels.map(async x => {
-        const data = x.dataValues;
+    const groupIds = [...new Set(endpoints.map(x => x.groupId))];
+    const groups = await BridgeGroup.findAll({ where: { id: { [Op.in]: groupIds } }, raw: true });
+    const typeById = new Map(groups.map(g => [g.id, g.bridgeType]));
 
-        const [discordGuild, discordChannel, fluxerChannel, fluxerGuild] = await Promise.allSettled([
-          discordClient.guilds.fetch(data.discordGuildId),
-          discordClient.channels.fetch(data.discordChannelId),
-          fluxerClient.channels.fetch(data.fluxerChannelId),
-          fluxerClient.guilds.fetch(data.fluxerGuildId),
-        ]);
+    const allGroupEndpoints = await BridgeEndpoint.findAll({
+      where: { groupId: { [Op.in]: groupIds } },
+      raw: true,
+    });
 
-        return {
-          ...data,
-          discordGuild: discordGuild.status === "fulfilled" ? discordGuild.value : undefined,
-          discordChannel: discordChannel.status === "fulfilled" ? discordChannel.value : undefined,
-          fluxerChannel: fluxerChannel.status === "fulfilled" ? fluxerChannel.value : null,
-          fluxerGuild: fluxerGuild.status === "fulfilled" ? fluxerGuild.value : null,
-        };
-      })
-    );
+    const lines = [];
+    for (const groupId of groupIds) {
+      const members = allGroupEndpoints.filter(x => x.groupId === groupId);
+      const parts = await Promise.all(
+        members.map(async x => {
+          let name = "unknown";
+          let guildName = "unknown";
+          try {
+            if (x.platform === "discord") {
+              const channel = await discordClient.channels.fetch(x.channelId);
+              name = channel?.name ?? name;
+              const guild = await discordClient.guilds.fetch(x.guildId);
+              guildName = guild?.name ?? guildName;
+            } else {
+              const channel = await resolveFluxerClient(x.instanceId).channels.fetch(x.channelId);
+              name = channel?.name ?? name;
+              const guild = await resolveFluxerClient(x.instanceId).guilds.fetch(x.guildId);
+              guildName = guild?.name ?? guildName;
+            }
+          } catch {}
+          return `${x.platform === "fluxer" ? "F" : "D"}#${name} (${x.channelId}) on ${guildName}${x.instanceId !== "default" ? ` [${x.instanceId}]` : ""}`;
+        })
+      );
+      lines.push(`${typeById.get(groupId) ?? "both"}: ${parts.join(" <-> ")}`);
+    }
 
-    const bridgeArrow = type => (type === "both" ? "<->" : type === "fluxer2discord" ? "-->" : "<--");
-
-    const str = mappedChannels
-      .map(
-        x =>
-          `${x.fluxerChannel?.name ?? "unknown"} (${x.fluxerChannelId}) on ${x.fluxerGuild?.name ?? "unknown"} (${x.fluxerGuildId}) ` +
-          `${bridgeArrow(x.bridgeType)} ` +
-          `${x.discordChannel?.name ?? "unknown"} (${x.discordChannelId}) on ${x.discordGuild?.name ?? "unknown"} (${x.discordGuildId})`
-      )
-      .join("\n");
-
+    const str = lines.join("\n");
     const strBuf = Buffer.from(str);
 
     if (message instanceof FluxerMessage) {

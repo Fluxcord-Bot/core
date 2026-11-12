@@ -1,6 +1,6 @@
 import { Client as FluxerClient } from "@fluxerjs/core";
 import { ButtonStyle, ComponentType, Message, MessageMentions } from "discord.js";
-import { ChannelMap } from "../db/index.js";
+import { BridgeEndpoint } from "../db/index.js";
 import { Op } from "sequelize";
 
 const FLUXER_GUILD_CACHE_TTL = 60_000;
@@ -26,30 +26,63 @@ async function getFluxerGuildChannels(guild) {
   return entry.channels;
 }
 
+const crossSideCache = new Map();
+const CROSS_SIDE_TTL = 60_000;
+
+function cachedCrossSide(key) {
+  const cached = crossSideCache.get(key);
+  if (cached && Date.now() - cached.at < CROSS_SIDE_TTL) return cached.id;
+  return undefined;
+}
+
+/**
+ * @param {"discord" | "fluxer"} sourcePlatform
+ * @param {string} sourceChannelId
+ * @param {"discord" | "fluxer"} targetPlatform
+ * @returns {Promise<string | null>} target channel id through any bridge group, null when unbridged
+ */
+export async function crossSideChannelId(sourcePlatform, sourceChannelId, targetPlatform) {
+  const cacheKey = `${sourcePlatform}:${sourceChannelId}:${targetPlatform}`;
+  const cached = cachedCrossSide(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const own = await BridgeEndpoint.findAll({
+    where: { platform: sourcePlatform, channelId: sourceChannelId },
+    attributes: ["groupId"],
+    raw: true,
+  });
+  const groupIds = [...new Set(own.map(e => e.groupId))];
+  if (groupIds.length === 0) {
+    crossSideCache.set(cacheKey, { at: Date.now(), id: null });
+    return null;
+  }
+
+  const rows = await BridgeEndpoint.findAll({
+    where: { groupId: { [Op.in]: groupIds }, platform: targetPlatform },
+    raw: true,
+  });
+  const id = rows[0]?.channelId ?? null;
+  crossSideCache.set(cacheKey, { at: Date.now(), id });
+  return id;
+}
+
 /**
  * @param {import("discord.js").Message | import("@fluxerjs/core").Message} message
- * @param {string?} content
- * @param {(import("discord.js").Guild | import("@fluxerjs/core").Guild)?} otherSideGuild
+ * @param {string | null} content
+ * @param {import("discord.js").Guild | import("@fluxerjs/core").Guild | null} otherSideGuild
+ * @returns {Promise<string>}
  */
-export async function parseMentions(message, content, otherSideGuild) {
+export async function parseMentions(message, content, otherSideGuild, targetPlatform = "discord") {
   let res = content || message.content;
 
   if (!res) return "";
 
   if (message.mentions instanceof MessageMentions) {
-    const bridgedChannels = await ChannelMap.findAll({
-      where: {
-        discordChannelId: {
-          [Op.in]: message.mentions.channels.map(x => x.id),
-        },
-      },
-    });
-
-    message.mentions.channels.forEach(v => {
-      const bridgedChannel = bridgedChannels.find(x => v.id === x.discordChannelId);
-      if (!v.isDMBased())
-        res = res.replaceAll(`<#${v.id}>`, bridgedChannel ? `<#${bridgedChannel.fluxerChannelId}>` : `#${v.name}`);
-    });
+    for (const v of message.mentions.channels.values()) {
+      if (v.isDMBased()) continue;
+      const mapped = await crossSideChannelId("discord", v.id, "fluxer");
+      res = res.replaceAll(`<#${v.id}>`, mapped ? `<#${mapped}>` : `#${v.name}`);
+    }
 
     message.mentions.users.forEach(v => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.tag}`);
@@ -57,7 +90,6 @@ export async function parseMentions(message, content, otherSideGuild) {
 
     const whitelist = [];
 
-    /** @type {import("@fluxerjs/core").Role[]} */
     const roles = await getFluxerGuildRoles(otherSideGuild);
     message.mentions.roles.forEach(v => {
       res = res.replaceAll(
@@ -76,7 +108,7 @@ export async function parseMentions(message, content, otherSideGuild) {
       return whitelist.includes(id) ? match : "@unknown-role";
     });
   } else if (message.client instanceof FluxerClient) {
-    res = await parseRolesAndChannels(res, message.guildId ?? "", message.client, otherSideGuild, message);
+    res = await parseRolesAndChannels(res, message.guildId ?? "", message.client, otherSideGuild, message, targetPlatform);
 
     message.mentions.forEach(v => {
       res = res.replaceAll(`<@${v.id}>`, `@${v.username}#${v.discriminator}`);
@@ -86,14 +118,7 @@ export async function parseMentions(message, content, otherSideGuild) {
   return res;
 }
 
-/**
- * @param {string} content
- * @param {string} guildId
- * @param {FluxerClient} fluxerClient
- * @param {import("discord.js").Guild?} otherSideGuild
- * @param {import("@fluxerjs.core").Message} message
- */
-async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGuild, message) {
+async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGuild, message, targetPlatform = "discord") {
   let guild;
   try {
     guild = await fluxerClient.guilds.fetch(guildId);
@@ -127,18 +152,10 @@ async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGu
       return whitelist.includes(id) ? match : "@unknown-role";
     });
 
-    const bridgedChannels = await ChannelMap.findAll({
-      where: {
-        fluxerChannelId: {
-          [Op.in]: channels.map(x => x.id),
-        },
-      },
-    });
-
-    channels.forEach(v => {
-      const bridgedChannel = bridgedChannels.find(x => v.id === x.fluxerChannelId);
-      res = res.replaceAll(`<#${v.id}>`, bridgedChannel ? `<#${bridgedChannel.discordChannelId}>` : `#${v.name}`);
-    });
+    for (const v of channels.values()) {
+      const mapped = await crossSideChannelId("fluxer", v.id, targetPlatform);
+      res = res.replaceAll(`<#${v.id}>`, mapped ? `<#${mapped}>` : `#${v.name}`);
+    }
   }
 
   return res;
@@ -182,7 +199,7 @@ export async function attemptParseBridgedMessage(message) {
       type: "kuma",
       isBridge: true,
       isProxy: false,
-      regex: /-# ↩ \[.*\]\(https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)\).*\n?/,
+      regex: /-# ↩ \[.*\]\(<https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)\).*\n?/,
     },
   ];
 

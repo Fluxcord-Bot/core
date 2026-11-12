@@ -19,7 +19,9 @@ const Config = {
   // Example: "postgres://user:password@localhost:5432/fluxcord"
   // PostgresConnectionString: "",
 
-  // The Discord bot token
+  // The Discord bot token. Optional: if you only bridge between Fluxer instances
+  // (or multiple self-hosted Fluxer instances), you can omit this entirely and
+  // Fluxcord runs without a Discord bot.
   DiscordBotToken: "DISCORD_BOT_TOKEN",
 
   // Additional bot tokens for voice bridging multiple voice channels at the same time. Optional.
@@ -33,6 +35,31 @@ const Config = {
 
   // The Fluxer bot token
   FluxerBotToken: "FLUXER_BOT_TOKEN",
+
+  // Multi-instance Fluxer support. Each entry runs its own bot client in this process.
+  // The entry with id "default" (or the legacy single-token fields above) is used
+  // wherever no explicit instance is specified. If FluxerInstances is set but has no
+  // "default" entry, one is synthesized from FluxerBotToken + FluxerAPIBaseURL above.
+  // FluxerInstances: [
+  //   {
+  //     id: "default",
+  //     token: "FLUXER_BOT_TOKEN",
+  //     FluxerAPIBaseURL: "https://api.fluxer.app",
+  //   },
+  //   {
+  //     id: "selfhosted",
+  //     token: "OTHER_FLUXER_BOT_TOKEN",
+  //     FluxerAPIBaseURL: "https://my-fluxer.example.com/api",
+  //   },
+  // ],
+  // Each entry can also override (per instance):
+  //   FluxerTempEmojiGuildId - REQUIRED for every instance; each instance needs
+  //     its own temporary emoji store community (bot startup fails without it).
+  //   FluxerBioStart - the bio prefix used on that instance's bot (falls back to
+  //     the root FluxerBioStart).
+  //   EmbedFooterContent - the embed footer used for embeds sent to that
+  //     instance (falls back to the root EmbedFooterContent).
+  // and set `discovery` / `instance` for self-hosted Fluxer connections.
 
   // The Fluxer temporary emoji store community ID
   FluxerTempEmojiGuildId: "0000000000000000000",

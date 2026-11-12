@@ -38,15 +38,15 @@ export function isAnnouncementPairAllowed(discordChannel, fluxerChannel) {
   return isVoiceChannel(discordChannel) === isVoiceChannel(fluxerChannel);
 }
 
-export async function maybePublishDiscordMessage(discordClient, channelMap, messageId) {
+export async function maybePublishDiscordMessage(discordClient, endpoint, messageId) {
   let enabled = true;
   try {
-    enabled = await isBridgeToggleEnabled(channelMap, "autoPublishEnabled");
+    enabled = await isBridgeToggleEnabled(endpoint, "autoPublishEnabled");
   } catch {}
   if (!enabled) return false;
   let channel = null;
   try {
-    channel = await discordClient.channels.fetch(channelMap.discordChannelId);
+    channel = await discordClient.channels.fetch(endpoint.channelId);
   } catch {
     return false;
   }
@@ -63,31 +63,31 @@ export async function maybePublishDiscordMessage(discordClient, channelMap, mess
   }
 }
 
-export async function maybePublishFluxerMessage(fluxerClient, channelMap, messageId) {
+export async function maybePublishFluxerMessage(fluxerClient, endpoint, messageId) {
   let enabled = true;
   try {
-    enabled = await isBridgeToggleEnabled(channelMap, "autoPublishEnabled");
+    enabled = await isBridgeToggleEnabled(endpoint, "autoPublishEnabled");
   } catch {}
   if (!enabled || !messageId) return false;
   let channel = null;
   try {
     channel =
-      fluxerClient.channels.get(channelMap.fluxerChannelId) ??
+      fluxerClient.channels.get(endpoint.channelId) ??
       (await withFluxerRateLimit(
-        () => fluxerClient.channels.fetch(channelMap.fluxerChannelId),
-        `channel:${channelMap.fluxerChannelId}`
+        () => fluxerClient.channels.fetch(endpoint.channelId),
+        `channel:${endpoint.channelId}`
       ));
   } catch {
     return false;
   }
   if (!isFluxerAnnouncementChannel(channel)) return false;
   const paths = [
-    `/channels/${channelMap.fluxerChannelId}/messages/${messageId}/crosspost`,
-    `/channels/${channelMap.fluxerChannelId}/messages/${messageId}/publish`,
+    `/channels/${endpoint.channelId}/messages/${messageId}/crosspost`,
+    `/channels/${endpoint.channelId}/messages/${messageId}/publish`,
   ];
   for (const path of paths) {
     try {
-      await withFluxerRateLimit(() => fluxerClient.rest.post(path, { body: {} }), `channel:${channelMap.fluxerChannelId}`);
+      await withFluxerRateLimit(() => fluxerClient.rest.post(path, { body: {} }), `channel:${endpoint.channelId}`);
       return true;
     } catch (e) {
       const status = e?.status ?? e?.statusCode ?? e?.cause?.statusCode;

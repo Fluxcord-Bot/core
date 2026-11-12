@@ -1,17 +1,24 @@
-import { EmbedBuilder, TextChannel as FluxerTextChannel } from "@fluxerjs/core";
-import { GuildMap, MessageMap } from "../db/index.js";
-import { Op, or } from "sequelize";
-import { ChannelType, TextChannel } from "discord.js";
+import { EmbedBuilder } from "@fluxerjs/core";
+import { GuildMap, MessageLink } from "../db/index.js";
 import { genMsgLink } from "./GenMsgLink.js";
+import { resolveFluxerClient } from "./FluxerClients.js";
 
 export const DEFAULT_INFO_EMOJI = "ℹ️";
 
+/**
+ * @param {string | null} guildId
+ */
 export async function getInfoReactionEmoji(guildId) {
   if (!guildId) return DEFAULT_INFO_EMOJI;
   const guildMap = await GuildMap.findOne({ where: { guildId } });
   return guildMap?.infoReactionEmoji || DEFAULT_INFO_EMOJI;
 }
 
+/**
+ * @param {string | null} emojiId
+ * @param {string} emojiName
+ * @param {string} configured
+ */
 export function isInfoReactionEmoji(emojiId, emojiName, configured) {
   if (emojiId) return false;
   const strip = value => (value ?? "").replace(/\uFE0F/g, "");
@@ -22,54 +29,44 @@ export function isInfoReactionEmoji(emojiId, emojiName, configured) {
  * @param {import("@fluxerjs/core").Message | import("discord.js").Message} message
  * @param {import("@fluxerjs/core").User | import("discord.js").User} user
  * @param {import("discord.js").Client} discordClient
- * @param {import("@fluxerjs/core").Client} fluxerClient
  */
-export async function sendBridgeInfo(message, user, discordClient, fluxerClient) {
-  const embed = new EmbedBuilder();
-  embed.setURL(await genMsgLink(message));
-  const messageMap = await MessageMap.findOne({
-    where: {
-      [Op.or]: {
-        discordMessageId: message.id,
-        fluxerMessageId: message.id,
-      },
-    },
-    include: ["channelMap"],
-  });
-  if (!messageMap) return;
-  let origChannel;
+export async function sendBridgeInfo(message, user, discordClient) {
+  const rows = await MessageLink.findAll({ where: { messageId: message.id }, include: ["endpoint"] });
+  const local = rows.find(r => r.endpoint?.channelId === message.channelId) ?? rows[0];
+  if (!local?.endpoint) return;
+
+  const target =
+    rows.find(r => r.endpoint?.platform !== local.endpoint.platform) ?? rows.find(r => r.messageId !== local.messageId);
+  if (!target?.endpoint) return;
+
+  let targetMessage;
   try {
-    origChannel =
-      messageMap.messageSource === "fluxer"
-        ? await fluxerClient.channels.fetch(messageMap.channelMap.fluxerChannelId)
-        : await discordClient.channels.fetch(messageMap.channelMap.discordChannelId);
+    if (target.endpoint.platform === "fluxer") {
+      const channel = await resolveFluxerClient(target.endpoint.instanceId).channels.fetch(target.endpoint.channelId);
+      if (!channel) return;
+      targetMessage = await channel.messages.fetch(target.messageId);
+    } else {
+      const channel = await discordClient.channels.fetch(target.endpoint.channelId);
+      if (!channel) return;
+      targetMessage = await channel.messages.fetch(target.messageId);
+    }
   } catch {
     return;
   }
-  if (!origChannel) return;
-  if (origChannel instanceof FluxerTextChannel) {
-    const message = await origChannel.messages.fetch(messageMap.fluxerMessageId);
-    embed.setTitle(`Message ${message.id} on #${origChannel.name}`);
-    embed.setDescription(`[Jump to message on original platform](${await genMsgLink(message)})`);
-    embed.addFields({
-      name: "Author",
-      value: `@${message.author.username}#${message.author.discriminator} (${message.author.id})`,
-      inline: true,
-    });
-  } else if (origChannel.isTextBased()) {
-    const message = await origChannel.messages.fetch(messageMap.discordMessageId);
-    embed.setTitle(`Message ${message.id} on #${origChannel.name}`);
-    embed.setDescription(`[Jump to message on original platform](${await genMsgLink(message)})`);
-    embed.addFields({
-      name: "Author",
-      value: `@${message.author.tag} (${message.author.id})`,
-      inline: true,
-    });
-  }
+  if (!targetMessage) return;
+
+  const embed = new EmbedBuilder();
+  embed.setURL(await genMsgLink(message));
+  embed.setTitle(`Message ${targetMessage.id} on #${targetMessage.channel.name}`);
+  embed.setDescription(`[Jump to message on original platform](${await genMsgLink(targetMessage)})`);
+  const author = targetMessage.author;
+  embed.addFields({
+    name: "Author",
+    value: `@${author.username}${author.discriminator && author.discriminator !== "0000" ? `#${author.discriminator}` : ""} (${author.id})`,
+    inline: true,
+  });
 
   const dm = await user.createDM();
-  await dm.send({
-    embeds: [embed],
-  });
+  await dm.send({ embeds: [embed] });
   return true;
 }

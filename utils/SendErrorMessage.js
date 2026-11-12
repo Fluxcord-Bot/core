@@ -1,47 +1,54 @@
-import { EmbedBuilder, Message } from "@fluxerjs/core";
+import { EmbedBuilder as FluxerEmbedBuilder, Message as FluxerMessage } from "@fluxerjs/core";
 import { EmbedBuilder as DiscordEmbedBuilder } from "discord.js";
 import { GuildMap } from "../db/index.js";
 import { log } from "./Logger.js";
 import { genMsgLink } from "./GenMsgLink.js";
 import { isBridgeHealthDegraded, recordBridgeFailure } from "./BridgeHealth.js";
+import { instanceIdOfClient, resolveFluxerClient } from "./FluxerClients.js";
 
 /**
- * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | Message} message
- * @param {import("discord.js").Client} discordClient
- * @param {import("@fluxerjs/core").Client} fluxerClient
- * @param {any} error
- * @param {boolean} [replyFallback=false]
+ * @typedef {Object} SendErrorOptions
+ * @property {string} [instanceId]
  */
-export async function sendErrorMessage(message, discordClient, fluxerClient, error, replyFallback = false) {
+
+/**
+ * @param {import("discord.js").OmitPartialGroupDMChannel<import("discord.js").Message<boolean>> | FluxerMessage} message
+ * @param {import("discord.js").Client} discordClient
+ * @param {any} error
+ * @param {SendErrorOptions} [options]
+ */
+export async function sendErrorMessage(message, discordClient, error, options = {}) {
   recordBridgeFailure(message.guildId);
   const suppressReaction = isBridgeHealthDegraded(message.guildId);
+  const isFluxer = message instanceof FluxerMessage;
+  const instanceId = options.instanceId ?? (isFluxer ? instanceIdOfClient(message.client) ?? "default" : "default");
 
-  const guildMap = await GuildMap.findOne({
-    where: {
-      guildId: message.guildId,
-    },
-  });
+  const maps = await GuildMap.findAll({ where: { guildId: message.guildId } });
+  const guildMap = maps.find(m => (isFluxer ? true : m.guildType === "discord")) ?? null;
 
   try {
     if (guildMap) {
       if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform) {
         if (guildMap.errorLoggingPlatform === "fluxer") {
-          const channel = await fluxerClient.channels.fetch(guildMap.errorLoggingChannelId);
+          const fluxerClient = resolveFluxerClient(instanceId);
+          const channel = await fluxerClient.channels.fetch(guildMap.errorLoggingChannelId).catch(() => null);
 
-          /** @type {any} */ (channel).send({
-            embeds: [
-              new EmbedBuilder()
-                .setTitle("Error occurred while bridging a message")
-                .addFields({
-                  name: "Message",
-                  value: `${message.author.globalName} (${await genMsgLink(message)}): ${message.content}`,
-                })
-                .addFields({
-                  name: "Stack trace",
-                  value: `${error}`,
-                }),
-            ],
-          });
+          if (channel?.isSendable()) {
+            await channel.send({
+              embeds: [
+                new FluxerEmbedBuilder()
+                  .setTitle("Error occurred while bridging a message")
+                  .addFields({
+                    name: "Message",
+                    value: `${message.author.globalName} (${await genMsgLink(message)}): ${message.content}`,
+                  })
+                  .addFields({
+                    name: "Stack trace",
+                    value: `${error}`,
+                  }),
+              ],
+            });
+          }
         } else {
           const channel = await discordClient.channels.fetch(guildMap.errorLoggingChannelId);
 
@@ -73,7 +80,7 @@ export async function sendErrorMessage(message, discordClient, fluxerClient, err
   } catch {}
 
   log(
-    message instanceof Message ? "FLUXER" : "DISCORD",
+    isFluxer ? "FLUXER" : "DISCORD",
     `An error occurred on ${await genMsgLink(message).catch(() => "?")}`,
     error
   );

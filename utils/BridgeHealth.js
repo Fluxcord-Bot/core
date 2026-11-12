@@ -1,7 +1,6 @@
 const FAILURE_WINDOW_MS = 5 * 60 * 1000;
 const FAILURE_THRESHOLD = 5;
 
-/** @type {Map<string, number[]>} */
 const failuresByGuild = new Map();
 
 function pruneFailures(guildId) {

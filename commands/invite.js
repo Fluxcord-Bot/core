@@ -1,7 +1,8 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { ChannelMap, GuildMap } from "../db/index.js";
+import { BridgeEndpoint, BridgeGroup, GuildMap } from "../db/index.js";
 import { Op } from "sequelize";
 import { getFluxerInviteBaseUrl } from "../utils/GetFluxerUrls.js";
+import { resolveFluxerClient } from "../utils/FluxerClients.js";
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -11,46 +12,39 @@ const command = {
   description: "Get an invite code from the other side",
   requireElevated: false,
   async run(params, message, discordClient, fluxerClient) {
-    const channelMap = await ChannelMap.findOne({
-      where: {
-        [Op.or]: {
-          discordChannelId: message.channelId,
-          fluxerChannelId: message.channelId,
-          discordGuildId: message.guildId,
-          fluxerGuildId: message.guildId,
-        },
-      },
+    const sourcePlatform = message instanceof FluxerMessage ? "fluxer" : "discord";
+    const endpoints = await BridgeEndpoint.findAll({
+      where: { guildId: message.guildId, platform: sourcePlatform, kind: "channel" },
+      raw: true,
     });
 
-    if (!channelMap) {
+    if (endpoints.length === 0) {
       await message.reply("This channel isn't part of a bridge.");
       return;
     }
 
-    const guildMaps = await GuildMap.findAll({
-      where: {
-        [Op.or]: [
-          {
-            guildId: channelMap.get("discordGuildId"),
-            guildType: "discord",
-          },
-          {
-            guildId: channelMap.get("fluxerGuildId"),
-            guildType: "fluxer",
-          },
-        ],
-      },
-    });
-
+    const groupIds = [...new Set(endpoints.map(x => x.groupId))];
+    const groups = await BridgeGroup.findAll({ where: { id: { [Op.in]: groupIds } }, raw: true });
+    const guildMaps = await GuildMap.findAll({ where: { guildId: message.guildId } });
     if (guildMaps.some(g => g.get("inviteEnabled") === false)) {
       await message.reply("The invite command is disabled in this guild.");
       return;
     }
 
-    if (message instanceof FluxerMessage) {
+    const members = await BridgeEndpoint.findAll({
+      where: { groupId: { [Op.in]: groupIds } },
+      raw: true,
+    });
+    const target = members.find(x => x.platform !== sourcePlatform);
+    if (!target) {
+      await message.reply("This channel isn't part of a bridge.");
+      return;
+    }
+
+    if (sourcePlatform === "fluxer") {
       let guild;
       try {
-        guild = await discordClient.guilds.fetch(channelMap.discordGuildId);
+        guild = await discordClient.guilds.fetch(target.guildId);
       } catch {
         guild = null;
       }
@@ -59,7 +53,7 @@ const command = {
         let guildInvite = "https://discord.gg/";
         if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
         else {
-          const invite = await guild.invites.create(channelMap.discordChannelId, {
+          const invite = await guild.invites.create(target.channelId, {
             maxAge: 172800,
           });
           guildInvite += invite.code;
@@ -72,20 +66,20 @@ const command = {
     } else {
       let guild;
       try {
-        guild = await fluxerClient.guilds.fetch(channelMap.fluxerGuildId);
+        guild = await resolveFluxerClient(target.instanceId).guilds.fetch(target.guildId);
       } catch {
         guild = null;
       }
 
       if (guild) {
-        const inviteBase = await getFluxerInviteBaseUrl();
+        const inviteBase = await getFluxerInviteBaseUrl(target.instanceId);
         let guildInvite = inviteBase + "/";
         if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
         else {
-          /** @type {import("@fluxerjs/core").GuildChannel} */
+          /** @type {import("@fluxerjs/core").GuildChannel | null} */
           let channel;
           try {
-            channel = await fluxerClient.channels.fetch(channelMap.fluxerChannelId);
+            channel = await resolveFluxerClient(target.instanceId).channels.fetch(target.channelId);
           } catch {
             channel = null;
           }

@@ -24,6 +24,10 @@ FROM node:24-trixie-slim
 
 WORKDIR /app
 
+RUN apt-get update \
+  && apt-get install  -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=comicallylongnamefordependencies /app/node_modules ./node_modules
 
 COPY --from=mwader/static-ffmpeg:9.0.2-1 /ffmpeg /usr/local/bin/
