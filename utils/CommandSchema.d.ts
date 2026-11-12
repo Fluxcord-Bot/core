@@ -31,24 +31,46 @@ export type SlashShimMessage = {
   reply: (payload: any) => Promise<any>;
 };
 
-export type CommandSchema = {
-  groupNames?: string[];
-  name: string;
-  aliases?: string[];
-  topLevelAliases?: string[];
-  description: string;
-  requireElevated: boolean;
-  requireOwner?: boolean;
-  hideFromHelp?: boolean;
-  params?: string;
-  slashOptions?: SlashOptionDef[];
-  allowDM?: boolean;
-  excludeFromSlash?: boolean;
-  additionalInfo?: string;
-  run: (
-    params: string[],
-    message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | FluxerMessage | SlashShimMessage,
-    discordClient: DiscordClient,
-    fluxerClient: FluxerClient
-  ) => Promise<void>;
-};
+export type CommandSchema =
+  | {
+      groupNames?: string[];
+      name: string;
+      aliases?: string[];
+      topLevelAliases?: string[];
+      description: string;
+      requireElevated: boolean;
+      requireOwner?: boolean;
+      hideFromHelp?: boolean;
+      params?: string;
+      slashOptions?: SlashOptionDef[];
+      allowDM?: boolean;
+      excludeFromSlash?: false | undefined;
+      additionalInfo?: string;
+      run: (
+        params: string[],
+        message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | FluxerMessage | SlashShimMessage,
+        discordClient: DiscordClient,
+        fluxerClient: FluxerClient
+      ) => Promise<void>;
+    }
+  | {
+      groupNames?: string[];
+      name: string;
+      aliases?: string[];
+      topLevelAliases?: string[];
+      description: string;
+      requireElevated: boolean;
+      requireOwner?: boolean;
+      hideFromHelp?: boolean;
+      params?: string;
+      slashOptions?: SlashOptionDef[];
+      allowDM?: boolean;
+      excludeFromSlash?: true;
+      additionalInfo?: string;
+      run: (
+        params: string[],
+        message: OmitPartialGroupDMChannel<DiscordMessage<boolean>> | FluxerMessage,
+        discordClient: DiscordClient,
+        fluxerClient: FluxerClient
+      ) => Promise<void>;
+    };

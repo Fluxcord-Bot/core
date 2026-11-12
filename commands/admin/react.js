@@ -1,3 +1,4 @@
+import { Message } from "@fluxerjs/core";
 import { GuildMap } from "../../db/index.js";
 
 /**
@@ -11,7 +12,16 @@ const command = {
   requireElevated: false,
   excludeFromSlash: true,
   requireOwner: true,
-  async run(params, message, discordClient, fluxerClient) {
+  async run(params, msg, discordClient, fluxerClient) {
+    let message = msg;
+    if (msg.messageReference) {
+      if (msg instanceof Message) {
+        message = await msg.referencedMessage.fetch();
+      } else {
+        message = await msg.fetchReference();
+      }
+    }
+
     const guildMap = await GuildMap.findOne({
       where: {
         guildId: message.guildId,

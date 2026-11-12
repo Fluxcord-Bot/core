@@ -1,4 +1,3 @@
-//@ts-check
 import Config from "../../utils/ConfigHandler.js";
 import { VoiceChannelMap, ChannelMap } from "../../db/index.js";
 import { ChannelType } from "discord.js";
