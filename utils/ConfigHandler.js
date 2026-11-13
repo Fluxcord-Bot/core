@@ -1,7 +1,7 @@
 import Config from "../config.js";
 
 const DefaultConfig = {
-  FluxerAPIBaseURL: "https://api.fluxer.app",
+  FluxerAPIBaseURL: "https://fluxer.com/api",
   DataFolderPath: "/data",
   DiscordBotToken: "DISCORD_BOT_TOKEN",
   /** @type {string[]} */

@@ -15,7 +15,7 @@ export async function getWellknownFluxer(attempt = 0) {
     if (attempt >= 5) {
       return {
         endpoints: {
-          webapp: "https://fluxer.app",
+          webapp: "https://fluxer.com",
         },
       };
     }
