@@ -273,7 +273,7 @@ export async function traverseMessageLinks(str) {
   const webAppUrl = await getFluxerWebappUrl();
   const webApp = new URL(webAppUrl);
   const regex = new RegExp(
-    `https://(discord\\.com|(?:web.)?(?:canary.)?fluxer.app|${webApp.hostname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/channels/(\\d+)/(\\d+)(?:/(\\d+))?`,
+    `https://(discord\\.com|(?:[\\w-]+\\.)?${webApp.hostname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})/channels/(\\d+)/(\\d+)(?:/(\\d+))?`,
     "g"
   );
 
