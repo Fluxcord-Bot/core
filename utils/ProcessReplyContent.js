@@ -18,8 +18,9 @@ export async function processReplyContent(message) {
   if (truncated !== cleaned) {
     secondProcess = secondProcess.replace(/<[^<>]*…$/, "").replace(/[\s\u200b]+$/, "");
     if (!secondProcess.endsWith("…")) secondProcess += "…";
+    if ((secondProcess.match(/\|\|/g)?.length ?? 0) % 2 !== 0) secondProcess += "||";
   }
-  if (!secondProcess.endsWith("…") && message.content.split("\n").length > 1) {
+  if (truncated === cleaned && message.content.split("\n").length > 1) {
     secondProcess += "…";
   }
   secondProcess = secondProcess.replace(/^[\s\u200b]*@+[\s\u200b]*/, "");
