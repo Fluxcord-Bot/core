@@ -168,7 +168,7 @@ async function replyLineFor(target, refMessageId, refMessage) {
   }
 
   if (refMessage) {
-    const authorLabel = `${indicatorPrefix("discord", target.nameIndicator)}@${refMessage.author?.tag ?? "unknown-user"}`;
+    const authorLabel = `@${refMessage.author?.tag ?? "unknown-user"}`;
     const body = refMessage ? await processReplyContent(refMessage) : "*original message*";
     if (isFluxerTarget) {
       return `${linePrefix}${authorLabel}: ${body}\n`;

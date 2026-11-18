@@ -1,10 +1,13 @@
 import { MessageLink } from "../../db/index.js";
 import { Op } from "sequelize";
 import { sendFluxerWebhook } from "../FluxerWebhookSend.js";
-import { getDiscordWebhook } from "../Webhooks.js";
+import { getDiscordWebhook, hasFluxerWebhook, invalidateFluxerWebhookCache } from "../Webhooks.js";
+import { createWebhookFor } from "../SetupHelper.js";
+import { BridgeEndpoint } from "../../db/index.js";
 import { resolveDiscordThreadChannel } from "../DiscordThreadResolver.js";
 import { maybePublishDiscordMessage, maybePublishFluxerMessage } from "../AnnouncementPublish.js";
 import { resolveFluxerClient } from "../FluxerClients.js";
+import { withFluxerRateLimit } from "../FluxerRateLimit.js";
 import { recordRelay } from "../Bridging.js";
 import { log } from "../Logger.js";
 
@@ -24,6 +27,47 @@ export async function sendToTarget(umsg, targetEndpoint, render, ctx, relayMeta)
     }
   }
   return sent;
+}
+
+export async function sendEarlyBridge(umsg, targetEndpoint, earlyRender, ctx) {
+  try {
+    if (targetEndpoint.platform === "discord") {
+      if (!targetEndpoint.webhookId) return null;
+      const webhook = await getDiscordWebhook(ctx.discordClient, targetEndpoint);
+      if (!webhook) return null;
+      let threadId = null;
+      if (targetEndpoint.kind === "thread") threadId = targetEndpoint.channelId;
+      else
+        threadId = (await resolveDiscordThreadChannel(ctx.discordClient, targetEndpoint.channelId).catch(() => null))?.id ?? null;
+      const msg = await webhook.send({
+        content: earlyRender.content,
+        username: earlyRender.username,
+        avatarURL: earlyRender.avatarURL,
+        allowedMentions: earlyRender.allowedMentions,
+        flags: earlyRender.flags,
+        ...(threadId ? { threadId } : {}),
+      });
+      log("DEBUG", `Pipeline early bridge id=${umsg.id} discordId=${msg.id} endpoint=${targetEndpoint.id}`);
+      return msg;
+    }
+    if (!targetEndpoint.webhookId) return null;
+    const fluxerClient = resolveFluxerClient(targetEndpoint.instanceId);
+    const msg = await sendFluxerWebhook(targetEndpoint.webhookId, targetEndpoint.webhookToken, fluxerClient, {
+      content: earlyRender.content,
+      username: earlyRender.username,
+      avatar_url: earlyRender.avatarURL,
+      files: [],
+      message_reference: earlyRender.messageReferenceOption,
+      allowed_mentions: earlyRender.allowedMentions,
+      flags: earlyRender.flags,
+      ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
+    });
+    log("DEBUG", `Pipeline early bridge id=${umsg.id} fluxerId=${msg?.id} endpoint=${targetEndpoint.id}`);
+    return msg;
+  } catch (e) {
+    log("DEBUG", `Early bridge placeholder failed for ${umsg.id} endpoint=${targetEndpoint.id}`, e);
+    return null;
+  }
 }
 
 async function sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMeta) {
@@ -50,23 +94,50 @@ async function sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMet
     threadId = discordThread?.id ?? null;
   }
 
-  const files = render.attachmentUploads?.length
-    ? render.files.map(f => ({ ...f, attachment: f.attachment instanceof Buffer ? f.attachment : f.attachment }))
-    : render.files;
+  const cloudFiles = render.attachmentUploads?.length ? render.attachmentUploads : null;
 
   let sent;
   try {
-    sent = await webhook.send({
-      content: render.content,
-      embeds: render.embeds,
-      username: render.username,
-      avatarURL: render.avatarURL,
-      files,
-      allowedMentions: render.allowedMentions,
-      flags: render.flags,
-      ...(threadId ? { threadId } : {}),
-      ...(render.attachmentUploads ? { attachments: render.attachmentUploads } : {}),
-    });
+    if (render.editMessageId) {
+      try {
+        sent = await webhook.editMessage(render.editMessageId, {
+          content: render.content,
+          embeds: render.embeds,
+          files: cloudFiles ? [] : render.files,
+          flags: render.flags,
+          ...(cloudFiles ? { attachments: cloudFiles } : {}),
+          ...(threadId ? { threadId } : {}),
+        });
+      } catch (e) {
+        log("DISCORD", `Failed to edit early bridged Discord message ${render.editMessageId}`, e);
+        try {
+          await webhook.deleteMessage(render.editMessageId, threadId ?? undefined);
+        } catch {}
+        sent = await webhook.send({
+          content: render.content,
+          embeds: render.embeds,
+          username: render.username,
+          avatarURL: render.avatarURL,
+          files: cloudFiles ? [] : render.files,
+          allowedMentions: render.allowedMentions,
+          flags: render.flags,
+          ...(threadId ? { threadId } : {}),
+          ...(cloudFiles ? { attachments: cloudFiles } : {}),
+        });
+      }
+    } else {
+      sent = await webhook.send({
+        content: render.content,
+        embeds: render.embeds,
+        username: render.username,
+        avatarURL: render.avatarURL,
+        files: cloudFiles ? [] : render.files,
+        allowedMentions: render.allowedMentions,
+        flags: render.flags,
+        ...(threadId ? { threadId } : {}),
+        ...(cloudFiles ? { attachments: cloudFiles } : {}),
+      });
+    }
   } catch (e) {
     log("DISCORD", `Failed to bridge ${umsg.platform} message ${umsg.id} into Discord channel ${targetEndpoint.channelId}`, e);
     return null;
@@ -82,27 +153,95 @@ async function sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMet
   return sent;
 }
 
+async function ensureFluxerWebhook(targetEndpoint, fluxerClient) {
+  try {
+    const channel = await fluxerClient.channels.fetch(targetEndpoint.channelId);
+    const webhook = await createWebhookFor(
+      channel,
+      "fluxer",
+      `Fluxcord Bridge (${targetEndpoint.channelId} F ${targetEndpoint.guildId})`
+    );
+    if (!webhook) return false;
+    targetEndpoint.webhookId = webhook.id;
+    targetEndpoint.webhookToken = webhook.token;
+    await BridgeEndpoint.update(
+      { webhookId: webhook.id, webhookToken: webhook.token },
+      { where: { id: targetEndpoint.id } }
+    );
+    log("DEBUG", `Pipeline lazily created fluxer webhook endpoint=${targetEndpoint.id} webhook=${webhook.id}`);
+    return true;
+  } catch (e) {
+    log("FLUXER", `Failed to lazily create webhook for endpoint ${targetEndpoint.id}`, e);
+    return false;
+  }
+}
+
 async function sendToFluxerEndpoint(umsg, targetEndpoint, render, relayMeta) {
+  const fluxerClient = resolveFluxerClient(targetEndpoint.instanceId);
+
   if (!targetEndpoint.webhookId) {
-    log("DEBUG", `Pipeline skip target endpoint=${targetEndpoint.id} reason=noFluxerWebhook`);
-    return null;
+    const made = await ensureFluxerWebhook(targetEndpoint, fluxerClient);
+    if (!made) {
+      log("DEBUG", `Pipeline skip target endpoint=${targetEndpoint.id} reason=noFluxerWebhook`);
+      return null;
+    }
   }
 
-  const fluxerClient = resolveFluxerClient(targetEndpoint.instanceId);
+  if (!render.editMessageId) {
+    const webhookExists = await hasFluxerWebhook(fluxerClient, targetEndpoint.channelId, targetEndpoint.webhookId);
+    if (!webhookExists) {
+      invalidateFluxerWebhookCache(targetEndpoint.channelId);
+      const made = await ensureFluxerWebhook(targetEndpoint, fluxerClient);
+      if (!made) {
+        log("DEBUG", `Pipeline skip target endpoint=${targetEndpoint.id} reason=missingFluxerWebhook`);
+        try {
+          await MessageLink.destroy({ where: { linkGroup: relayMeta.linkGroup, endpointId: targetEndpoint.id } });
+        } catch (e) {
+          log("DB", `Failed to clean link rows for missing webhook endpoint ${targetEndpoint.id}`, e);
+        }
+        return null;
+      }
+    }
+  }
 
   let sent;
   try {
-    sent = await sendFluxerWebhook(targetEndpoint.webhookId, targetEndpoint.webhookToken, fluxerClient, {
-      content: render.content,
-      username: render.username,
-      avatar_url: render.avatarURL,
-      embeds: render.embeds,
-      files: render.files,
-      message_reference: render.messageReferenceOption,
-      allowed_mentions: render.allowedMentions,
-      flags: render.flags,
-      ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
-    });
+    if (render.editMessageId) {
+      const threadSuffix = targetEndpoint.kind === "thread" ? `?thread_id=${targetEndpoint.channelId}` : "";
+      try {
+        await withFluxerRateLimit(
+          () =>
+            fluxerClient.rest.patch(
+              `/webhooks/${targetEndpoint.webhookId}/${targetEndpoint.webhookToken}/messages/${render.editMessageId}${threadSuffix}`,
+              {
+                body: {
+                  content: render.content,
+                  embeds: render.embeds,
+                  allowed_mentions: render.allowedMentions,
+                  flags: render.flags,
+                },
+                auth: false,
+              }
+            ),
+          `webhook-patch:${targetEndpoint.webhookId}`
+        );
+      } catch (e) {
+        log("FLUXER", `Failed to edit early bridged Fluxer message ${render.editMessageId}`, e);
+      }
+      sent = { id: render.editMessageId };
+    } else {
+      sent = await sendFluxerWebhook(targetEndpoint.webhookId, targetEndpoint.webhookToken, fluxerClient, {
+        content: render.content,
+        username: render.username,
+        avatar_url: render.avatarURL,
+        embeds: render.embeds,
+        files: render.files,
+        message_reference: render.messageReferenceOption,
+        allowed_mentions: render.allowedMentions,
+        flags: render.flags,
+        ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
+      });
+    }
   } catch (e) {
     if (render.messageReferenceOption && (e?.code === "UNKNOWN_MESSAGE" || e?.code === "MESSAGE_NOT_FOUND")) {
       log("DEBUG", `Pipeline retry without message_reference ${umsg.platform} message ${umsg.id} endpoint=${targetEndpoint.id}`);

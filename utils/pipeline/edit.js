@@ -1,4 +1,5 @@
 import { MessageLink } from "../../db/index.js";
+import { MessageFlags } from "discord.js";
 import { findLinkSiblings } from "../Bridging.js";
 import { canUserBridge } from "../UserOptOut.js";
 import { checkEmbedPerms } from "../CheckManageServerPerms.js";
@@ -29,6 +30,7 @@ function isFluxerUnknownMessageError(error) {
 export async function handleEdit(umsg) {
   if (umsg.guildId == null || !umsg.author) return;
   if (umsg.platform === "discord" && umsg.type === 30) return;
+  if (umsg.platform === "fluxer" && umsg.raw.flags?.has?.(32)) return;
 
   if (!(await canUserBridge(umsg.platform, umsg.author.id, umsg.guildId))) return;
 
@@ -40,6 +42,48 @@ export async function handleEdit(umsg) {
       raw: true,
     });
     if (echoRow) {
+      const suppressed =
+        umsg.platform === "discord"
+          ? Boolean(umsg.raw.flags?.has?.(MessageFlags.SuppressEmbeds))
+          : Boolean(umsg.raw.flags?.has?.(4));
+      const echoLinkRows = await MessageLink.findAll({ where: { messageId: umsg.id }, include: ["endpoint"] });
+      const echoSourceRows = echoLinkRows.filter(
+        row => row.endpoint?.platform === umsg.platform && row.endpoint?.channelId === umsg.channelId
+      );
+      for (const sourceRow of echoSourceRows) {
+        const siblings = await findLinkSiblings(sourceRow.linkGroup);
+        for (const other of siblings.filter(s => s.endpoint?.id !== sourceRow.endpointId)) {
+          const targetEndpoint = other.endpoint;
+          if (!targetEndpoint) continue;
+          try {
+            if (targetEndpoint.platform === "fluxer") {
+              const fluxerClient = resolveFluxerClient(targetEndpoint.instanceId);
+              const current = await withFluxerRateLimit(
+                () => fluxerClient.rest.get(FluxerRoutes.channelMessage(targetEndpoint.channelId, other.messageId)),
+                `channel:${targetEndpoint.channelId}`
+              );
+              const originalFlags = current?.flags ?? 0;
+              if (Boolean(originalFlags & 4) !== suppressed) {
+                await withFluxerRateLimit(
+                  () =>
+                    fluxerClient.rest.patch(FluxerRoutes.channelMessage(targetEndpoint.channelId, other.messageId), {
+                      body: { flags: suppressed ? originalFlags | 4 : originalFlags & ~4 },
+                    }),
+                  `channel:${targetEndpoint.channelId}`
+                );
+              }
+            } else {
+              const channel = await umsg.ctx.discordClient.channels.fetch(targetEndpoint.channelId).catch(() => null);
+              const original = await channel?.messages?.fetch?.(other.messageId).catch(() => null);
+              if (original && original.flags?.has?.(MessageFlags.SuppressEmbeds) !== suppressed) {
+                await original.suppressEmbeds(suppressed);
+              }
+            }
+          } catch (e) {
+            log("DEBUG", `Suppress mirror failed ${umsg.platform} id=${umsg.id} endpoint=${targetEndpoint.id}`, e);
+          }
+        }
+      }
       log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} reason=webhookEcho`);
       return;
     }

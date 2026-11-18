@@ -12,6 +12,7 @@ import { getFluxerInstanceConfig, getFluxerInstances, DiscordEnabled } from "./u
 import { FluxerPinsUpdateHandler } from "./utils/FluxerHandler.js";
 import { DiscordPinsUpdateHandler } from "./utils/DiscordHandler.js";
 import { setPipelineCtx, pipelineCreate, pipelineEdit, pipelineDelete, pipelineBulkDelete } from "./utils/pipeline/adapters.js";
+import { linkedThreadFamilyEndpoints } from "./utils/pipeline/targets.js";
 import { invalidateFluxerWebhookCache } from "./utils/Webhooks.js";
 import { log } from "./utils/Logger.js";
 import fs from "node:fs";
@@ -142,7 +143,7 @@ discordClient.on(DiscordEvents.ThreadCreate, async (thread, newlyCreated) => {
     for (const parentEndpoint of parentEndpoints) {
       const group = await BridgeGroup.findByPk(parentEndpoint.groupId);
       if (!group || group.bridgeType === "fluxer2discord") continue;
-      await autoBridgeDiscordThread(thread, parentEndpoint, discordClient);
+      await autoBridgeDiscordThread(thread, [parentEndpoint], discordClient);
     }
   } catch (e) {
     log("FLUXER", `Failed to auto-bridge Discord thread ${thread.id}`, e);
@@ -195,14 +196,31 @@ discordClient.on(DiscordEvents.TypingStart, async type => {
     const sourceEndpoints = await BridgeEndpoint.findAll({
       where: { platform: "discord", channelId: type.channel.id },
     });
+    log(
+      "DEBUG",
+      `DiscordTyping channel=${type.channel.id} user=${type.user.id} endpoints=${sourceEndpoints.length} enabled=${Config.TypingIndicatorEnabled}`
+    );
     if (!Config.TypingIndicatorEnabled || sourceEndpoints.length === 0) return;
 
     for (const source of sourceEndpoints) {
+      const toggle = await isBridgeToggleEnabled(source, "typingEnabled");
       const group = await BridgeGroup.findByPk(source.groupId);
+      if (!toggle) continue;
       if (!group || group.bridgeType === "fluxer2discord") continue;
-      const targets = await BridgeEndpoint.findAll({
-        where: { groupId: source.groupId, id: { [Op.ne]: source.id } },
-      });
+      let targets;
+      if (source.kind === "thread") {
+        const family = await linkedThreadFamilyEndpoints(source.channelId);
+        targets =
+          family.size > 0
+            ? await BridgeEndpoint.findAll({ where: { id: { [Op.in]: [...family] } } })
+            : await BridgeEndpoint.findAll({
+                where: { groupId: source.groupId, id: { [Op.ne]: source.id } },
+              });
+      } else {
+        targets = await BridgeEndpoint.findAll({
+          where: { groupId: source.groupId, id: { [Op.ne]: source.id }, kind: "channel" },
+        });
+      }
       for (const target of targets) {
         try {
           if (target.platform === "fluxer") {
@@ -306,7 +324,7 @@ function wireFluxerEvents(instanceId, fluxerClient) {
       for (const parentEndpoint of parentEndpoints) {
         const group = await BridgeGroup.findByPk(parentEndpoint.groupId);
         if (!group || group.bridgeType === "discord2fluxer") continue;
-        await autoBridgeFluxerThread(thread, parentEndpoint, discordClient, fluxerClient);
+        await autoBridgeFluxerThread(thread, [parentEndpoint], discordClient, fluxerClient);
       }
     } catch (e) {
       log("DISCORD", `Failed to auto-bridge Fluxer thread ${thread.id}`, e);
@@ -405,14 +423,31 @@ function wireFluxerEvents(instanceId, fluxerClient) {
       const sourceEndpoints = await BridgeEndpoint.findAll({
         where: { platform: "fluxer", channelId: type.channelId, instanceId },
       });
+      log(
+        "DEBUG",
+        `FluxerTyping channel=${type.channelId} user=${type.userId} endpoints=${sourceEndpoints.length} enabled=${Config.TypingIndicatorEnabled}`
+      );
       if (!Config.TypingIndicatorEnabled || sourceEndpoints.length === 0) return;
 
       for (const source of sourceEndpoints) {
+        const toggle = await isBridgeToggleEnabled(source, "typingEnabled");
         const group = await BridgeGroup.findByPk(source.groupId);
+        if (!toggle) continue;
         if (!group || group.bridgeType === "discord2fluxer") continue;
-        const targets = await BridgeEndpoint.findAll({
-          where: { groupId: source.groupId, id: { [Op.ne]: source.id } },
-        });
+        let targets;
+        if (source.kind === "thread") {
+          const family = await linkedThreadFamilyEndpoints(source.channelId);
+          targets =
+            family.size > 0
+              ? await BridgeEndpoint.findAll({ where: { id: { [Op.in]: [...family] } } })
+              : await BridgeEndpoint.findAll({
+                  where: { groupId: source.groupId, id: { [Op.ne]: source.id } },
+                });
+        } else {
+          targets = await BridgeEndpoint.findAll({
+            where: { groupId: source.groupId, id: { [Op.ne]: source.id }, kind: "channel" },
+          });
+        }
         for (const target of targets) {
           try {
             if (target.platform === "discord") {

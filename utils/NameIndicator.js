@@ -1,28 +1,52 @@
-import { GuildMap } from "../db/index.js";
-
-export const NAME_INDICATOR_STYLES = {
-  full: { discord: "[Discord]", fluxer: "[Fluxer]" },
-  short: { discord: "[D]", fluxer: "[F]" },
-};
+import { GuildMap, BridgeEndpoint } from "../db/index.js";
+import { Op } from "sequelize";
+import { getFluxerInstanceName } from "./GetFluxerUrls.js";
 
 const MAX_WEBHOOK_NAME = 80;
 
+function shortIndicator(name) {
+  const caps = (name ?? "").replace(/[^A-Z]/g, "");
+  if (caps.length > 0) return caps;
+  const first = (name ?? "").trim().charAt(0);
+  return first ? first.toUpperCase() : "?";
+}
+
+async function bridgeWebGuildIds(guildIds) {
+  const seed = [...new Set(guildIds.filter(Boolean))];
+  if (seed.length === 0) return [];
+  const own = await BridgeEndpoint.findAll({ where: { guildId: seed }, attributes: ["groupId"], raw: true });
+  const groupIds = [...new Set(own.map(e => e.groupId))];
+  if (groupIds.length === 0) return seed;
+  const others = await BridgeEndpoint.findAll({
+    where: { groupId: groupIds, guildId: { [Op.notIn]: seed } },
+    attributes: ["guildId"],
+    raw: true,
+  });
+  return [...new Set([...seed, ...others.map(e => e.guildId)].filter(Boolean))];
+}
+
 export async function resolveNameIndicator(receiverGuildId, senderGuildId) {
-  const guildIds = [...new Set([receiverGuildId, senderGuildId].filter(Boolean))];
+  const guildIds = await bridgeWebGuildIds([receiverGuildId, senderGuildId]);
   if (guildIds.length === 0) return null;
 
   const rows = await GuildMap.findAll({
     where: { guildId: guildIds },
-    attributes: ["guildId", "nameIndicator"],
+    attributes: ["guildId", "nameIndicator", "guildType", "fluxerInstanceId"],
     raw: true,
   });
+  if (rows.length === 0) return null;
 
-  for (const guildId of guildIds) {
-    const style = NAME_INDICATOR_STYLES[rows.find(x => x.guildId === guildId)?.nameIndicator];
-    if (style) return style;
+  const styleRow = rows.find(x => x.nameIndicator);
+  const style = styleRow?.nameIndicator === "short" ? "short" : "full";
+  const senderRow = (senderGuildId && rows.find(x => x.guildId === senderGuildId)) ?? styleRow ?? rows[0];
+
+  if (senderRow.guildType === "fluxer") {
+    const instanceName = await getFluxerInstanceName(senderRow.fluxerInstanceId ?? "default");
+    if (style === "short") return { discord: "[D]", fluxer: `[${shortIndicator(instanceName)}]` };
+    return { discord: "[Discord]", fluxer: `[${instanceName}]` };
   }
-
-  return null;
+  if (style === "short") return { discord: "[D]", fluxer: "[F]" };
+  return { discord: "[Discord]", fluxer: "[Fluxer]" };
 }
 
 export function indicatorPrefix(platform, indicator) {

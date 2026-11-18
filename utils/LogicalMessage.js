@@ -4,6 +4,7 @@ import { getDiscordWebhook } from "./Webhooks.js";
 import { resolveFluxerClient } from "./FluxerClients.js";
 import { Routes as FluxerRoutes } from "@fluxerjs/core";
 import { withFluxerRateLimit } from "./FluxerRateLimit.js";
+import { discordReplyLine } from "./pipeline/emojiCfg.js";
 import { log } from "./Logger.js";
 
 const replyHeaderRegex = /-# <:reply_l:[^>]+><:reply_r:[^>]+>.*?\(<https:\/\/discord\.com\/channels\/\d+\/\d+\/\d+>\)\n?/;
@@ -94,10 +95,13 @@ export async function rewriteRepliesForDeleted(linkGroup, discordClient) {
       const webhook = await getDiscordWebhook(discordClient, ref.endpoint);
       const message = await webhook.fetchMessage(ref.messageId);
       if (!message?.content || !replyHeaderRegex.test(message.content)) continue;
+      const replyContent = message.content.replace(replyHeaderRegex, "");
       await webhook.editMessage(ref.messageId, {
-        content: message.content.replace(replyHeaderRegex, ""),
+        content: `${discordReplyLine()}*Deleted message*\n${replyContent}`,
         allowedMentions: { parse: [] },
       });
+      ref.replyId = null;
+      await ref.save();
     } catch (e) {
       if (!isDiscordUnknownMessageError(e)) {
         log("BRIDGE", `Failed to rewrite reply header for message ${ref.messageId}`, e);

@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import { BridgeEndpoint, BridgeGroup, MessageLink, VoiceChannelMap } from "../db/index.js";
 import { invalidateFluxerWebhookCache } from "./Webhooks.js";
 import { findOrCreateGuildMap } from "./Bridging.js";
+import { log } from "./Logger.js";
 
 /**
  * @param {any} channel
@@ -22,7 +23,8 @@ export async function createWebhookFor(channel, platform, label) {
     if (!(channel instanceof DiscordGuildChannel)) return null;
     const webhook = await channel.createWebhook({ name: label });
     return { id: webhook.id, token: webhook.token };
-  } catch {
+  } catch (e) {
+    log("WARN", `Failed to create webhook for ${platform} channel ${channel?.id}`, e);
     return null;
   }
 }

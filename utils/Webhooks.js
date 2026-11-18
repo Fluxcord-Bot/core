@@ -42,7 +42,13 @@ function fetchFluxerWebhookIds(fluxerClient, channelId) {
 
   const inflight = withFluxerRateLimit(async () => {
     const channel = fluxerClient.channels.get(channelId) ?? (await fluxerClient.channels.fetch(channelId));
-    return  (channel).fetchWebhooks();
+    const isThread = typeof channel?.isThread === "function" && channel.isThread();
+    const webhookChannelId = isThread ? (channel.parentId ?? channelId) : channelId;
+    const webhookChannel =
+      webhookChannelId !== channelId
+        ? fluxerClient.channels.get(webhookChannelId) ?? (await fluxerClient.channels.fetch(webhookChannelId))
+        : channel;
+    return webhookChannel.fetchWebhooks();
   }, `webhook:${channelId}`)
     .then(webhooks => {
       const ids = new Set(webhooks.map(x => x.id));

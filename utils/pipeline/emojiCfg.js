@@ -32,3 +32,13 @@ export function discordReplyLine() {
 export function replyLineForPlatform(targetPlatform, targetInstanceId = null) {
   return targetPlatform === "fluxer" ? fluxerReplyLine(targetInstanceId ?? "default") : discordReplyLine();
 }
+
+export function loadingEmojiFor(targetPlatform, targetInstanceId = null) {
+  const cfg = fluxcordBotEmojiCfg();
+  if (targetPlatform === "fluxer") {
+    const token = cfg?.fluxerLoadingEmojis?.[targetInstanceId] ?? cfg?.fluxerLoadingEmojis?.default;
+    return token ? `<${token}>` : "⏳";
+  }
+  const token = cfg?.discordLoadingEmoji;
+  return token ? `<a:loading:${token}>` : "⏳";
+}

@@ -1,5 +1,5 @@
 import { MessageType, MessageFlags } from "discord.js";
-import { replyLineForPlatform } from "./emojiCfg.js";
+import { replyLineForPlatform, loadingEmojiFor } from "./emojiCfg.js";
 import { renderReplyLine, findReplyCopy } from "./replies.js";
 import { parseMentions } from "../MessageContentParser.js";
 import { sanitizePings } from "../SanitizePings.js";
@@ -60,22 +60,65 @@ function attachmentUrl(attachment) {
 
 export async function renderIdentity(umsg, nameIndicator) {
   if (!umsg.author) return { username: "Fluxcord", avatarURL: undefined };
+  if (umsg.webhookId) {
+    const fallback = (umsg.author.globalName ?? umsg.author.username ?? "Fluxcord").replace(/^\[[^\]]*\]\s*/, "");
+    return { username: fallback, avatarURL: umsg.raw?.author?.avatarURL?.() ?? undefined };
+  }
+  const memberName = umsg.author.globalName ?? umsg.author.username;
+  let member;
+  try {
+    member =
+      umsg.platform === "fluxer"
+        ? await umsg.raw?.guild?.fetchMember(umsg.author.id)
+        : await umsg.raw?.guild?.members.fetch(umsg.author.id);
+  } catch {
+    member = undefined;
+  }
   if (umsg.platform === "fluxer") {
-    const username = withIndicator(umsg.author.globalName ?? umsg.author.username, "fluxer", nameIndicator);
+    const username = withIndicator(member?.displayName ?? memberName, "fluxer", nameIndicator);
     const mediaBase = (await getFluxerMediaBaseUrl(umsg.instanceId).catch(() => undefined)) ?? Config.FluxerCDNBaseURL;
-    const avatar = umsg.raw?.author?.avatar;
+    const avatar = member?.avatar ?? umsg.raw?.author?.avatar;
     let avatarURL;
     if (avatar) {
       const cdnBase = String(mediaBase).replace(/\/$/, "");
       const extension = avatar.startsWith("a_") ? "gif" : "webp";
-      avatarURL = `${cdnBase}/avatars/${umsg.author.id}/${avatar}.${extension}?size=160`;
+      const path = member?.avatar ? `guilds/${umsg.raw.guild.id}/users/${umsg.author.id}/avatars` : `avatars/${umsg.author.id}`;
+      avatarURL = `${cdnBase}/${path}/${avatar}.${extension}?size=160`;
     } else {
       avatarURL = umsg.raw?.author?.avatarURL?.() ?? undefined;
     }
     return { username, avatarURL };
   }
-  const username = withIndicator(umsg.author.globalName ?? umsg.author.username ?? "Fluxcord", "discord", nameIndicator);
-  return { username, avatarURL: umsg.raw?.author?.avatarURL?.() ?? undefined };
+  const username = withIndicator(member?.displayName ?? memberName ?? "Fluxcord", "discord", nameIndicator);
+  return { username, avatarURL: member?.avatarURL?.() ?? umsg.raw?.author?.avatarURL?.() ?? undefined };
+}
+
+export function countCustomEmojis(content, stickerCount = 0) {
+  if (!content) return stickerCount;
+  const matches = content.match(/<a?:.+?:\d+>/g);
+  return (matches ? matches.length : 0) + stickerCount;
+}
+
+export async function renderEarlyBridge(umsg, targetEndpoint, opts = {}) {
+  const nameIndicator = await resolveNameIndicator(targetEndpoint.guildId, umsg.guildId).catch(() => undefined);
+  const identity = await renderIdentity(umsg, nameIndicator);
+  const { canUserEmbed } = await sourcePermissions(umsg, opts.ctx);
+  const headerPrefix = replyLineForPlatform(targetEndpoint.platform, targetEndpoint.instanceId);
+  const loadingEmoji = loadingEmojiFor(targetEndpoint.platform, targetEndpoint.instanceId);
+  const sourceText = opts.bridgeContent?.messageData?.parsedContent ?? umsg.content ?? "";
+  const loadingText = sourceText.replace(/<a?:.+?:\d+>/g, loadingEmoji) || `${loadingEmoji} Bridging message...`;
+  return {
+    content:
+      (opts.forwarded ? `${headerPrefix}${targetEndpoint.platform === "fluxer" ? "Forwarded" : "Forwarded message"}\n` : "") +
+      loadingText,
+    embeds: [],
+    username: identity.username,
+    avatarURL: identity.avatarURL,
+    files: [],
+    allowedMentions: { parse: [] },
+    flags: canUserEmbed ? undefined : 4,
+    messageReferenceOption: opts.messageReferenceOption ?? null,
+  };
 }
 
 async function renderContent(umsg, targetEndpoint, opts) {
@@ -241,6 +284,12 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
   if (refMessageId && !forwarded) {
     if (targetPlatform === "fluxer") {
       const localReply = await findReplyCopy(targetEndpoint.channelId, refMessageId);
+      log(
+        "DEBUG",
+        `Reply resolve fluxer target endpoint=${targetEndpoint.id} refMessageId=${refMessageId} localReply=${
+          localReply ? `${localReply.messageId}` : "none"
+        }`
+      );
       if (localReply?.messageId && localReply.endpoint?.platform === "fluxer") {
         messageReferenceOption = { message_id: localReply.messageId };
       } else {

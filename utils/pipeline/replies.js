@@ -14,6 +14,12 @@ export async function findReplyCopy(targetChannelId, refMessageId) {
 
 function authorLabelFor(refMessage, targetPlatform, nameIndicator) {
   const author = refMessage?.author;
+  if (refMessage?.webhookId) {
+    const name = author?.globalName ?? author?.username ?? "";
+    if (/^\[[^\]]+\]/.test(name)) {
+      return targetPlatform === "discord" ? name : `@${name}`;
+    }
+  }
   if (targetPlatform === "discord") {
     return `${indicatorPrefix("discord", nameIndicator)}${author?.tag ?? author?.username ?? "unknown-user"}`;
   }

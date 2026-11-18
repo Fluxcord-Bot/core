@@ -38,7 +38,35 @@ export async function handleBulkDelete(platform, channelId, messageIds, ctx) {
 
   const linkGroups = [...new Set(sourceRows.map(row => row.linkGroup))];
   for (const linkGroup of linkGroups) {
+    const siblings = await MessageLink.findAll({ where: { linkGroup }, include: ["endpoint"] });
+    const sourceRowIds = new Set(sourceRows.map(row => row.id));
+    const byTarget = new Map();
+    for (const row of siblings) {
+      if (!row.endpoint || sourceRowIds.has(row.id) || !row.messageId) continue;
+      const key = `${row.endpoint.platform}:${row.endpoint.channelId}`;
+      if (!byTarget.has(key)) byTarget.set(key, { endpoint: row.endpoint, ids: [] });
+      byTarget.get(key).ids.push(row.messageId);
+    }
+    for (const { endpoint, ids } of byTarget.values()) {
+      try {
+        const channel =
+          endpoint.platform === "discord"
+            ? await ctx.discordClient.channels.fetch(endpoint.channelId).catch(() => null)
+            : await resolveFluxerClient(endpoint.instanceId)
+                .channels.fetch(endpoint.channelId)
+                .catch(() => null);
+        if (!channel?.isSendable?.()) continue;
+        const notice = await channel.send({ content: "Bridging bulk deletes, please wait..." });
+        try {
+          await channel.bulkDelete(ids);
+        } catch {}
+        await notice.delete().catch(() => {});
+      } catch (e) {
+        log("BRIDGE", `Bulk delete mirror failed on ${endpoint.platform} channel ${endpoint.channelId}`, e);
+      }
+    }
     await deleteLogicalMessage(linkGroup, ctx.discordClient);
+    await rewriteRepliesForDeleted(linkGroup, ctx.discordClient);
   }
 }
 

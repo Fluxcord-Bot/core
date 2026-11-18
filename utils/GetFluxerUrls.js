@@ -71,4 +71,12 @@ export async function getFluxerInviteBaseUrl(instanceId = "default") {
   return endpoints.invite;
 }
 
+/**
+ * @param {string} [instanceId]
+ */
+export async function getFluxerInstanceName(instanceId = "default") {
+  const json = await getWellknownFluxer(instanceId);
+  return json?.app_public?.branding?.product_name ?? "Fluxer";
+}
+
 void DefaultConfig;

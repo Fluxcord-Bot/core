@@ -45,3 +45,11 @@ export async function linkedGroupIds(linkGroup, endpoints) {
   const linked = new Set(rows.map(r => r.endpointId));
   return [...new Set(endpoints.filter(e => linked.has(e.id)).map(e => e.groupId))];
 }
+
+export async function linkedThreadFamilyEndpoints(threadId) {
+  const starterRows = await MessageLink.findAll({ where: { messageId: threadId }, attributes: ["linkGroup"], raw: true });
+  const groups = [...new Set(starterRows.map(r => r.linkGroup))];
+  if (groups.length === 0) return new Set();
+  const rows = await MessageLink.findAll({ where: { linkGroup: { [Op.in]: groups } }, include: ["endpoint"] });
+  return new Set(rows.map(r => r.endpoint).filter(e => e?.kind === "thread").map(e => e.id));
+}

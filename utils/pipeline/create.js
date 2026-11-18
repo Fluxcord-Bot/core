@@ -1,4 +1,6 @@
-import { MessageLink } from "../../db/index.js";
+import { MessageLink, BridgeEndpoint, BridgeGroup } from "../../db/index.js";
+import { MessageType } from "discord.js";
+import { sendErrorMessage } from "../SendErrorMessage.js";
 import { findEndpoints, newLinkGroup, ensureLink } from "../Bridging.js";
 import { waitForMessageMap } from "../WaitForMessageMap.js";
 import { canUserBridge, promptOptedOutUserOnFirstMessage } from "../UserOptOut.js";
@@ -7,19 +9,42 @@ import { getGuildPrefix } from "../GetGuildPrefix.js";
 import { CommandHandler } from "../CommandHandler.js";
 import { cacheUser } from "../MentionResolver.js";
 import { log } from "../Logger.js";
-import { waitForPendingMirror } from "../ThreadMirror.js";
-import { collectTargets } from "./targets.js";
+import {
+  waitForPendingMirror,
+  autoBridgeDiscordThread,
+  autoBridgeFluxerThread,
+  backfillMirroredThread,
+} from "../ThreadMirror.js";
+import { collectTargets, linkedThreadFamilyEndpoints } from "./targets.js";
 import { classifyWebhookMessage, propagateRelayEcho } from "./relay.js";
-import { renderForTarget } from "./render.js";
-import { sendToTarget } from "./send.js";
+import { renderForTarget, renderEarlyBridge, countCustomEmojis } from "./render.js";
+import { sendToTarget, sendEarlyBridge } from "./send.js";
 import { shouldSkipMessageType } from "./UnifiedMessage.js";
 import { resolveDiscordReference, resolveFluxerReference } from "./references.js";
+import { isFluxerRateLimited } from "../FluxerRateLimit.js";
+import { resolveFluxerClient } from "../FluxerClients.js";
 import { attemptParseBridgedMessage } from "../MessageContentParser.js";
 
 export async function handleCreate(umsg, options = {}) {
   if (umsg.guildId == null) return;
   if (shouldSkipMessageType(umsg.platform, umsg.type)) return;
   if (umsg.platform === "fluxer" && umsg.id === umsg.channelId) return;
+  if (umsg.platform === "discord" && umsg.id === umsg.channelId && umsg.raw?.channel?.isThread?.()) {
+    log("DEBUG", `Create skip discord id=${umsg.id} reason=forumStarter`);
+    return;
+  }
+
+  if (umsg.platform === "discord" && umsg.type === MessageType.ChatInputCommand && umsg.raw.flags?.has?.("Loading")) {
+    log("DEBUG", `Create defer id=${umsg.id} reason=loadingInteraction`);
+    setTimeout(async () => {
+      try {
+        await pipelineCreate(umsg.raw, { instanceId: umsg.instanceId });
+      } catch (e) {
+        await sendErrorMessage(umsg.raw, umsg.ctx.discordClient, e);
+      }
+    }, 5000);
+    return;
+  }
 
   cacheUser(umsg.raw.author, umsg.platform);
 
@@ -47,6 +72,9 @@ export async function handleCreate(umsg, options = {}) {
     if (pending?.length) {
       endpoints = pending;
       log("DEBUG", `Create ${umsg.platform} id=${umsg.id} resolved pending mirror for thread ${umsg.channelId}`);
+    } else {
+      const mirrored = await mirrorExistingThreadForCreate(umsg);
+      if (mirrored) return;
     }
   }
 
@@ -74,16 +102,32 @@ export async function handleCreate(umsg, options = {}) {
 
   const kind = endpoints.some(e => e.kind === "thread") ? "thread" : "channel";
 
+  const bridgeContent =
+    umsg.platform === "discord" ? attemptParseBridgedMessage(umsg.raw) : { messageData: { parsedContent: umsg.content } };
+
   let refMessageId = null;
   let refMessage = null;
   if (umsg.reference && !umsg.reference.forwarded && !umsg.flags.crosspost) {
     refMessageId = umsg.reference.messageId;
+  } else if (
+    umsg.platform === "discord" &&
+    (bridgeContent?.isBridge || bridgeContent?.isProxy) &&
+    bridgeContent?.messageData?.messageId
+  ) {
+    refMessageId = bridgeContent.messageData.messageId;
   }
   if (refMessageId) {
     refMessage =
       umsg.platform === "fluxer"
         ? await resolveFluxerReference(umsg.raw, umsg.client)
         : await resolveDiscordReference(umsg.raw, umsg.client);
+    if (!refMessage) refMessage = await resolveRefMessageById(refMessageId, umsg);
+    log(
+      "DEBUG",
+      `Create reply ${umsg.platform} id=${umsg.id} refMessageId=${refMessageId} refMessage=${
+        refMessage ? `${refMessage.platform === "fluxer" ? refMessage.id : refMessage.id}` : "none"
+      }`
+    );
     await waitForMessageMap(
       umsg.platform,
       refMessageId,
@@ -92,9 +136,6 @@ export async function handleCreate(umsg, options = {}) {
       umsg.guildId
     );
   }
-
-  const bridgeContent =
-    umsg.platform === "discord" ? attemptParseBridgedMessage(umsg.raw) : { messageData: { parsedContent: umsg.content } };
 
   const linkGroup = newLinkGroup();
   for (const e of endpoints) {
@@ -112,9 +153,24 @@ export async function handleCreate(umsg, options = {}) {
   }
 
   const targets = await collectTargets(endpoints, umsg.platform, { kind, excludeChannelId: umsg.channelId });
+  let filteredTargets = targets;
+  if (kind === "thread") {
+    const family = await linkedThreadFamilyEndpoints(umsg.channelId);
+    if (family.size > 0) {
+      filteredTargets = targets
+        .map(entry => ({ ...entry, endpoints: entry.endpoints.filter(e => family.has(e.id)) }))
+        .filter(entry => entry.endpoints.length > 0);
+    }
+  }
+
+  const emojiCount = countCustomEmojis(
+    bridgeContent?.messageData?.parsedContent ?? umsg.content ?? "",
+    umsg.stickers?.length ?? 0
+  );
 
   let sentAny = false;
-  for (const entry of targets) {
+  let earlyDone = false;
+  for (const entry of filteredTargets) {
     const targetEndpoint = entry.endpoints.find(e => e.webhookId) ?? entry.endpoints[0];
 
     let delivered = true;
@@ -135,6 +191,21 @@ export async function handleCreate(umsg, options = {}) {
       ctx: umsg.ctx,
     });
 
+    if (emojiCount >= 3 && !earlyDone && !isFluxerRateLimited(`webhook:${targetEndpoint.webhookId}`)) {
+      const earlyRender = await renderEarlyBridge(umsg, targetEndpoint, {
+        forwarded: Boolean(umsg.forwardedSnapshot),
+        bridgeContent,
+        ctx: umsg.ctx,
+        messageReferenceOption: umsg.platform === "fluxer" ? null : (render.messageReferenceOption ?? null),
+      });
+      const early = await sendEarlyBridge(umsg, targetEndpoint, earlyRender, umsg.ctx);
+      if (early?.id) {
+        render.editMessageId = early.id;
+        render.messageReferenceOption = null;
+      }
+      earlyDone = true;
+    }
+
     const sent = await sendToTarget(umsg, targetEndpoint, render, umsg.ctx, {
       linkGroup,
       sourceGroupId: options.sourceGroupId ?? null,
@@ -143,5 +214,94 @@ export async function handleCreate(umsg, options = {}) {
     if (sent) sentAny = true;
   }
 
-  if (sentAny) resetBridgeHealth(umsg.guildId);
+  if (sentAny) {
+    resetBridgeHealth(umsg.guildId);
+    scheduleSourceVerification(umsg, bridgeContent?.messageData?.parsedContent ?? umsg.content ?? "");
+  }
+}
+
+async function resolveRefMessageById(messageId, umsg) {
+  try {
+    const row = await MessageLink.findOne({ where: { messageId }, include: ["endpoint"] });
+    if (!row?.endpoint) return null;
+    const ep = row.endpoint;
+    if (ep.platform === "fluxer") {
+      const client = resolveFluxerClient(ep.instanceId);
+      const channel = await client.channels.fetch(ep.channelId);
+      return await channel.messages.fetch(row.messageId);
+    }
+    const channel = await umsg.ctx.discordClient.channels.fetch(ep.channelId);
+    return await channel.messages.fetch(row.messageId);
+  } catch {
+    return null;
+  }
+}
+
+async function mirrorExistingThreadForCreate(umsg) {
+  try {
+    let thread = umsg.raw.channel?.isThread?.() ? umsg.raw.channel : null;
+    if (!thread) thread = await umsg.client.channels.fetch(umsg.channelId).catch(() => null);
+    if (!thread?.isThread?.() || !thread.parentId) return false;
+    if (umsg.platform === "fluxer" && thread.type === 12) return false;
+
+    const parentEndpoints = await findEndpoints(umsg.platform, thread.parentId);
+    if (parentEndpoints.length === 0) return false;
+    const anchor = parentEndpoints[0];
+    const group = await BridgeGroup.findByPk(anchor.groupId ?? anchor.BridgeGroupId);
+    if (!group || (umsg.platform === "fluxer" ? group.bridgeType === "discord2fluxer" : group.bridgeType === "fluxer2discord")) {
+      return false;
+    }
+
+    const made =
+      umsg.platform === "fluxer"
+        ? await autoBridgeFluxerThread(thread, parentEndpoints, umsg.ctx.discordClient, umsg.client)
+        : await autoBridgeDiscordThread(thread, parentEndpoints, umsg.ctx.discordClient);
+    if (!made?.length) return false;
+    log("DEBUG", `Create mirrored on activity thread ${thread.id} count=${made.length}`);
+
+    await backfillMirroredThread(thread, msg => pipelineCreateDynamic(msg, umsg), umsg.guildId);
+    return true;
+  } catch (e) {
+    log("DEBUG", `mirrorExistingThreadForCreate failed ${umsg.platform} thread=${umsg.channelId}`, e);
+    return false;
+  }
+}
+
+async function pipelineCreateDynamic(msg, umsg) {
+  const { pipelineCreate } = await import("./adapters.js");
+  await pipelineCreate(msg, { instanceId: umsg.instanceId });
+}
+
+function isSourceMessageGoneError(e) {
+  return (
+    e?.code === 10008 ||
+    e?.code === "MESSAGE_NOT_FOUND" ||
+    e?.code === "UNKNOWN_MESSAGE" ||
+    e?.status === 404 ||
+    e?.statusCode === 404
+  );
+}
+
+function scheduleSourceVerification(umsg, initialContent) {
+  const checkMsg = async () => {
+    try {
+      const channel = umsg.raw.channel?.fetch ? await umsg.raw.channel.fetch() : umsg.raw.channel;
+      if (!channel?.isTextBased?.() && !channel?.messages) return;
+      const fetched = await channel.messages.fetch(umsg.id);
+      if (fetched.content !== initialContent || fetched.editedAt) {
+        const { pipelineEdit } = await import("./adapters.js");
+        await pipelineEdit(fetched, { instanceId: umsg.instanceId });
+      }
+    } catch (e) {
+      if (isSourceMessageGoneError(e)) {
+        const { pipelineDelete } = await import("./adapters.js");
+        await pipelineDelete(umsg.raw, { instanceId: umsg.instanceId });
+        return;
+      }
+      log("DEBUG", `Source message verification failed ${umsg.platform} id=${umsg.id}`, e);
+    }
+  };
+  setTimeout(checkMsg, 1000);
+  setTimeout(checkMsg, 2500);
+  setTimeout(checkMsg, 5000);
 }

@@ -1,7 +1,9 @@
 import { EmbedBuilder } from "@fluxerjs/core";
 import { GuildMap, MessageLink } from "../db/index.js";
+import { findLinkSiblings } from "./Bridging.js";
 import { genMsgLink } from "./GenMsgLink.js";
 import { resolveFluxerClient } from "./FluxerClients.js";
+import { log } from "./Logger.js";
 
 export const DEFAULT_INFO_EMOJI = "ℹ️";
 
@@ -31,34 +33,47 @@ export function isInfoReactionEmoji(emojiId, emojiName, configured) {
  * @param {import("discord.js").Client} discordClient
  */
 export async function sendBridgeInfo(message, user, discordClient) {
-  const rows = await MessageLink.findAll({ where: { messageId: message.id }, include: ["endpoint"] });
-  const local = rows.find(r => r.endpoint?.channelId === message.channelId) ?? rows[0];
-  if (!local?.endpoint) return;
-
-  const target =
-    rows.find(r => r.endpoint?.platform !== local.endpoint.platform) ?? rows.find(r => r.messageId !== local.messageId);
-  if (!target?.endpoint) return;
-
-  let targetMessage;
-  try {
-    if (target.endpoint.platform === "fluxer") {
-      const channel = await resolveFluxerClient(target.endpoint.instanceId).channels.fetch(target.endpoint.channelId);
-      if (!channel) return;
-      targetMessage = await channel.messages.fetch(target.messageId);
-    } else {
-      const channel = await discordClient.channels.fetch(target.endpoint.channelId);
-      if (!channel) return;
-      targetMessage = await channel.messages.fetch(target.messageId);
-    }
-  } catch {
+  const row = (await MessageLink.findAll({ where: { messageId: message.id }, include: ["endpoint"] })).find(
+    r => r.endpoint?.channelId === message.channelId
+  );
+  if (!row?.endpoint) {
+    log("DEBUG", `BridgeInfo skip message=${message.id} reason=noRows`);
     return;
   }
-  if (!targetMessage) return;
 
+  const siblings = await findLinkSiblings(row.linkGroup);
+  const local = siblings.find(s => s.endpoint?.id === row.endpoint.id) ?? siblings[0];
+  if (siblings.length < 2) {
+    log("DEBUG", `BridgeInfo skip message=${message.id} reason=noTarget`);
+    return;
+  }
+
+  const sourceRow = [...siblings].sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt))[0];
+  let targetMessage;
+  try {
+    if (sourceRow.endpoint.platform === "fluxer") {
+      const channel = await resolveFluxerClient(sourceRow.endpoint.instanceId).channels.fetch(sourceRow.endpoint.channelId);
+      if (!channel) return;
+      targetMessage = await channel.messages.fetch(sourceRow.messageId);
+    } else {
+      const channel = await discordClient.channels.fetch(sourceRow.endpoint.channelId);
+      if (!channel) return;
+      targetMessage = await channel.messages.fetch(sourceRow.messageId);
+    }
+  } catch (e) {
+    log("DEBUG", `BridgeInfo skip message=${message.id} reason=targetFetchFailed`, e);
+    return;
+  }
+  if (!targetMessage) {
+    log("DEBUG", `BridgeInfo skip message=${message.id} reason=noTargetMessage`);
+    return;
+  }
+
+  const platformName = sourceRow.endpoint.platform === "fluxer" ? "Fluxer" : "Discord";
   const embed = new EmbedBuilder();
   embed.setURL(await genMsgLink(message));
   embed.setTitle(`Message ${targetMessage.id} on #${targetMessage.channel.name}`);
-  embed.setDescription(`[Jump to message on original platform](${await genMsgLink(targetMessage)})`);
+  embed.setDescription(`[Jump to message on original platform (${platformName})](${await genMsgLink(targetMessage)})`);
   const author = targetMessage.author;
   embed.addFields({
     name: "Author",

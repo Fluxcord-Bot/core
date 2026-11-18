@@ -8,7 +8,7 @@ import { syncForumTags } from "../../utils/ThreadMirror.js";
 import { Op } from "sequelize";
 import { createBridgeGroup } from "../../utils/SetupHelper.js";
 import { newLinkGroup } from "../../utils/Bridging.js";
-import { instanceIdOfClient } from "../../utils/FluxerClients.js";
+import { instanceIdOfClient, getFluxerClient } from "../../utils/FluxerClients.js";
 import { ChannelType } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
 import { checkBotPermissions } from "../../utils/CheckBotPerms.js";
@@ -78,22 +78,6 @@ silent - skip the "this forum is now bridged" messages on both sides`,
     }
 
     if (!directionOrCode || directionOrCode.length !== 6) {
-      const existing = await BridgeEndpoint.findOne({
-        where: {
-          [Op.or]: [{ platform: "discord", channelId: forum.id }, { platform: "fluxer", channelId: forum.id }],
-          kind: "channel",
-        },
-      });
-
-      if (existing) {
-        await message.reply(
-          "This forum is already bridged. Run `" +
-            Config.BotPrefix +
-            "bridge remove` inside one of its posts to unbridge it first."
-        );
-        return;
-      }
-
       const code = RandomString(6);
 
       PendingSetup.set(code, {
@@ -102,6 +86,7 @@ silent - skip the "this forum is now bridged" messages on both sides`,
         postId: message.channel.id,
         isForum: true,
         isFluxer,
+        instanceId: isFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default",
         silent: silentRequested,
         direction: "both",
       });
@@ -142,115 +127,120 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      if (setup.isFluxer === isFluxer) {
-        await message.reply(`We don't support Fluxer <-> Fluxer or Discord <-> Discord currently.`);
-        PendingSetup.delete(directionOrCode);
-        return;
-      }
+      const samePlatform = setup.isFluxer === isFluxer;
 
       let otherForum;
       try {
-        otherForum = await (isFluxer ? discordClient : fluxerClient).channels.fetch(setup.channelId);
+        const otherClient = setup.isFluxer ? getFluxerClient(setup.instanceId ?? "default") : discordClient;
+        if (!otherClient) {
+          await message.reply("Fluxer instance not connected. Is the bot running for it?");
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
+        otherForum = await otherClient.channels.fetch(setup.channelId);
       } catch {
         await message.reply("Forum not found. Maybe invite the bot?");
         PendingSetup.delete(directionOrCode);
         return;
       }
 
-      const otherOk = isFluxer ? isDiscordForumLike(otherForum) : isFluxerForumLike(otherForum);
+      const otherOk = setup.isFluxer ? isFluxerForumLike(otherForum) : isDiscordForumLike(otherForum);
       if (!otherOk) {
         await message.reply("Both sides need to be forum channels to bridge them.");
         PendingSetup.delete(directionOrCode);
         return;
       }
 
-      const existing = await BridgeEndpoint.findOne({
-        where: {
-          [Op.or]: [
-            { platform: "discord", channelId: forum.id },
-            { platform: "fluxer", channelId: forum.id },
-            { platform: "discord", channelId: otherForum.id },
-            { platform: "fluxer", channelId: otherForum.id },
-          ],
-          kind: "channel",
-        },
-      });
-
-      if (existing) {
-        await message.reply("One of these forums is already bridged. Unbridge it first, then run this command again.");
-        return;
-      }
-
+      const otherNsfwClient = setup.isFluxer ? getFluxerClient(setup.instanceId ?? "default") : discordClient;
       const [forumNsfw, otherForumNsfw] = await Promise.all([
         resolveChannelNsfw(isFluxer ? fluxerClient : discordClient, forum),
-        resolveChannelNsfw(isFluxer ? discordClient : fluxerClient, otherForum),
+        resolveChannelNsfw(otherNsfwClient, otherForum),
       ]);
       if ((forumNsfw && !otherForumNsfw) || (!forumNsfw && otherForumNsfw)) {
         await message.reply("Both forums needs to be set as NSFW to bridge them.");
         return;
       }
 
-      const discordForum = isFluxer ? otherForum : forum;
-      const fluxerForum = isFluxer ? forum : otherForum;
+      const existing = await BridgeEndpoint.findAll({
+        where: {
+          [Op.or]: [
+            { platform: isFluxer ? "fluxer" : "discord", channelId: forum.id, kind: "channel" },
+            { platform: setup.isFluxer ? "fluxer" : "discord", channelId: otherForum.id, kind: "channel" },
+          ],
+        },
+      });
+      const sharedGroup = existing
+        .map(e => e.groupId)
+        .filter(id => existing.filter(x => x.groupId === id).length > 1);
+      if (existing.length > 0 && sharedGroup.length > 0) {
+        await message.reply("One of these forums is already bridged. Unbridge it first, then run this command again.");
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
 
-      const fluxerInstanceId = instanceIdOfClient(fluxerClient) ?? "default";
+      const myForum = forum;
+      const myInstanceId = isFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default";
+      const otherInstanceId = setup.isFluxer ? (setup.instanceId ?? "default") : "default";
+      const myPlatform = isFluxer ? "fluxer" : "discord";
+      const otherPlatform = setup.isFluxer ? "fluxer" : "discord";
+
       const { endpoints } = await createBridgeGroup("both", [
-        { platform: "discord", instanceId: "default", channel: discordForum },
-        { platform: "fluxer", instanceId: fluxerInstanceId, channel: fluxerForum },
+        { platform: myPlatform, instanceId: myInstanceId, channel: myForum },
+        { platform: otherPlatform, instanceId: otherInstanceId, channel: otherForum },
       ]);
 
-      const discordForumEndpoint = endpoints.find(e => e.platform === "discord");
-      const fluxerForumEndpoint = endpoints.find(e => e.platform === "fluxer");
+      const myForumEndpoint = endpoints.find(e => e.platform === myPlatform);
+      const otherForumEndpoint = endpoints.find(e => e.platform === otherPlatform);
 
-      const discordPostId = isFluxer ? setup.postId : message.channelId;
-      const fluxerPostId = isFluxer ? message.channelId : setup.postId;
-      if (discordPostId && fluxerPostId) {
-        const discordPostEndpoint = await BridgeEndpoint.create({
-          platform: "discord",
-          instanceId: "default",
-          channelId: discordPostId,
-          guildId: discordForum.guildId,
-          webhookId: discordForumEndpoint.webhookId,
-          webhookToken: discordForumEndpoint.webhookToken,
+      const myPostId = message.channelId;
+      const otherPostId = setup.postId;
+      if (myPostId && otherPostId) {
+        const myPostEndpoint = await BridgeEndpoint.create({
+          platform: myPlatform,
+          instanceId: myInstanceId,
+          channelId: myPostId,
+          guildId: myForum.guildId,
+          webhookId: myForumEndpoint.webhookId,
+          webhookToken: myForumEndpoint.webhookToken,
           kind: "thread",
           autoMirrored: true,
-          parentEndpointId: discordForumEndpoint.id,
+          parentEndpointId: myForumEndpoint.id,
           tagMap: null,
-          groupId: discordForumEndpoint.groupId,
+          groupId: myForumEndpoint.groupId,
         });
-        const fluxerPostEndpoint = await BridgeEndpoint.create({
-          platform: "fluxer",
-          instanceId: fluxerInstanceId,
-          channelId: fluxerPostId,
-          guildId: fluxerForum.guildId,
-          webhookId: fluxerForumEndpoint.webhookId,
-          webhookToken: fluxerForumEndpoint.webhookToken,
+        const otherPostEndpoint = await BridgeEndpoint.create({
+          platform: otherPlatform,
+          instanceId: otherInstanceId,
+          channelId: otherPostId,
+          guildId: otherForum.guildId,
+          webhookId: otherForumEndpoint.webhookId,
+          webhookToken: otherForumEndpoint.webhookToken,
           kind: "thread",
           autoMirrored: true,
-          parentEndpointId: fluxerForumEndpoint.id,
+          parentEndpointId: otherForumEndpoint.id,
           tagMap: null,
-          groupId: fluxerForumEndpoint.groupId,
+          groupId: otherForumEndpoint.groupId,
         });
 
         const linkGroup = newLinkGroup();
         await MessageLink.create({
           linkGroup,
-          messageId: discordPostId,
+          messageId: myPostId,
           replyId: null,
           authorId: "",
-          endpointId: discordPostEndpoint.id,
+          endpointId: myPostEndpoint.id,
         });
         await MessageLink.create({
           linkGroup,
-          messageId: fluxerPostId,
+          messageId: otherPostId,
           replyId: null,
           authorId: "",
-          endpointId: fluxerPostEndpoint.id,
+          endpointId: otherPostEndpoint.id,
         });
       }
 
-      await syncForumTags(discordForum, "discord", discordClient, fluxerClient);
-      await syncForumTags(fluxerForum, "fluxer", discordClient, fluxerClient);
+      await syncForumTags(myForum, myPlatform, discordClient);
+      await syncForumTags(otherForum, otherPlatform, discordClient);
 
       PendingSetup.delete(directionOrCode);
 

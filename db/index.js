@@ -70,7 +70,7 @@ GuildMap.init(
     typingEnabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     inviteEnabled: {
       type: DataTypes.BOOLEAN,

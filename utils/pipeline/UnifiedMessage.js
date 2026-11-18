@@ -4,7 +4,7 @@ import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment } from "../Spoile
 
 export const DISCORD_SKIP_TYPES = new Set([4, 5, 6, 18, 21, 22, 23, 24]);
 
-const FLUXER_SKIP_TYPES = new Set([4, 5, 6, 18]);
+const FLUXER_SKIP_TYPES = new Set([4, 5, 6, 18, 21]);
 
 export function shouldSkipMessageType(platform, type) {
   if (type == null) return false;
@@ -35,7 +35,7 @@ function normalizeAttachment(attachment, platform) {
 }
 
 function discordReference(message) {
-  const ref = message.messageReference;
+  const ref = message.reference ?? message.messageReference;
   if (!ref) return null;
   return {
     messageId: ref.messageId ?? null,
@@ -86,7 +86,8 @@ export function fromDiscord(message, options = {}) {
     embeds: message.embeds ?? [],
     stickers: message.stickers ?? [],
     reference: discordReference(message),
-    forwardedSnapshot: message.messageReference?.type === 1 ? (message.messageSnapshots?.[0] ?? null) : null,
+    forwardedSnapshot:
+      (message.reference ?? message.messageReference)?.type === 1 ? (message.messageSnapshots?.[0] ?? null) : null,
     flags: discordFlags(message),
     type: message.type ?? 0,
     interaction: message.interaction ?? null,
