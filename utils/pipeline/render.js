@@ -134,10 +134,19 @@ async function renderContent(umsg, targetEndpoint, opts) {
   }
 
   let content = await parseMentions(umsg.raw, parsedSeed ?? null, targetGuild, targetPlatform);
+  if (content.includes("@")) {
+    log(
+      "DEBUG",
+      `MentionDebug src=${umsg.platform}->${targetPlatform} seed=${JSON.stringify(parsedSeed)} afterParse=${JSON.stringify(content)}`
+    );
+  }
   content = sanitizePings(content, canBridgePing && !forwarded);
 
   if (targetGuild) {
     content = await resolveMentions(targetGuild, content);
+    if (content.includes("@")) {
+      log("DEBUG", `MentionDebug resolved=${JSON.stringify(content)}`);
+    }
   }
 
   if (umsg.platform === "fluxer" && targetPlatform === "discord") {
@@ -220,7 +229,8 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
   const files = [];
   const stickerFallbacks = [];
   const stickerLottie = [];
-  for (const sticker of umsg.stickers ?? []) {
+  const stickerList = umsg.stickers?.values ? [...umsg.stickers.values()] : [...(umsg.stickers ?? [])];
+  for (const sticker of stickerList) {
     let stickerUrl = sticker.url ?? null;
     let animated = sticker.format === 2 || sticker.animated === true;
     if (umsg.platform === "fluxer") {
@@ -245,6 +255,14 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
   }
   if (stickerLottie.length > 0) parts.push(`-# Message contains stickers: ${stickerLottie.join(", ")}`);
   if (stickerFallbacks.length > 0) parts.push(stickerFallbacks.join(", "));
+  if (stickerList.length > 0) {
+    log(
+      "DEBUG",
+      `StickerDebug src=${umsg.platform}->${targetPlatform} count=${stickerList.length} stickers=[${stickerList
+        .map(s => `${s.id ?? "?"}:${s.name ?? "?"}:fmt=${s.format ?? "?"}:anim=${s.animated ?? "?"}:url=${s.url ? "yes" : "no"}`)
+        .join(", ")}] files=${files.length} fallbacks=${stickerFallbacks.length} lottie=${stickerLottie.length}`
+    );
+  }
 
   const targetClient = targetPlatform === "fluxer" ? resolveFluxerClient(targetEndpoint.instanceId) : opts.ctx?.discordClient;
 
@@ -296,6 +314,10 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
         replyHeader = `${headerPrefix}Unbridged message\n`;
       }
     } else {
+      let discordGuild = null;
+      if (opts.ctx?.discordClient) {
+        discordGuild = await opts.ctx.discordClient.guilds.fetch(targetEndpoint.guildId).catch(() => null);
+      }
       replyHeader = await renderReplyLine(
         {
           channelId: targetEndpoint.channelId,
@@ -303,6 +325,9 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
           platform: targetPlatform,
           instanceId: targetEndpoint.instanceId,
           nameIndicator,
+          sourcePlatform: umsg.platform,
+          discordClient: opts.ctx?.discordClient,
+          discordGuild,
         },
         refMessageId,
         refMessage
@@ -335,10 +360,19 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
 
   let payloadContent = replyHeader + parts.join("");
   if (!payloadContent.trim() && files.length === 0 && embeds.length === 0) {
+    const rawStickers = umsg.raw?.stickers;
+    log(
+      "DEBUG",
+      `EmptyRender src=${umsg.platform}->${targetPlatform} type=${umsg.type} stickerCount=${umsg.stickers?.length ?? 0} rawStickers=${
+        Array.isArray(rawStickers) ? rawStickers.length : rawStickers?.size ?? "n/a"
+      } stickersCtor=${umsg.stickers?.constructor?.name ?? "none"} sameRef=${umsg.stickers === rawStickers} iterable=${
+        typeof umsg.stickers?.[Symbol.iterator] === "function"
+      } attachments=${umsg.attachments?.length ?? 0} embeds=${umsg.embeds?.length ?? 0} contentLen=${(umsg.content ?? "").length}`
+    );
     payloadContent =
       umsg.platform === "discord" && umsg.raw?.poll
         ? "-# Sent a poll"
-        : umsg.platform === "discord" && umsg.stickers?.length
+        : umsg.platform === "discord" && stickerList.length
           ? "-# Sent an unsupported sticker or empty message"
           : "-# Sent an unsupported message";
   }

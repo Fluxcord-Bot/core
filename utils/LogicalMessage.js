@@ -32,13 +32,22 @@ async function deleteFluxerCopy(endpoint, messageId) {
 }
 
 async function deleteDiscordCopy(discordClient, endpoint, messageId) {
-  if (endpoint.webhookId) {
-    const webhook = getDiscordWebhook(discordClient, endpoint);
-    await webhook.deleteMessage(messageId, endpoint.kind === "thread" ? endpoint.channelId : undefined);
-    return;
+  const channel = await discordClient.channels.fetch(endpoint.channelId).catch(() => null);
+  if (channel?.messages?.delete) {
+    try {
+      await channel.messages.delete(messageId);
+      return;
+    } catch (e) {
+      if (isDiscordUnknownMessageError(e)) return;
+      log(
+        "DEBUG",
+        `Delete discord copy via channel failed endpoint=${endpoint.id} message=${messageId} channel=${endpoint.channelId} code=${e?.code ?? e?.status ?? "n/a"}`
+      );
+    }
   }
-  const channel = await discordClient.channels.fetch(endpoint.channelId);
-  await channel.messages.delete(messageId);
+  if (!endpoint.webhookId) return;
+  const webhook = await getDiscordWebhook(discordClient, endpoint);
+  await webhook.deleteMessage(messageId, endpoint.kind === "thread" ? endpoint.channelId : undefined);
 }
 
 /**

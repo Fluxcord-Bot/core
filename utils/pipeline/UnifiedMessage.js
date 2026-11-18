@@ -1,5 +1,5 @@
 import { Message as DiscordMessage } from "discord.js";
-import { Message as FluxerMessage } from "@fluxerjs/core";
+import { Message as FluxerMessage, PartialMessage as FluxerPartialMessage } from "@fluxerjs/core";
 import { isDiscordSpoilerAttachment, isFluxerSpoilerAttachment } from "../SpoilerAttachments.js";
 
 export const DISCORD_SKIP_TYPES = new Set([4, 5, 6, 18, 21, 22, 23, 24]);
@@ -123,8 +123,35 @@ export function fromFluxer(message, options = {}) {
   };
 }
 
+export function fromFluxerPartial(message, options = {}) {
+  return {
+    platform: "fluxer",
+    instanceId: options.instanceId ?? "default",
+    raw: message,
+    id: message.id,
+    guildId: message.guildId ?? null,
+    channelId: message.channelId,
+    author: normalizeAuthor(message.author),
+    member: null,
+    webhookId: null,
+    content: message.content ?? "",
+    attachments: [],
+    embeds: [],
+    stickers: [],
+    reference: null,
+    forwardedSnapshot: null,
+    flags: { crosspost: false, suppressEmbeds: false, silent: false },
+    type: 0,
+    interaction: null,
+    channel: message.channel ?? null,
+    guild: null,
+    client: message.client,
+  };
+}
+
 export function normalizeMessage(message, options = {}) {
   if (message instanceof DiscordMessage) return fromDiscord(message, options);
   if (message instanceof FluxerMessage) return fromFluxer(message, options);
+  if (message instanceof FluxerPartialMessage) return fromFluxerPartial(message, options);
   return null;
 }

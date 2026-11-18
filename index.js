@@ -382,9 +382,12 @@ function wireFluxerEvents(instanceId, fluxerClient) {
 
   fluxerClient.on(FluxerEvents.MessageUpdate, async (oldMsg, newMsg) => {
     try {
-      await pipelineEdit(oldMsg, { instanceId });
+      const msg = newMsg?.partial
+        ? await (await fluxerClient.channels.fetch(newMsg.channelId)).messages.fetch(newMsg.id)
+        : (newMsg ?? oldMsg);
+      await pipelineEdit(msg, { instanceId });
     } catch (e) {
-      if (newMsg.partial) {
+      if (newMsg?.partial) {
         log("FLUXER", "An error occurred", e);
       } else {
         await sendErrorMessage(newMsg, discordClient, e);

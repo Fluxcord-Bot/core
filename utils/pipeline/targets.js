@@ -40,10 +40,9 @@ export function channelEndpoints(endpoint) {
   return findEndpoints(endpoint.platform, endpoint.channelId, { raw: true });
 }
 
-export async function linkedGroupIds(linkGroup, endpoints) {
-  const rows = await MessageLink.findAll({ where: { linkGroup }, attributes: ["endpointId"], raw: true });
-  const linked = new Set(rows.map(r => r.endpointId));
-  return [...new Set(endpoints.filter(e => linked.has(e.id)).map(e => e.groupId))];
+export async function linkedGroupIds(linkGroup) {
+  const rows = await MessageLink.findAll({ where: { linkGroup }, include: ["endpoint"] });
+  return [...new Set(rows.map(r => r.endpoint?.groupId).filter(g => g != null))];
 }
 
 export async function linkedThreadFamilyEndpoints(threadId) {

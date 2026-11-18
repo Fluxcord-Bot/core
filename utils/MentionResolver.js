@@ -18,6 +18,11 @@ function tagOf(user, platform) {
   return disc === hidden ? name : `${name}#${disc}`;
 }
 
+function keyFor(platform, username, discriminator) {
+  if (platform === "discord") return username.toLowerCase();
+  return tagOf({ username, discriminator }, platform);
+}
+
 function trimCache() {
   if (idCache.size <= 5000) return;
   const oldestId = idCache.keys().next().value;
@@ -65,7 +70,7 @@ function hitToUser(hit) {
 export async function resolveUsername(guild, username, discriminator) {
   const platform = platformOf(guild);
   const name = username.toLowerCase();
-  const key = tagOf({ username, discriminator }, platform);
+  const key = keyFor(platform, username, discriminator);
 
   const cachedId = usernameCache.get(key);
   if (cachedId) {
@@ -82,7 +87,9 @@ export async function resolveUsername(guild, username, discriminator) {
   for (const hit of hits) {
     const parsed = hitToUser(hit);
     if (!parsed) continue;
-    if (discriminator) {
+    if (platform === "discord") {
+      if (parsed.user.username.toLowerCase() !== name) continue;
+    } else if (discriminator) {
       if (tagOf(parsed.user, platform) !== key) continue;
     } else {
       if (parsed.user.username.toLowerCase() !== name) continue;
@@ -115,7 +122,7 @@ export async function resolveMentions(guild, content) {
   const wanted = new Map();
   for (const [, username, discriminator] of content.matchAll(mentionRegex)) {
     if (skipNames.includes(username.toLowerCase())) continue;
-    const key = tagOf({ username, discriminator }, platform);
+    const key = keyFor(platform, username, discriminator);
     if (!wanted.has(key)) wanted.set(key, { username, discriminator });
   }
   if (wanted.size === 0) return content;

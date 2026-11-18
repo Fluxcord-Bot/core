@@ -12,6 +12,9 @@ import { recordRelay } from "../Bridging.js";
 import { log } from "../Logger.js";
 
 export async function sendToTarget(umsg, targetEndpoint, render, ctx, relayMeta) {
+  if (targetEndpoint.webhookId) {
+    recordRelay(targetEndpoint.id, targetEndpoint.webhookId, relayMeta.linkGroup, relayMeta.sourceGroupId ?? null);
+  }
   const sent =
     targetEndpoint.platform === "discord"
       ? await sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMeta)
@@ -25,6 +28,15 @@ export async function sendToTarget(umsg, targetEndpoint, render, ctx, relayMeta)
     } catch (e) {
       log("DB", `Failed to backfill copy id for endpoint ${targetEndpoint.id}`, e);
     }
+    try {
+      const rows = await MessageLink.findAll({ where: { linkGroup: relayMeta.linkGroup }, raw: true });
+      log(
+        "DEBUG",
+        `LinkState group=${relayMeta.linkGroup} afterSend endpoint=${targetEndpoint.id} sentId=${sent.id} rows=[${rows
+          .map(r => `${r.endpointId}:${r.messageId}`)
+          .join(", ")}]`
+      );
+    } catch {}
   }
   return sent;
 }

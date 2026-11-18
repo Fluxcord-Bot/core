@@ -65,6 +65,10 @@ export async function handleCreate(umsg, options = {}) {
     return;
   }
 
+  if (umsg.raw?.channel?.isThread?.()) {
+    await waitForPendingMirror(umsg.platform, umsg.channelId);
+  }
+
   let endpoints = await findEndpoints(umsg.platform, umsg.channelId);
 
   if (endpoints.length === 0 && umsg.raw?.channel?.isThread?.()) {
@@ -84,6 +88,10 @@ export async function handleCreate(umsg, options = {}) {
   }
 
   const echo = classifyWebhookMessage(umsg, endpoints);
+  log(
+    "DEBUG",
+    `Echo classify ${umsg.platform} id=${umsg.id} kind=${echo.kind} webhookId=${umsg.webhookId ?? "null"} authorId=${umsg.author?.id ?? "null"} endpointCount=${endpoints.length} matched=${echo.relayEndpoint?.id ?? "none"} relayRecord=${Boolean(echo.relay)}`
+  );
   if (echo.kind === "echo") {
     await propagateRelayEcho(umsg, echo.relayEndpoint, echo.relay, umsg.ctx);
     return;
@@ -165,20 +173,24 @@ export async function handleCreate(umsg, options = {}) {
 
   const emojiCount = countCustomEmojis(
     bridgeContent?.messageData?.parsedContent ?? umsg.content ?? "",
-    umsg.stickers?.length ?? 0
+    umsg.stickers?.values ? umsg.stickers.size : (umsg.stickers?.length ?? 0)
   );
 
   let sentAny = false;
   let earlyDone = false;
+  const deliveredFlags = new Map();
+  for (const entry of filteredTargets) {
+    const targetEndpoint = entry.endpoints.find(e => e.webhookId) ?? entry.endpoints[0];
+    for (const endpoint of entry.endpoints) {
+      const existing = await ensureLink(linkGroup, endpoint.id, umsg.id, refMessageId, umsg.author?.id);
+      if (existing && endpoint.id === targetEndpoint.id) deliveredFlags.set(entry.key, false);
+    }
+  }
+
   for (const entry of filteredTargets) {
     const targetEndpoint = entry.endpoints.find(e => e.webhookId) ?? entry.endpoints[0];
 
-    let delivered = true;
-    for (const endpoint of entry.endpoints) {
-      const existing = await ensureLink(linkGroup, endpoint.id, umsg.id, refMessageId, umsg.author?.id);
-      if (existing && endpoint.id === targetEndpoint.id) delivered = false;
-    }
-    if (!delivered) {
+    if (deliveredFlags.get(entry.key) === false) {
       log("DEBUG", `Create skip target endpoint=${targetEndpoint.id} message=${umsg.id} reason=alreadyLinked`);
       continue;
     }

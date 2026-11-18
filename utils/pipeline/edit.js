@@ -28,11 +28,27 @@ function isFluxerUnknownMessageError(error) {
 }
 
 export async function handleEdit(umsg) {
-  if (umsg.guildId == null || !umsg.author) return;
-  if (umsg.platform === "discord" && umsg.type === 30) return;
-  if (umsg.platform === "fluxer" && umsg.raw.flags?.has?.(32)) return;
+  if (umsg.guildId == null || !umsg.author) {
+    log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} reason=noGuildOrAuthor guildId=${umsg.guildId} author=${Boolean(umsg.author)}`);
+    return;
+  }
+  if (umsg.platform === "discord" && umsg.type === 30) {
+    log("DEBUG", `Edit skip discord id=${umsg.id} reason=type30`);
+    return;
+  }
+  if (umsg.platform === "fluxer" && umsg.raw.flags?.has?.(32)) {
+    log("DEBUG", `Edit skip fluxer id=${umsg.id} reason=flag32`);
+    return;
+  }
+  log(
+    "DEBUG",
+    `Edit event ${umsg.platform} id=${umsg.id} channel=${umsg.channelId} author=${umsg.author.id} type=${umsg.type} contentLen=${(umsg.content ?? "").length}`
+  );
 
-  if (!(await canUserBridge(umsg.platform, umsg.author.id, umsg.guildId))) return;
+  if (!(await canUserBridge(umsg.platform, umsg.author.id, umsg.guildId))) {
+    log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} reason=optedOut`);
+    return;
+  }
 
   const relayWebhookId = umsg.platform === "fluxer" ? (umsg.webhookId ?? umsg.author.id ?? null) : (umsg.webhookId ?? null);
   if (relayWebhookId) {
@@ -124,6 +140,10 @@ export async function handleEdit(umsg) {
             refMessage: refMessageForUpdate,
             ctx: umsg.ctx,
           });
+          log(
+            "DEBUG",
+            `Edit target ${umsg.platform} id=${umsg.id} endpoint=${targetEndpoint.id} platform=${targetEndpoint.platform} instance=${targetEndpoint.instanceId ?? "default"} targetMsg=${other.messageId} contentLen=${render.content.length} embeds=${render.embeds.length} files=${render.files.length}`
+          );
 
           try {
             if (targetEndpoint.platform === "fluxer") {
@@ -145,7 +165,7 @@ export async function handleEdit(umsg) {
                   content: render.content,
                   embeds: render.embeds,
                   flags: nextFlags,
-                });
+                }, { threadId: targetEndpoint.kind === "thread" ? targetEndpoint.channelId : undefined });
               } else {
                 await withFluxerRateLimit(
                   () =>
@@ -174,6 +194,11 @@ export async function handleEdit(umsg) {
           } catch (e) {
             if (!isDiscordUnknownMessageError(e) && !isFluxerUnknownMessageError(e) && !isFluxerRateLimitError(e)) {
               log("BRIDGE", `Failed to edit copy of message ${umsg.id} on ${targetEndpoint.platform}`, e);
+            } else {
+              log(
+                "DEBUG",
+                `Edit failed ${umsg.platform} id=${umsg.id} endpoint=${targetEndpoint.id} reason=unknownMessageOrRateLimit code=${e?.code ?? e?.status ?? "n/a"}`
+              );
             }
           }
         });

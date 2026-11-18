@@ -20,6 +20,12 @@ async function getFluxerGuildRoles(guild) {
   return entry.roles;
 }
 
+async function getGuildRoles(guild) {
+  if (!guild) return null;
+  if (typeof guild.fetchRoles === "function") return getFluxerGuildRoles(guild);
+  return guild.roles.cache.size > 0 ? guild.roles.cache : await guild.roles.fetch();
+}
+
 async function getFluxerGuildChannels(guild) {
   const entry = getFluxerGuildCacheEntry(guild.id);
   if (!entry.channels) entry.channels = guild.channels.size > 0 ? guild.channels : await guild.fetchChannels();
@@ -80,7 +86,7 @@ export async function parseMentions(message, content, otherSideGuild, targetPlat
   if (message.mentions instanceof MessageMentions) {
     for (const v of message.mentions.channels.values()) {
       if (v.isDMBased()) continue;
-      const mapped = await crossSideChannelId("discord", v.id, "fluxer");
+      const mapped = await crossSideChannelId("discord", v.id, targetPlatform);
       res = res.replaceAll(`<#${v.id}>`, mapped ? `<#${mapped}>` : `#${v.name}`);
     }
 
@@ -90,7 +96,7 @@ export async function parseMentions(message, content, otherSideGuild, targetPlat
 
     const whitelist = [];
 
-    const roles = await getFluxerGuildRoles(otherSideGuild);
+    const roles = await getGuildRoles(otherSideGuild);
     message.mentions.roles.forEach(v => {
       res = res.replaceAll(
         `<@&${v.id}>`,
@@ -131,7 +137,7 @@ async function parseRolesAndChannels(content, guildId, fluxerClient, otherSideGu
   if (guild) {
     const roles = await getFluxerGuildRoles(guild);
     const channels = await getFluxerGuildChannels(guild);
-    const otherRoles = otherSideGuild.roles.cache.size > 0 ? otherSideGuild.roles.cache : await otherSideGuild.roles.fetch();
+    const otherRoles = await getGuildRoles(otherSideGuild);
     const whitelist = [];
 
     roles.forEach(v => {

@@ -10,11 +10,20 @@ export async function handleDelete(umsg) {
 
   const sourceRows = rows.filter(row => row.endpoint?.platform === umsg.platform && row.endpoint?.channelId === umsg.channelId);
   if (sourceRows.length === 0) {
-    log("DEBUG", `Delete skip ${umsg.platform} id=${umsg.id} reason=unbridgedMessage`);
+    log(
+      "DEBUG",
+      `Delete skip ${umsg.platform} id=${umsg.id} channel=${umsg.channelId} reason=unbridgedMessage totalLinkRows=${rows.length} rowEndpoints=[${rows
+        .map(r => `${r.endpoint?.platform}:${r.endpoint?.channelId}`)
+        .join(", ")}]`
+    );
     return;
   }
 
   const linkGroups = [...new Set(sourceRows.map(row => row.linkGroup))];
+  log(
+    "DEBUG",
+    `Delete applied ${umsg.platform} id=${umsg.id} channel=${umsg.channelId} groups=[${linkGroups.join(", ")}] siblings=${rows.length}`
+  );
   for (const linkGroup of linkGroups) {
     await deleteLogicalMessage(linkGroup, umsg.ctx.discordClient);
     await rewriteRepliesForDeleted(linkGroup, umsg.ctx.discordClient);

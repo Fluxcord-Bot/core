@@ -212,6 +212,9 @@ MessageLink.belongsTo(BridgeEndpoint, {
   foreignKey: "endpointId",
   as: "endpoint",
 });
+MessageLink.addHook("beforeBulkDestroy", options => {
+  console.log(`[LinkTrace] MessageLink.destroy where=${JSON.stringify(options.where ?? null)} stack=${new Error().stack?.split("\n").slice(2, 6).join(" | ")}`);
+});
 BridgeEndpoint.hasMany(MessageLink, {
   foreignKey: "endpointId",
   as: "messageLinks",

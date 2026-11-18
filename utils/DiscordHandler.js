@@ -612,7 +612,7 @@ async function sendToFluxerTarget(
       await resolveMentions(
         otherSideGuild,
         sanitizePings(
-          await parseMentions(source, bridgeContent.messageData.parsedContent, otherSideGuild),
+          await parseMentions(source, bridgeContent.messageData.parsedContent, otherSideGuild, "fluxer"),
           canBridgePing && !forwardedMessage
         )
       ),
@@ -1056,7 +1056,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, fluxerClientDe
             await parseDiscordEmojiToFluxer(
               await resolveMentions(
                 otherSideGuild,
-                sanitizePings(await parseMentions(newMsg, bridgeContent.messageData.parsedContent, otherSideGuild), canBridgePing)
+                sanitizePings(await parseMentions(newMsg, bridgeContent.messageData.parsedContent, otherSideGuild, "fluxer"), canBridgePing)
               ),
               fluxerClient,
               targetEndpoint.guildId

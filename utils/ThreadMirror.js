@@ -357,7 +357,82 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
   const isForumParent =
     typeof targetParent.isForum === "function" &&
     (targetParent.isForum() || (typeof targetParent.isMedia === "function" && targetParent.isMedia()));
-  if (!isForumParent) return made;
+
+  if (!isForumParent) {
+    let newThreadId = null;
+    const starterLink = await MessageLink.findOne({ where: { messageId: thread.id, endpointId: parentEndpoint.id } });
+    if (starterLink) {
+      const targetStarterLink = await MessageLink.findOne({
+        where: { linkGroup: starterLink.linkGroup, endpointId: targetParentEndpoint.id },
+      });
+      if (targetStarterLink) {
+        try {
+          const starterMessage = await targetParent.messages.fetch(targetStarterLink.messageId);
+          selfCreatedThreads.add("fluxer:" + targetStarterLink.messageId);
+          const attached = await starterMessage.startThread({ name: thread.name.slice(0, 100) });
+          newThreadId = attached.id;
+          log("DEBUG", `autoBridgeFluxerThread attached to Fluxer message ${targetStarterLink.messageId}`);
+        } catch (e) {
+          if (e?.code === "THREAD_ALREADY_CREATED_FOR_MESSAGE") {
+            log("DEBUG", `autoBridgeFluxerThread skip id=${thread.id} reason=fluxerThreadAlreadyAttached`);
+            return made;
+          }
+          log(
+            "FLUXER",
+            `Couldn't attach mirrored thread to Fluxer message ${targetStarterLink.messageId}, creating a standalone thread`,
+            e
+          );
+        }
+      }
+    }
+    if (!newThreadId) {
+      let resolveSelfCreate;
+      markSelfCreate(
+        `fluxer:${targetParentEndpoint.channelId}`,
+        new Promise(r => {
+          resolveSelfCreate = r;
+        })
+      );
+      const created = await targetParent.threads.create({
+        name: thread.name.slice(0, 100),
+        type: thread.type === 10 ? FluxerChannelType.AnnouncementThread : FluxerChannelType.PublicThread,
+      });
+      resolveSelfCreate(created.id);
+      newThreadId = created.id;
+    }
+
+    selfCreatedThreads.add("fluxer:" + newThreadId);
+    try {
+      const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
+        platform: "fluxer",
+        instanceId: parentEndpoint.instanceId,
+        channelId: thread.id,
+        guildId: parentEndpoint.guildId,
+        webhookId: parentEndpoint.webhookId,
+        webhookToken: parentEndpoint.webhookToken,
+        parentEndpointId: parentEndpoint.id,
+      });
+      const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
+        platform: "fluxer",
+        instanceId: targetParentEndpoint.instanceId,
+        channelId: newThreadId,
+        guildId: targetParentEndpoint.guildId,
+        webhookId: targetParentEndpoint.webhookId,
+        webhookToken: targetParentEndpoint.webhookToken,
+        parentEndpointId: targetParentEndpoint.id,
+      });
+      made.push(srcRow, dstRow);
+      log(
+        "DEBUG",
+        `autoBridgeFluxerThread mirrored fluxer=${thread.id} -> ${newThreadId} instance=${targetParentEndpoint.instanceId ?? "default"}`
+      );
+      await ensureThreadFamilyLink(srcRow, thread.id, dstRow, newThreadId);
+    } finally {
+      selfCreatedThreads.delete("fluxer:" + newThreadId);
+    }
+
+    return made;
+  }
 
   const headMessage = await fetchStarterWithRetry(() =>
     srcClient.channels.fetch(thread.id).then(c => c.messages.fetch(thread.id))
@@ -498,7 +573,86 @@ async function mirrorDiscordThreadToDiscord(thread, parentEndpoint, targetParent
   if (!targetParent) return made;
   const isForumParent =
     targetParent.type === DiscordChannelType.GuildForum || targetParent.type === DiscordChannelType.GuildMedia;
-  if (!isForumParent) return made;
+
+  if (!isForumParent) {
+    let newThreadId = null;
+    const starterLink = await MessageLink.findOne({ where: { messageId: thread.id, endpointId: parentEndpoint.id } });
+    if (starterLink) {
+      const targetStarterLink = await MessageLink.findOne({
+        where: { linkGroup: starterLink.linkGroup, endpointId: targetParentEndpoint.id },
+      });
+      if (targetStarterLink) {
+        try {
+          const starterMessage = await targetParent.messages.fetch(targetStarterLink.messageId);
+          selfCreatedThreads.add("discord:" + targetStarterLink.messageId);
+          if (starterMessage.thread) {
+            newThreadId = starterMessage.thread.id;
+          } else {
+            const attached = await starterMessage.startThread({ name: thread.name.slice(0, 100), autoArchiveDuration: 1440 });
+            newThreadId = attached.id;
+          }
+          log("DEBUG", `autoBridgeDiscordThread attached to Discord message ${targetStarterLink.messageId}`);
+        } catch (e) {
+          log(
+            "DISCORD",
+            `Couldn't attach mirrored thread to Discord message ${targetStarterLink.messageId}, creating a standalone thread`,
+            e
+          );
+        }
+      }
+    }
+    if (!newThreadId) {
+      let resolveSelfCreate;
+      markSelfCreate(
+        `discord:${targetParentEndpoint.channelId}`,
+        new Promise(r => {
+          resolveSelfCreate = r;
+        })
+      );
+      try {
+        const created = await targetParent.threads.create({
+          name: thread.name.slice(0, 100),
+          type: thread.type === 10 ? DiscordChannelType.AnnouncementThread : DiscordChannelType.PublicThread,
+          autoArchiveDuration: 1440,
+        });
+        newThreadId = created.id;
+      } finally {
+        resolveSelfCreate(newThreadId ?? null);
+      }
+    }
+
+    selfCreatedThreads.add("discord:" + newThreadId);
+    try {
+      const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
+        platform: "discord",
+        instanceId: parentEndpoint.instanceId,
+        channelId: thread.id,
+        guildId: parentEndpoint.guildId,
+        webhookId: parentEndpoint.webhookId,
+        webhookToken: parentEndpoint.webhookToken,
+        parentEndpointId: parentEndpoint.id,
+      });
+      const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
+        platform: "discord",
+        instanceId: targetParentEndpoint.instanceId ?? "default",
+        channelId: newThreadId,
+        guildId: targetParentEndpoint.guildId,
+        webhookId: targetParentEndpoint.webhookId,
+        webhookToken: targetParentEndpoint.webhookToken,
+        parentEndpointId: targetParentEndpoint.id,
+      });
+      made.push(srcRow, dstRow);
+      log(
+        "DEBUG",
+        `autoBridgeDiscordThread mirrored discord=${thread.id} -> ${newThreadId} guild=${targetParentEndpoint.guildId}`
+      );
+      await ensureThreadFamilyLink(srcRow, thread.id, dstRow, newThreadId);
+    } finally {
+      selfCreatedThreads.delete("discord:" + newThreadId);
+    }
+
+    return made;
+  }
 
   const headMessage = await fetchStarterWithRetry(() => thread.messages.fetch(thread.id));
 
@@ -898,28 +1052,10 @@ async function mirrorDiscordThreadToFluxer(thread, parentEndpoint, fluxerParentE
       `autoBridgeDiscordThread mirrored discord=${thread.id} fluxer=${fluxerThreadId} group=${parentEndpoint.groupId}`
     );
 
-    if (starterMessageId && headInlined && rows.length) {
-      const linkGroup = newLinkGroup();
-      try {
-        await MessageLink.create({
-          linkGroup,
-          messageId: thread.id,
-          endpointId: row.id,
-          authorId: headAuthorId,
-        });
-        await MessageLink.create({
-          linkGroup,
-          messageId: starterMessageId,
-          endpointId: (
-          await BridgeEndpoint.findOne({
-            where: { groupId: parentEndpoint.groupId, platform: "fluxer", kind: "thread", channelId: fluxerThreadId },
-          })
-        )?.id,
-          authorId: headAuthorId,
-        });
-      } catch (e) {
-        log("DB", "Failed to map bridged thread starter message", e);
-      }
+    const discordRow = rows.find(r => r.platform === "discord");
+    const fluxerRow = rows.find(r => r.platform === "fluxer");
+    if (discordRow && fluxerRow) {
+      await ensureThreadFamilyLink(discordRow, thread.id, fluxerRow, starterMessageId ?? fluxerThreadId, headAuthorId);
     }
   } finally {
     selfCreatedThreads.delete("fluxer:" + fluxerThreadId);
@@ -933,9 +1069,15 @@ async function BridgeGroupSafeCreate({ discordParent, fluxerParent, discordThrea
     where: { groupId: discordParent.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
     limit: 1,
   });
-  if (discordThreadEndpoint) return [discordThreadEndpoint];
+  const [fluxerThreadEndpoint] = await BridgeEndpoint.findAll({
+    where: { groupId: discordParent.groupId, platform: "fluxer", kind: "thread", channelId: fluxerThreadId },
+    limit: 1,
+  });
+  if (discordThreadEndpoint && fluxerThreadEndpoint) return [discordThreadEndpoint, fluxerThreadEndpoint];
 
-  const row = await BridgeEndpoint.create({
+  const row =
+    discordThreadEndpoint ??
+    (await BridgeEndpoint.create({
     groupId: discordParent.groupId,
     platform: "discord",
     instanceId: "default",
@@ -946,19 +1088,21 @@ async function BridgeGroupSafeCreate({ discordParent, fluxerParent, discordThrea
     kind: "thread",
     autoMirrored: true,
     parentEndpointId: discordParent.id,
-  });
-  const fluxerRow = await BridgeEndpoint.create({
-    groupId: discordParent.groupId,
-    platform: "fluxer",
-    instanceId: fluxerParent.instanceId,
-    channelId: fluxerThreadId,
-    guildId: fluxerParent.guildId,
-    webhookId: fluxerParent.webhookId,
-    webhookToken: fluxerParent.webhookToken,
-    kind: "thread",
-    autoMirrored: true,
-    parentEndpointId: fluxerParent.id,
-  });
+  }));
+  const fluxerRow =
+    fluxerThreadEndpoint ??
+    (await BridgeEndpoint.create({
+      groupId: discordParent.groupId,
+      platform: "fluxer",
+      instanceId: fluxerParent.instanceId,
+      channelId: fluxerThreadId,
+      guildId: fluxerParent.guildId,
+      webhookId: fluxerParent.webhookId,
+      webhookToken: fluxerParent.webhookToken,
+      kind: "thread",
+      autoMirrored: true,
+      parentEndpointId: fluxerParent.id,
+    }));
   return [row, fluxerRow];
 }
 
@@ -1243,8 +1387,16 @@ async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParent
         autoMirrored: true,
         parentEndpointId: parentEndpoint.id,
       });
-      await BridgeEndpoint.create({
-        groupId: parentEndpoint.groupId,
+    }
+    made.push(row);
+    log("DEBUG", `autoBridgeFluxerThread mirrored discord=${discordThreadId} fluxer=${thread.id} endpointId=${row?.id}`);
+
+    let discordThreadEndpoint = await BridgeEndpoint.findOne({
+      where: { groupId: row.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
+    });
+    if (!discordThreadEndpoint) {
+      discordThreadEndpoint = await BridgeEndpoint.create({
+        groupId: row.groupId,
         platform: "discord",
         instanceId: "default",
         channelId: discordThreadId,
@@ -1256,12 +1408,6 @@ async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParent
         parentEndpointId: discordParentEndpoint.id,
       });
     }
-    made.push(row);
-    log("DEBUG", `autoBridgeFluxerThread mirrored discord=${discordThreadId} fluxer=${thread.id} endpointId=${row?.id}`);
-
-    const discordThreadEndpoint = await BridgeEndpoint.findOne({
-      where: { groupId: row.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
-    });
     if (discordThreadEndpoint) {
       await ensureThreadFamilyLink(row, thread.id, discordThreadEndpoint, discordThreadId, headAuthorId);
     }

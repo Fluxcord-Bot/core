@@ -38,11 +38,28 @@ export async function propagateRelayEcho(umsg, relayEndpoint, relay, ctx) {
   const endpoints = await channelEndpoints(relayEndpoint);
   if (endpoints.length === 0) return;
 
+  const linkedGroups = await linkedGroupIds(linkGroup);
+  const rows = await MessageLink.findAll({ where: { linkGroup }, raw: true });
+  log(
+    "DEBUG",
+    `RelayEcho start id=${umsg.id} relayEndpoint=${relayEndpoint.id} linkGroup=${linkGroup} rows=[${rows
+      .map(r => `${r.endpointId}:${r.messageId}`)
+      .join(", ")}] linkedGroups=[${linkedGroups.join(", ")}]`
+  );
+  if (rows.length === 0) {
+    log("DEBUG", `RelayEcho skip id=${umsg.id} reason=staleRelayGroup group=${linkGroup}`);
+    return;
+  }
+
   const targets = await collectTargets(endpoints, umsg.platform, {
-    excludeGroupIds: [...new Set([sourceGroupId, ...(await linkedGroupIds(linkGroup, endpoints))].filter(g => g != null))],
+    excludeGroupIds: [...new Set([sourceGroupId, ...linkedGroups].filter(g => g != null))],
     kind: relayEndpoint.kind,
     excludeChannelId: relayEndpoint.channelId,
   });
+  log(
+    "DEBUG",
+    `RelayEcho targets id=${umsg.id} entries=[${targets.map(t => `${t.key}(ep=${t.endpoints.map(e => e.id).join("/")})`).join(", ")}]`
+  );
 
   await Promise.allSettled(
     targets.map(async entry => {
