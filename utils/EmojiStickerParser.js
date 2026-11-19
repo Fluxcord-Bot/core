@@ -5,6 +5,7 @@ import { Op } from "sequelize";
 import { getFluxEmojis, getDiscordEmojis, getBotEmojis, clearFluxEmojiCache, clearBotEmojiCache } from "./EmojiCache.js";
 import { getFluxerMediaBaseUrl, getFluxerWebappUrl } from "./GetFluxerUrls.js";
 import { fluxerConfigOfClient, tempEmojiGuildFor } from "./PerInstance.js";
+import { bridgeEmojiName, isBridgeEmojiName } from "./BridgeEmojiName.js";
 
 const EMOJI_DELETE_BATCH = 10;
 const EMOJI_DELETE_MARGIN = 2;
@@ -68,6 +69,20 @@ function isValidEmojiToken(token) {
   return /^\d{17,19}$/.test(token.startsWith("a") ? token.slice(1) : token);
 }
 
+function tokenId(token) {
+  return token.startsWith("a") ? token.slice(1) : token;
+}
+
+function legacyEmojiNameFor(token) {
+  return `e${token}`;
+}
+
+function bridgedEmojiNameFor(token, nameById) {
+  const raw = nameById?.get(token) ?? "emoji";
+  if (isBridgeEmojiName(raw) || /^ea?\d{17,19}$/.test(raw)) return raw;
+  return bridgeEmojiName(raw, tokenId(token));
+}
+
 function discordEmojiLink(token, name) {
   const animated = token.startsWith("a");
   const rawId = animated ? token.slice(1) : token;
@@ -126,7 +141,8 @@ export async function parseFluxerEmojiToFluxer(content, targetFluxerClient, sour
   const staged = [];
   const targetEmojis = await getFluxEmojis(tempGuildIdForTarget, targetFluxerClient).catch(() => null);
   for (const token of tokens) {
-    const hit = targetEmojis?.find(x => x.name === `e${token}`);
+    const expected = bridgedEmojiNameFor(token, emojiIdNameMap);
+    const hit = targetEmojis?.find(x => x.name === expected || x.name === legacyEmojiNameFor(token));
     if (hit) {
       replacements.set(token, `<:${hit.name}:${hit.id}>`);
       continue;
@@ -136,7 +152,7 @@ export async function parseFluxerEmojiToFluxer(content, targetFluxerClient, sour
 
   if (staged.length > 0) {
     const ensured = await Promise.race([
-      ensureFluxerEmojis(targetFluxerClient, staged, tempGuildIdForTarget, sourceMediaBase),
+      ensureFluxerEmojis(targetFluxerClient, staged, tempGuildIdForTarget, sourceMediaBase, emojiIdNameMap),
       new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
     ]);
     for (const token of staged) {
@@ -201,7 +217,7 @@ export async function parseDiscordEmojiToFluxer(
 
   if (staged.length > 0) {
     const ensured = await Promise.race([
-      ensureFluxerEmojis(fluxerClient, staged, tempGuildId),
+      ensureFluxerEmojis(fluxerClient, staged, tempGuildId, null, emojiIdNameMap),
       new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
     ]);
     for (const token of staged) {
@@ -262,7 +278,7 @@ export async function parseFluxerEmojiToDiscord(content, discordClient, targetDi
 
   if (staged.length > 0) {
     const ensured = await Promise.race([
-      ensureDiscordEmojis(discordClient, staged),
+      ensureDiscordEmojis(discordClient, staged, sourceInstanceId, emojiIdNameMap),
       new Promise(resolve => setTimeout(() => resolve(null), 10_000)),
     ]);
     for (const token of staged) {
@@ -367,7 +383,8 @@ export async function ensureFluxerEmojis(
   fluxerClient,
   tokens,
   tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId,
-  sourceMediaBase = null
+  sourceMediaBase = null,
+  nameById = null
 ) {
   const resolved = new Map();
 
@@ -385,7 +402,8 @@ export async function ensureFluxerEmojis(
 
   const missing = [];
   for (const token of tokens) {
-    const hit = existing.find(x => x.name === `e${token}`);
+    const expected = bridgedEmojiNameFor(token, nameById);
+    const hit = existing.find(x => x.name === expected || x.name === legacyEmojiNameFor(token));
     if (hit) resolved.set(token, { name: hit.name, id: hit.id });
     else missing.push(token);
   }
@@ -401,7 +419,7 @@ export async function ensureFluxerEmojis(
 
   if (toCreate.length > 0) {
     const batch = withEmojiGuildLock(`fluxer:${tempGuildId}`, () =>
-      createFluxerEmojis(fluxerClient, toCreate, tempGuildId, sourceMediaBase)
+      createFluxerEmojis(fluxerClient, toCreate, tempGuildId, sourceMediaBase, nameById)
     );
     for (const token of toCreate) {
       const entry = batch.then(results => results.get(token) ?? null);
@@ -419,7 +437,7 @@ export async function ensureFluxerEmojis(
   return resolved;
 }
 
-export async function ensureDiscordEmojis(discordClient, tokens) {
+export async function ensureDiscordEmojis(discordClient, tokens, instanceId = "default", nameById = null) {
   const resolved = new Map();
 
   if (isDiscordEmojiRateLimited()) {
@@ -436,7 +454,8 @@ export async function ensureDiscordEmojis(discordClient, tokens) {
 
   const missing = [];
   for (const token of tokens) {
-    const hit = [...existing.values()].find(x => x.name === `e${token}`);
+    const expected = bridgedEmojiNameFor(token, nameById);
+    const hit = [...existing.values()].find(x => x.name === expected || x.name === legacyEmojiNameFor(token));
     if (hit) resolved.set(token, { name: hit.name, id: hit.id });
     else missing.push(token);
   }
@@ -451,7 +470,9 @@ export async function ensureDiscordEmojis(discordClient, tokens) {
   }
 
   if (toCreate.length > 0) {
-    const batch = withEmojiGuildLock("discord-app-emojis", () => createDiscordEmojis(discordClient, toCreate));
+    const batch = withEmojiGuildLock("discord-app-emojis", () =>
+      createDiscordEmojis(discordClient, toCreate, instanceId, nameById)
+    );
     for (const token of toCreate) {
       const entry = batch.then(results => results.get(token) ?? null);
       discordEmojiInflight.set(token, entry);
@@ -472,7 +493,8 @@ async function createFluxerEmojis(
   fluxerClient,
   tokens,
   tempGuildId = fluxerConfigOfClient(fluxerClient)?.FluxerTempEmojiGuildId ?? Config.FluxerTempEmojiGuildId,
-  sourceMediaBase = null
+  sourceMediaBase = null,
+  nameById = null
 ) {
   const out = new Map();
   if (isFluxerEmojiRateLimited()) return settleEmojiResults(out, tokens);
@@ -489,7 +511,7 @@ async function createFluxerEmojis(
         if (!res.ok) continue;
         const buf = new Uint8Array(await res.arrayBuffer());
         payloads.set(token, {
-          name: `e${token}`,
+          name: bridgedEmojiNameFor(token, nameById),
           image: btoa(buf.reduce((data, byte) => data + String.fromCharCode(byte), "")),
         });
       } catch {
@@ -529,20 +551,22 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out, tempGuildId) {
   const maxEmojis = [];
   for (let i = 0; i < entries.length; i += EMOJI_BULK_LIMIT) {
     const chunk = entries.slice(i, i + EMOJI_BULK_LIMIT);
+    const tokenByName = new Map(chunk.map(([token, payload]) => [payload.name, token]));
     try {
       const guild = await fluxerClient.guilds.fetch(tempGuildId);
       const res = await guild?.createEmojisBulk(chunk.map(([, payload]) => payload));
       let createdAny = false;
       for (const created of res?.success ?? []) {
-        const token = chunk.find(([t]) => `e${t}` === created.name)[0];
-        if (created?.id) {
+        const token = tokenByName.get(created.name);
+        if (token && created?.id) {
           out.set(token, { name: created.name, id: created.id });
           createdAny = true;
         }
       }
       for (const failed of res?.failed ?? []) {
-        if (isMaxEmojisFailure(failed?.error)) {
-          maxEmojis.push(chunk.find(([t]) => `e${t}` === failed.name)[0]);
+        const token = tokenByName.get(failed?.name);
+        if (token && isMaxEmojisFailure(failed?.error)) {
+          maxEmojis.push(token);
         }
       }
       if (createdAny) clearFluxEmojiCache(tempGuildId);
@@ -561,7 +585,7 @@ async function bulkCreateFluxerEmojis(fluxerClient, entries, out, tempGuildId) {
   return { rateLimited: false, maxEmojis };
 }
 
-async function createDiscordEmojis(discordClient, tokens) {
+async function createDiscordEmojis(discordClient, tokens, instanceId = "default", nameById = null) {
   const out = new Map();
   if (isDiscordEmojiRateLimited()) return settleEmojiResults(out, tokens);
   try {
@@ -569,7 +593,7 @@ async function createDiscordEmojis(discordClient, tokens) {
     const failedMax = [];
     for (const token of tokens) {
       try {
-        const created = await createDiscordEmoji(discordClient, token);
+        const created = await createDiscordEmoji(discordClient, token, instanceId, nameById);
         if (created) out.set(token, created);
       } catch (e) {
         if (isRateLimitError(e)) {
@@ -592,7 +616,7 @@ async function createDiscordEmojis(discordClient, tokens) {
       }
       for (const token of failedMax) {
         try {
-          const created = await createDiscordEmoji(discordClient, token);
+          const created = await createDiscordEmoji(discordClient, token, instanceId, nameById);
           if (created) out.set(token, created);
         } catch (e) {
           if (isRateLimitError(e)) {
@@ -610,10 +634,10 @@ async function createDiscordEmojis(discordClient, tokens) {
   return settleEmojiResults(out, tokens);
 }
 
-async function createDiscordEmoji(discordClient, token) {
+async function createDiscordEmoji(discordClient, token, instanceId = "default", nameById = null) {
   const animated = token.startsWith("a");
   const rawId = animated ? token.slice(1) : token;
-  const mediaBase = await getFluxerMediaBaseUrl();
+  const mediaBase = await getFluxerMediaBaseUrl(instanceId);
   if (!mediaBase) return null;
 
   const res = await fetch(`${mediaBase}/emojis/${rawId}.webp?animated=${animated ? "true" : "false"}&size=240&quality=lossless`);
@@ -621,11 +645,11 @@ async function createDiscordEmoji(discordClient, token) {
 
   const created = await discordClient.application?.emojis.create({
     attachment: Buffer.from(await res.arrayBuffer()),
-    name: `e${token}`,
+    name: bridgedEmojiNameFor(token, nameById),
   });
   if (created?.id) {
     clearBotEmojiCache();
-    return { name: created.name ?? `e${token}`, id: created.id };
+    return { name: created.name ?? bridgedEmojiNameFor(token, nameById), id: created.id };
   }
   return null;
 }

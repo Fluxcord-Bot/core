@@ -9,9 +9,14 @@ import {
 } from "discord.js";
 import Config from "./utils/ConfigHandler.js";
 import { getFluxerInstanceConfig, getFluxerInstances, DiscordEnabled } from "./utils/ConfigHandler.js";
-import { FluxerPinsUpdateHandler } from "./utils/FluxerHandler.js";
-import { DiscordPinsUpdateHandler } from "./utils/DiscordHandler.js";
-import { setPipelineCtx, pipelineCreate, pipelineEdit, pipelineDelete, pipelineBulkDelete } from "./utils/pipeline/adapters.js";
+import {
+  setPipelineCtx,
+  pipelineCreate,
+  pipelineEdit,
+  pipelineDelete,
+  pipelineBulkDelete,
+  pipelinePins,
+} from "./utils/pipeline/adapters.js";
 import { linkedThreadFamilyEndpoints } from "./utils/pipeline/targets.js";
 import { invalidateFluxerWebhookCache } from "./utils/Webhooks.js";
 import { log } from "./utils/Logger.js";
@@ -283,7 +288,7 @@ discordClient.on(DiscordEvents.MessageBulkDelete, async msgs => {
 
 discordClient.on(DiscordEvents.ChannelPinsUpdate, async channel => {
   try {
-    await DiscordPinsUpdateHandler(channel);
+    await pipelinePins("discord", channel);
   } catch (e) {
     log("FLUXER", e);
   }
@@ -413,7 +418,7 @@ function wireFluxerEvents(instanceId, fluxerClient) {
 
   fluxerClient.on(FluxerEvents.ChannelPinsUpdate, async chnl => {
     try {
-      await FluxerPinsUpdateHandler(chnl, discordClient, fluxerClient, { instanceId });
+      await pipelinePins("fluxer", chnl, { instanceId });
     } catch (e) {
       log("DISCORD", e);
     }

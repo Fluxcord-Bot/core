@@ -2,6 +2,7 @@ import { normalizeMessage } from "./UnifiedMessage.js";
 import { handleCreate } from "./create.js";
 import { handleEdit } from "./edit.js";
 import { handleDelete, handleBulkDelete } from "./delete.js";
+import { handlePins } from "./pins.js";
 
 const ctxHolder = { discordClient: null, defaultFluxerClient: null };
 
@@ -32,6 +33,10 @@ export async function pipelineDelete(message, options = {}) {
 
 export async function pipelineBulkDelete(ref, messageIds) {
   await handleBulkDelete(ref.platform, ref.channelId, messageIds, ctxHolder);
+}
+
+export async function pipelinePins(platform, payload, options = {}) {
+  await handlePins(platform, payload, { ...ctxHolder, ...options });
 }
 
 export async function pipelineDestroyEndpoints(ref) {

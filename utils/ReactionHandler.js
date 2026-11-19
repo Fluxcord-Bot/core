@@ -63,7 +63,8 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
   }
 
   const token = `${animated ? "a" : ""}${discordEmojiId}`;
-  const ensured = await ensureFluxerEmojis(fluxerClient, [token], tempGuildId);
+  const nameById = emojiName ? new Map([[token, emojiName]]) : null;
+  const ensured = await ensureFluxerEmojis(fluxerClient, [token], tempGuildId, null, nameById);
   const emoji = ensured.get(token);
   return emoji?.id ? `${emoji.name}:${emoji.id}` : null;
 }
@@ -75,7 +76,14 @@ async function mirrorDiscordEmojiToFluxer(discordEmojiId, animated, fluxerClient
  * @param {string} targetDiscordGuildId
  * @param {string | null} emojiName
  */
-async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient, targetDiscordGuildId, emojiName) {
+async function mirrorFluxerEmojiToDiscord(
+  fluxerEmojiId,
+  animated,
+  discordClient,
+  targetDiscordGuildId,
+  emojiName,
+  instanceId = "default"
+) {
   if (isDiscordEmojiRateLimited()) return null;
   if (emojiName) {
     try {
@@ -98,7 +106,8 @@ async function mirrorFluxerEmojiToDiscord(fluxerEmojiId, animated, discordClient
   }
 
   const token = `${animated ? "a" : ""}${fluxerEmojiId}`;
-  const ensured = await ensureDiscordEmojis(discordClient, [token]);
+  const nameById = emojiName ? new Map([[token, emojiName]]) : null;
+  const ensured = await ensureDiscordEmojis(discordClient, [token], instanceId, nameById);
   const emoji = ensured.get(token);
   return emoji?.id ? `${emoji.name}:${emoji.id}` : null;
 }
@@ -291,13 +300,18 @@ async function relayFluxerReaction(reaction, user, action, discordClient, fluxer
     if (!emoji.id) {
       emojiStr = emoji.name;
     } else {
+      const targetDiscordGuildId = targets.find(t => t.endpoint.platform === "discord")?.endpoint.guildId;
       emojiStr = await mirrorFluxerEmojiToDiscord(
         emoji.id,
         emoji.animated,
         discordClient,
-        targets[0]?.endpoint.guildId,
-        emoji.name
+        targetDiscordGuildId,
+        emoji.name,
+        instanceId
       );
+      if (!emojiStr) {
+        log("DEBUG", `Fluxer→Discord reaction skipped: unresolved custom emoji ${emoji.name}:${emoji.id} instance=${instanceId}`);
+      }
     }
 
     if (emojiStr) {
