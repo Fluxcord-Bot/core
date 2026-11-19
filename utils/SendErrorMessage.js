@@ -14,7 +14,7 @@ import { isBridgeHealthDegraded, recordBridgeFailure } from "./BridgeHealth.js";
  */
 export async function sendErrorMessage(message, discordClient, fluxerClient, error, replyFallback = false) {
   recordBridgeFailure(message.guildId);
-  const suppressReaction = isBridgeHealthDegraded(message.guildId);
+  const degraded = isBridgeHealthDegraded(message.guildId);
 
   const guildMap = await GuildMap.findOne({
     where: {
@@ -24,7 +24,7 @@ export async function sendErrorMessage(message, discordClient, fluxerClient, err
 
   try {
     if (guildMap) {
-      if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform) {
+      if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform && !degraded) {
         if (guildMap.errorLoggingPlatform === "fluxer") {
           const channel = await fluxerClient.channels.fetch(guildMap.errorLoggingChannelId);
 
@@ -64,10 +64,10 @@ export async function sendErrorMessage(message, discordClient, fluxerClient, err
         }
       }
 
-      if (guildMap.errorReaction && !suppressReaction) {
+      if (guildMap.errorReaction && !degraded) {
         await message.react(guildMap.errorReaction);
       }
-    } else if (!suppressReaction) {
+    } else if (!degraded) {
       await message.react("⛓️‍💥");
     }
   } catch {}

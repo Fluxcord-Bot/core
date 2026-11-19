@@ -1,5 +1,5 @@
 const FAILURE_WINDOW_MS = 5 * 60 * 1000;
-const FAILURE_THRESHOLD = 5;
+const FAILURE_THRESHOLD = 2; // i feel like a 2 fits here more than 5, feel free to change if u want it to stay at a 5
 
 /** @type {Map<string, number[]>} */
 const failuresByGuild = new Map();
