@@ -463,8 +463,7 @@ export async function DiscordCreateMessageHandler(message, client, fluxerClient,
       message_id: messageReference.fluxerMessageId,
     };
   }
-  const sourceText =
-    (forwardedMessage?.content || bridgeContent.messageData.parsedContent || (forwardedMessage ?? message).content) ?? "";
+  const sourceText = (forwardedMessage ? forwardedMessage.content : bridgeContent.messageData.parsedContent) ?? "";
   const customEmojiCount = countCustomEmojis(sourceText) + ((forwardedMessage ?? message).stickers?.size ?? 0);
   log(
     "DEBUG",

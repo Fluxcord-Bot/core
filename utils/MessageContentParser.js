@@ -32,7 +32,7 @@ async function getFluxerGuildChannels(guild) {
  * @param {(import("discord.js").Guild | import("@fluxerjs/core").Guild)?} otherSideGuild
  */
 export async function parseMentions(message, content, otherSideGuild) {
-  let res = content || message.content;
+  let res = content ?? message.content;
 
   if (!res) return "";
 
@@ -158,6 +158,17 @@ export async function attemptParseBridgedMessage(message) {
   if (!message.webhookId) return defaultResponse;
 
   const content = message.content ?? "";
+
+  const noticeRegex = /^-# <:reply_l:\d+><:reply_r:\d+> (?:Unbridged|Forwarded) message\n?/;
+  if (noticeRegex.test(content)) {
+    return {
+      isBridge: true,
+      isProxy: false,
+      type: "fluxcord",
+      messageData: { parsedContent: content.replace(noticeRegex, "") },
+      excludeEmbed: false,
+    };
+  }
 
   const contentParsers = [
     {
