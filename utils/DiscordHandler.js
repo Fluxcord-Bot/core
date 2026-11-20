@@ -33,6 +33,7 @@ import {
 import { isFluxerRateLimited, withFluxerRateLimit } from "./FluxerRateLimit.js";
 import { canUserBridge, promptOptedOutUserOnFirstMessage } from "./UserOptOut.js";
 import { waitForMessageMap } from "./WaitForMessageMap.js";
+import { knownSuppressState, markSuppressWrite } from "./SuppressState.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -738,11 +739,12 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
   });
 
   if (channelMapViaUserId) {
+    const nowSuppressed = newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;
     if (
       messageExisting &&
-      newMsg.flags?.has?.(MessageFlags.SuppressEmbeds) !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)
+      nowSuppressed !== oldMsg?.flags?.has?.(MessageFlags.SuppressEmbeds)
     ) {
-      const mirrorSuppressed = newMsg.flags.has(MessageFlags.SuppressEmbeds);
+      const mirrorSuppressed = nowSuppressed;
       const suppressionKey = `channel:${messageExisting.channelMap.fluxerChannelId}`;
       const original = await withFluxerRateLimit(
         () =>
@@ -752,7 +754,9 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
         suppressionKey
       );
       const originalFlags = original.flags ?? 0;
-      if (Boolean(originalFlags & 4) !== mirrorSuppressed) {
+      const originalSuppressed = knownSuppressState(messageExisting.fluxerMessageId) ?? Boolean(originalFlags & 4);
+      if (originalSuppressed !== mirrorSuppressed) {
+        markSuppressWrite(messageExisting.fluxerMessageId, mirrorSuppressed);
         await withFluxerRateLimit(
           () =>
             client.rest.patch(
@@ -851,6 +855,7 @@ export async function DiscordUpdateMessageHandler(oldMsg, newMsg, client) {
 
     const fluxerThreadId = channelMap.autoMirrored ? await fluxerThreadIdFor(client, channelMap) : null;
 
+    markSuppressWrite(messageExisting.fluxerMessageId, suppressEmbeds || !canUserEmbed);
     await withFluxerRateLimit(
       () =>
         client.rest.patch(

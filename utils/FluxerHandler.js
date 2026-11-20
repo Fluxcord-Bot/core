@@ -26,6 +26,7 @@ import { processSticker } from "./StickerProcessor.js";
 import { maybePublishDiscordMessage } from "./AnnouncementPublish.js";
 import { canUserBridge, promptOptedOutUserOnFirstMessage } from "./UserOptOut.js";
 import { waitForMessageMap } from "./WaitForMessageMap.js";
+import { knownSuppressState, markSuppressWrite } from "./SuppressState.js";
 
 let fluxcordBotEmojiCfg = undefined;
 
@@ -595,7 +596,8 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
   });
 
   if (channelMapViaUserId) {
-    if (newMessage.flags?.has?.(4) !== oldMessage?.flags?.has?.(4)) {
+    const nowSuppressed = newMessage.flags?.has?.(4) ?? false;
+    if (nowSuppressed !== oldMessage?.flags?.has?.(4)) {
       const messageExisting = await MessageMap.findOne({
         where: {
           fluxerMessageId: newMessage.id,
@@ -603,10 +605,12 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
         include: ["channelMap"],
       });
       if (messageExisting) {
-        const mirrorSuppressed = newMessage.flags.has(4);
+        const mirrorSuppressed = nowSuppressed;
         const channel = await client.channels.fetch(messageExisting.channelMap.discordChannelId);
         const original = await channel.messages.fetch(messageExisting.discordMessageId);
-        if (original.flags.has(4) !== mirrorSuppressed) {
+        const originalSuppressed = knownSuppressState(original.id) ?? original.flags.has(4);
+        if (originalSuppressed !== mirrorSuppressed) {
+          markSuppressWrite(original.id, mirrorSuppressed);
           await original.suppressEmbeds(mirrorSuppressed);
         }
       }
@@ -623,6 +627,29 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
 
   if (messageExisting) {
     const channelMap = messageExisting.channelMap;
+
+    if (
+      oldMessage &&
+      oldMessage !== newMessage &&
+      !oldMessage.partial &&
+      oldMessage.content === newMessage.content &&
+      oldMessage.flags?.has?.(4) !== newMessage.flags?.has?.(4)
+    ) {
+      const suppress = newMessage.flags.has(4);
+      try {
+        const channel = await client.channels.fetch(channelMap.discordChannelId);
+        // @ts-expect-error
+        const mirror = await channel.messages.fetch(messageExisting.discordMessageId);
+        if (mirror.flags.has(4) !== suppress) {
+          markSuppressWrite(mirror.id, suppress);
+          await mirror.suppressEmbeds(suppress);
+        }
+      } catch (e) {
+        log("FLUXER", `Failed to mirror embed suppression to Discord message ${messageExisting.discordMessageId}`, e);
+      }
+      return;
+    }
+
     const isCrosspostCopy = newMessage.flags?.has?.(2) === true;
     const nameIndicator = await resolveNameIndicator(channelMap.discordGuildId, newMessage.guildId);
     const webhook = await getDiscordWebhook(client, channelMap);
@@ -706,6 +733,7 @@ export async function FluxerUpdateMessageHandler(oldMessage, newMessage, client)
       `FluxerUpdate bridged fluxerId=${newMessage.id} discordId=${messageExisting.discordMessageId} channelMapId=${channelMap.id} fileCount=${editFiles.length} hasThread=${Boolean(threadId)}`
     );
 
+    markSuppressWrite(messageExisting.discordMessageId, suppressEmbeds || !canUserEmbed);
     await webhook.editMessage(messageExisting.discordMessageId, {
       content: editContent,
       attachments,
