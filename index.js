@@ -76,6 +76,7 @@ const fluxerClient = new FluxerClient({
     api: Config.FluxerAPIBaseURL,
     userAgent: buildFluxerUserAgent(),
     retryPolicy: fluxerRetryPolicy,
+    timeout: Config.FluxerAPITimeout,
   },
   presence: {
     status: "online",
