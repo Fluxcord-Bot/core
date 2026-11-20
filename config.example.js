@@ -3,6 +3,11 @@ const Config = {
   // FluxerAPIBaseURL: "https://example.com/api",
   FluxerAPIBaseURL: "https://fluxer.com/api",
 
+  // Timeout for the Fluxer API. Value is in ms. Default value is 15s.
+  // Only change if your Fluxer instance has slow attachments uploads.
+  // For instance, if your self-hosting has to deal with slow network or storage.
+  FluxerAPITimeout: 15_000,
+
   // The path for the bot's data directory. Probably do not touch if you're using Docker.
   DataFolderPath: "/data",
 

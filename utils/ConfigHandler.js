@@ -2,6 +2,7 @@ import Config from "../config.js";
 
 const DefaultConfig = {
   FluxerAPIBaseURL: "https://fluxer.com/api",
+  FluxerAPITimeout: 15_000,
   DataFolderPath: "/data",
   DiscordBotToken: "DISCORD_BOT_TOKEN",
   /** @type {string[]} */
