@@ -895,7 +895,7 @@ if (Config.VoiceBridgingEnabled) {
 
 setupReactionHandling(discordClient);
 
-setupHealthcheck(discordClient);
+setupHealthcheck(discordClient, defaultFluxerClient); // these fixes are suicide worthy
 
 if (DiscordEnabled) {
   setupDiscordCommands(discordClient, defaultFluxerClient);

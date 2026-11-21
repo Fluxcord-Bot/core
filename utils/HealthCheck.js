@@ -14,8 +14,8 @@ try {
 }
 
 /**
- * @param {import("discord.js").Client} discordClient
- * @param {import("@fluxerjs/core").Client} fluxerClient
+ * @param {import("discord.js").Client | null | undefined} discordClient
+ * @param {import("@fluxerjs/core").Client | null | undefined} fluxerClient
  * @returns {import("node:http").Server | null}
  */
 export function setupHealthcheck(discordClient, fluxerClient) {
@@ -33,17 +33,17 @@ export function setupHealthcheck(discordClient, fluxerClient) {
       return;
     }
 
-    const discordOnline = isDiscordOnline(discordClient);
-    const fluxerOnline = isFluxerOnline(fluxerClient);
+    const discordOnline = discordClient ? isDiscordOnline(discordClient) : null;
+    const fluxerOnline = fluxerClient ? isFluxerOnline(fluxerClient) : null;
 
-    const healthy = url === "/live" ? true : discordOnline && fluxerOnline;
+    const healthy = url === "/live" ? true : discordOnline !== false && fluxerOnline !== false;
 
     res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
         status: healthy ? "ok" : "degraded",
-        discord: discordOnline ? "online" : "offline",
-        fluxer: fluxerOnline ? "online" : "offline",
+        discord: discordOnline === null ? "disabled" : discordOnline ? "online" : "offline",
+        fluxer: fluxerOnline === null ? "disabled" : fluxerOnline ? "online" : "offline",
         uptime: Math.floor(process.uptime()),
         timestamp: new Date().toISOString(),
         ...(hasToken(req) ? details(discordClient, fluxerClient) : {}),
@@ -76,17 +76,17 @@ function hasToken(req) {
 
 /**
  * Extra stats for token holders: version, Discord latency/guilds/shards, Fluxer guilds.
- * @param {import("discord.js").Client} discordClient
- * @param {import("@fluxerjs/core").Client} fluxerClient
+ * @param {import("discord.js").Client | null | undefined} discordClient
+ * @param {import("@fluxerjs/core").Client | null | undefined} fluxerClient
  */
 function details(discordClient, fluxerClient) {
   /** @type {Record<string, any>} */
   const out = { version };
   try {
-    const ping = discordClient.ws?.ping;
+    const ping = discordClient?.ws?.ping;
     out.latency_ms = typeof ping === "number" && ping >= 0 ? ping : null;
-    out.guilds = discordClient.guilds?.cache?.size ?? null;
-    out.shards = [...(discordClient.ws?.shards?.values?.() ?? [])].map(s => ({
+    out.guilds = discordClient?.guilds?.cache?.size ?? null;
+    out.shards = [...(discordClient?.ws?.shards?.values?.() ?? [])].map(s => ({
       id: s.id,
       connected: s.status === 0, // Status.Ready
       latency_ms: typeof s.ping === "number" && s.ping >= 0 ? s.ping : null,
@@ -95,7 +95,7 @@ function details(discordClient, fluxerClient) {
     // mid-reconnect: leave out what the client can't say
   }
   try {
-    const guilds = /** @type {any} */ (fluxerClient.guilds);
+    const guilds = /** @type {any} */ (fluxerClient?.guilds);
     out.fluxer_guilds = typeof guilds?.size === "number" ? guilds.size : (guilds?.cache?.size ?? null);
   } catch {
     out.fluxer_guilds = null;
