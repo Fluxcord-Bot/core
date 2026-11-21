@@ -1,10 +1,60 @@
-import { EmbedBuilder, Routes as FluxerRoutes, Message } from "@fluxerjs/core";
+import fs from "node:fs";
+import os from "node:os";
+import { execSync } from "node:child_process";
+import { EmbedBuilder, Routes as FluxerRoutes } from "@fluxerjs/core";
 import { Routes } from "discord.js";
+import Package from "../package.json" with { type: "json" };
 import { BridgeEndpoint, MessageLink } from "../db/index.js";
 import { getDuration } from "../utils/GetDuration.js";
 import { botStartingTime } from "../index.js";
-import Config from "../utils/ConfigHandler.js";
+import getCommitHash from "../utils/GetCommitHash.js";
+import { fluxerClients } from "../utils/FluxerClients.js";
+import { getFluxerInstances } from "../utils/ConfigHandler.js";
 import { embedFooterForMessage } from "../utils/PerInstance.js";
+
+function readInstalledVersion(name) {
+  try {
+    const url = new URL(`../node_modules/${name}/package.json`, import.meta.url);
+    return JSON.parse(fs.readFileSync(url, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function instanceHost(instanceId, configured) {
+  const instance = configured.find(entry => entry.id === instanceId);
+  if (!instance?.FluxerAPIBaseURL) return instanceId;
+  try {
+    return new URL(instance.FluxerAPIBaseURL).hostname.replace(/^api\./, "");
+  } catch {
+    return instanceId;
+  }
+}
+
+function platformName() {
+  switch (process.platform) {
+    case "darwin":
+      return "macOS";
+    case "win32":
+      return "Windows";
+    case "linux":
+      return "Linux";
+    default:
+      return process.platform;
+  }
+}
+
+function isDocker() {
+  return fs.existsSync("/.dockerenv") || process.env.FLUXCORD_DOCKER === "1";
+}
+
+function pnpmVersion() {
+  try {
+    return execSync("pnpm --version", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -16,14 +66,21 @@ const command = {
   requireElevated: false,
   allowDM: true,
   async run(params, message, discordClient, fluxerClient) {
-    const isFluxer = message instanceof Message;
     const now = new Date();
-    const messageStart = Date.now();
     const msg = await message.reply("Pinging...");
-    const messageLatency = Date.now() - messageStart;
-    const fluxerRestStart = Date.now();
-    await fluxerClient.rest.get(FluxerRoutes.currentUser());
-    const fluxerRestLatency = Date.now() - fluxerRestStart;
+    const configuredInstances = getFluxerInstances();
+    const fluxerInstances = [...fluxerClients.entries()];
+    const fluxerRestLatencies = await Promise.all(
+      fluxerInstances.map(async ([instanceId, client]) => {
+        const start = Date.now();
+        try {
+          await client.rest.get(FluxerRoutes.currentUser());
+          return { instanceId, value: `${Date.now() - start}ms` };
+        } catch {
+          return { instanceId, value: "n/a" };
+        }
+      })
+    );
     const discordRestStart = Date.now();
     await discordClient.rest.get(Routes.currentApplication());
     const discordRestLatency = Date.now() - discordRestStart;
@@ -31,100 +88,77 @@ const command = {
     const messagesBridged = await MessageLink.count();
     const channelsBridged = await BridgeEndpoint.count({ where: { kind: "channel" } });
     const discordGuildCount = discordClient.guilds.cache.size;
-    const fluxerGuildCount = fluxerClient.guilds.size;
     const discordMemberCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
-    const fluxerMemberCount = fluxerClient.guilds.reduce((acc, guild) => acc + (guild.memberCount ?? guild.members.size), 0);
-    const heapMb = Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 10) / 10;
     const discordPing =
       typeof discordClient.ws.ping === "number" && discordClient.ws.ping >= 0 ? `${Math.round(discordClient.ws.ping)}ms` : "n/a";
-    const fluxerPing =
-      fluxerClient.isReady() && typeof fluxerClient.ws.ping === "number" && fluxerClient.ws.ping >= 0
-        ? `${Math.round(fluxerClient.ws.ping)}ms`
-        : "n/a";
+
+    const instanceLines = ["discord.com"];
+    const latencyLines = [`${discordRestLatency}ms REST, ${discordPing} GW`];
+    const countLines = [
+      `${discordGuildCount} guild${discordGuildCount === 1 ? "" : "s"}, ${discordMemberCount} user${discordMemberCount === 1 ? "" : "s"}`,
+    ];
+    for (const [instanceId, client] of fluxerInstances) {
+      const rest = fluxerRestLatencies.find(entry => entry.instanceId === instanceId)?.value ?? "n/a";
+      const ping =
+        client.isReady() && typeof client.ws.ping === "number" && client.ws.ping >= 0
+          ? `${Math.round(client.ws.ping)}ms`
+          : "n/a";
+      const guildCount = client.guilds.size;
+      const memberCount = client.guilds.reduce(
+        (acc, guild) => acc + (guild.memberCount ?? guild.members.size),
+        0
+      );
+      instanceLines.push(instanceHost(instanceId, configuredInstances));
+      latencyLines.push(`${rest} REST, ${ping} GW`);
+      countLines.push(
+        `${guildCount} guild${guildCount === 1 ? "" : "s"}, ${memberCount} user${memberCount === 1 ? "" : "s"}`
+      );
+    }
+
+    const load = os.loadavg()[0].toFixed(2);
+    const cpuCount = os.cpus().length;
+    const ramMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const nodeVersion = process.version;
+    const pnpm = pnpmVersion();
+    const fluxerVersion = readInstalledVersion("@fluxerjs/core");
+    const discordVersion = readInstalledVersion("discord.js");
+    const systemLines = [
+      `Load ${load} in ${cpuCount} CPU${cpuCount === 1 ? "" : "s"}, ${ramMb}MB used RAM`,
+      `Running ${isDocker() ? "on docker" : "bare metal"} in ${platformName()} ${process.arch}`,
+      `Node.js ${nodeVersion}${pnpm ? `, pnpm ${pnpm}` : ""}`,
+      `${fluxerVersion ? `@fluxerjs/core v${fluxerVersion}` : "@fluxerjs/core n/a"}, ${discordVersion ? `discord.js v${discordVersion}` : "discord.js n/a"}`,
+    ];
+
     await msg.edit({
       content: "",
       //@ts-expect-error
       embeds: [
         new EmbedBuilder()
-          .setTitle("Pong!")
+          .setTitle(`Fluxcord Stats (${Package.version}+${getCommitHash()})`)
           .setDescription(
-            `Bridging ${channelsBridged} channel${channelsBridged === 1 ? "" : "s"} (${messagesBridged} messages) for ${getDuration(botStartingTime, now)}`
+            `Bridging ${messagesBridged} message${messagesBridged === 1 ? "" : "s"} in ${channelsBridged} channel${channelsBridged === 1 ? "" : "s"}, bot running for ${getDuration(botStartingTime, now)}`
           )
+          .setColor(4992474)
           .addFields(
             {
-              name: (isFluxer ? "Fluxer" : "Discord") + " round-trip",
-              value: `${messageLatency}ms`,
+              name: "Instance",
+              value: instanceLines.join("\n"),
               inline: true,
             },
             {
-              name: "Fluxer REST",
-              value: `${fluxerRestLatency}ms`,
+              name: "Latency",
+              value: latencyLines.join("\n"),
               inline: true,
             },
             {
-              name: "Discord REST",
-              value: `${discordRestLatency}ms`,
+              name: "Counts",
+              value: countLines.join("\n"),
               inline: true,
             },
             {
-              name: "Discord gateway",
-              value: discordPing,
-              inline: true,
-            },
-            {
-              name: "Fluxer gateway",
-              value: fluxerPing,
-              inline: true,
-            },
-            {
-              name: "Memory",
-              value: `${heapMb} MB`,
-              inline: true,
-            },
-            {
-              name: "Fluxer uptime",
-              value: getDuration(fluxerClient.readyAt ?? now, now),
-              inline: true,
-            },
-            {
-              name: "Discord uptime",
-              value: getDuration(discordClient.readyAt ?? now, now),
-              inline: true,
-            },
-            {
-              name: "\u200b",
-              value: "\u200b",
-              inline: true,
-            },
-            {
-              name: "Discord guilds",
-              value: discordGuildCount + "",
-              inline: true,
-            },
-            {
-              name: "Fluxer guilds",
-              value: fluxerGuildCount + "",
-              inline: true,
-            },
-            {
-              name: "\u200b",
-              value: "\u200b",
-              inline: true,
-            },
-            {
-              name: "Discord members",
-              value: discordMemberCount + "",
-              inline: true,
-            },
-            {
-              name: "Fluxer members",
-              value: fluxerMemberCount + "",
-              inline: true,
-            },
-            {
-              name: "\u200b",
-              value: "\u200b",
-              inline: true,
+              name: "System",
+              value: systemLines.join("\n"),
+              inline: false,
             }
           )
           .setFooter(embedFooterForMessage(message) ? { text: embedFooterForMessage(message) } : null),

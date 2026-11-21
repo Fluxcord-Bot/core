@@ -1,5 +1,6 @@
 import Config from "../../utils/ConfigHandler.js";
 import { VoiceChannelMap, BridgeEndpoint } from "../../db/index.js";
+import { getFluxerClient, instanceIdOfClient } from "../../utils/FluxerClients.js";
 import { ChannelType } from "discord.js";
 
 /**
@@ -11,7 +12,7 @@ const command = {
   aliases: ["voicebridge"],
   description: "Bridge a Discord voice channel to a Fluxer voice channel",
   requireElevated: true,
-  params: "<discordVoiceChannelId> <fluxerVoiceChannelId>",
+  params: "<discordVoiceChannelId> <fluxerVoiceChannelId> [fluxerInstanceId]",
   slashOptions: [
     {
       name: "discord_channel",
@@ -20,16 +21,24 @@ const command = {
       channelTypes: [ChannelType.GuildVoice],
     },
     { name: "fluxer_channel_id", type: "string", required: true },
+    { name: "fluxer_instance", type: "string", required: false },
   ],
   async run(params, message, discordClient, fluxerClient) {
     const discordChannelId = params[0];
     const fluxerChannelId = params[1];
+    const fluxerInstanceId = params[2] || instanceIdOfClient(fluxerClient) || "default";
 
     if (!discordChannelId || !fluxerChannelId) {
       await message.reply(`Missing parameters. Usage:
 \`\`\`
-${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
+${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId> [fluxerInstanceId]
 \`\`\``);
+      return;
+    }
+
+    const targetFluxerClient = getFluxerClient(fluxerInstanceId);
+    if (!targetFluxerClient) {
+      await message.reply(`Unknown Fluxer instance \`${fluxerInstanceId}\`.`);
       return;
     }
 
@@ -47,9 +56,9 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
 
     let fluxerChannel;
     try {
-      fluxerChannel = await fluxerClient.channels.fetch(fluxerChannelId);
+      fluxerChannel = await targetFluxerClient.channels.fetch(fluxerChannelId);
     } catch {
-      await message.reply("Fluxer channel not found.");
+      await message.reply(`Fluxer channel not found on instance \`${fluxerInstanceId}\`.`);
       return;
     }
     if (!fluxerChannel || !fluxerChannel.isVoice()) {
@@ -66,7 +75,12 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
     );
     const fluxerEndpoints = /** @type {any} */ (
       await BridgeEndpoint.findAll({
-        where: { platform: "fluxer", guildId: fluxerChannel.guildId, kind: "channel" },
+        where: {
+          platform: "fluxer",
+          guildId: fluxerChannel.guildId,
+          instanceId: fluxerInstanceId,
+          kind: "channel",
+        },
         attributes: ["groupId"],
         raw: true,
       })
@@ -78,9 +92,11 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
       return;
     }
 
-    const existing = await VoiceChannelMap.findOne({ where: { discordChannelId } });
+    const existing = await VoiceChannelMap.findOne({
+      where: { discordChannelId, fluxerChannelId, fluxerInstanceId },
+    });
     if (existing) {
-      await message.reply("A voice bridge for this Discord channel already exists.");
+      await message.reply("A voice bridge for this Discord and Fluxer channel already exists.");
       return;
     }
 
@@ -89,9 +105,12 @@ ${Config.BotPrefix}voice bridge <discordVoiceChannelId> <fluxerVoiceChannelId>
       discordChannelId,
       fluxerGuildId: fluxerChannel.guildId,
       fluxerChannelId,
+      fluxerInstanceId,
     });
 
-    await message.reply(`Voice bridge created: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerChannelId}\``);
+    await message.reply(
+      `Voice bridge created: Discord \`${discordChannelId}\` ↔ Fluxer \`${fluxerInstanceId}/${fluxerChannelId}\``
+    );
   },
 };
 

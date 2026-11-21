@@ -280,13 +280,21 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, disco
   if (isFluxerVoice && isDiscordVoice) {
     const discordEndpoint = endpoints.find(e => e.platform === "discord");
     const fluxerEndpoint = endpoints.find(e => e.platform === "fluxer");
-    await VoiceChannelMap.create({
-      discordGuildId: discordEndpoint.guildId,
-      discordChannelId: discordEndpoint.channelId,
-      fluxerGuildId: fluxerEndpoint.guildId,
-      fluxerChannelId: fluxerEndpoint.channelId,
-      fluxerInstanceId: fluxerEndpoint.instanceId,
-    });
+    if (discordEndpoint && fluxerEndpoint) {
+      await VoiceChannelMap.destroy({
+        where: {
+          discordChannelId: discordEndpoint.channelId,
+          fluxerChannelId: fluxerEndpoint.channelId,
+        },
+      });
+      await VoiceChannelMap.create({
+        discordGuildId: discordEndpoint.guildId,
+        discordChannelId: discordEndpoint.channelId,
+        fluxerGuildId: fluxerEndpoint.guildId,
+        fluxerChannelId: fluxerEndpoint.channelId,
+        fluxerInstanceId: fluxerEndpoint.instanceId,
+      });
+    }
   }
 
   if (!silent) {

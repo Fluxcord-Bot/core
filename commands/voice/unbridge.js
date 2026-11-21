@@ -12,22 +12,29 @@ const command = {
   aliases: ["voiceunbridge"],
   description: "Remove a voice bridge by Discord or Fluxer channel ID",
   requireElevated: true,
-  params: "<channelId>",
-  slashOptions: [{ name: "channel_id", type: "string", required: true }],
+  params: "<channelId> [fluxerInstanceId]",
+  slashOptions: [
+    { name: "channel_id", type: "string", required: true },
+    { name: "fluxer_instance", type: "string", required: false },
+  ],
   async run(params, message, discordClient, fluxerClient) {
     const channelId = params[0];
+    const fluxerInstanceId = params[1];
 
     if (!channelId) {
       await message.reply(`Missing parameters. Usage:
 \`\`\`
-${Config.BotPrefix}voice unbridge <channelId>
+${Config.BotPrefix}voice unbridge <channelId> [fluxerInstanceId]
 \`\`\``);
       return;
     }
 
+    const fluxerMatch = fluxerInstanceId
+      ? { fluxerChannelId: channelId, fluxerInstanceId }
+      : { fluxerChannelId: channelId };
     const voiceMaps = await VoiceChannelMap.findAll({
       where: {
-        [Op.or]: [{ discordChannelId: channelId }, { fluxerChannelId: channelId }],
+        [Op.or]: [{ discordChannelId: channelId }, fluxerMatch],
       },
     });
     if (voiceMaps.length === 0) {

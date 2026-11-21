@@ -889,7 +889,7 @@ if (Config.VoiceBridgingEnabled) {
     const voiceHandler = await import("./utils/VoiceHandler.js");
     const { setupVoiceHandling } = voiceHandler;
     startVoiceRecovery = voiceHandler.startVoiceRecovery;
-    await setupVoiceHandling(discordClient, defaultFluxerClient, discordVoiceClients);
+    await setupVoiceHandling(discordClient, discordVoiceClients);
   }
 }
 

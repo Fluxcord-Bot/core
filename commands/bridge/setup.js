@@ -210,20 +210,23 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
       const platformsDiffer = (sourceIsFluxer ? "fluxer" : "discord") !== (currentIsFluxer ? "fluxer" : "discord");
       if (isVoice && setup.isVoice && platformsDiffer) {
         const discordEndpoint = endpoints.find(e => e.platform === "discord");
-        const fluxerEndpoint = endpoints.find(e => e.platform === "fluxer");
-        if (discordEndpoint && fluxerEndpoint) {
-          await VoiceChannelMap.destroy({
-            where: {
-              [Op.or]: [{ discordChannelId: discordEndpoint.channelId }, { fluxerChannelId: fluxerEndpoint.channelId }],
-            },
-          });
-          await VoiceChannelMap.create({
-            discordGuildId: discordEndpoint.guildId,
-            discordChannelId: discordEndpoint.channelId,
-            fluxerGuildId: fluxerEndpoint.guildId,
-            fluxerChannelId: fluxerEndpoint.channelId,
-            fluxerInstanceId: fluxerEndpoint.instanceId,
-          });
+        const fluxerEndpoints = endpoints.filter(e => e.platform === "fluxer");
+        if (discordEndpoint && fluxerEndpoints.length > 0) {
+          for (const fluxerEndpoint of fluxerEndpoints) {
+            await VoiceChannelMap.destroy({
+              where: {
+                discordChannelId: discordEndpoint.channelId,
+                fluxerChannelId: fluxerEndpoint.channelId,
+              },
+            });
+            await VoiceChannelMap.create({
+              discordGuildId: discordEndpoint.guildId,
+              discordChannelId: discordEndpoint.channelId,
+              fluxerGuildId: fluxerEndpoint.guildId,
+              fluxerChannelId: fluxerEndpoint.channelId,
+              fluxerInstanceId: fluxerEndpoint.instanceId,
+            });
+          }
         }
       }
 
