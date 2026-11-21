@@ -108,7 +108,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
   const hasOldTables = await queryInterface.tableExists("ChannelMaps");
   if (!hasOldTables) return;
 
-  const existingRows = (await queryInterface.sequelize.query(`SELECT COUNT(*) AS count FROM BridgeEndpoints`, {
+  const existingRows = (await queryInterface.sequelize.query(`SELECT COUNT(*) AS count FROM "BridgeEndpoints"`, {
     type: QueryTypes.SELECT,
   })) as any[];
   const existingEndpoints = existingRows[0]?.count ?? 0;
@@ -118,8 +118,8 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
   }
 
   const now = new Date();
-  const oldRows = (await queryInterface.sequelize.query(`SELECT * FROM ChannelMaps`, { type: QueryTypes.SELECT })) as any[];
-  const oldMessages = (await queryInterface.sequelize.query(`SELECT * FROM MessageMaps`, { type: QueryTypes.SELECT })) as any[];
+  const oldRows = (await queryInterface.sequelize.query(`SELECT * FROM "ChannelMaps"`, { type: QueryTypes.SELECT })) as any[];
+  const oldMessages = (await queryInterface.sequelize.query(`SELECT * FROM "MessageMaps"`, { type: QueryTypes.SELECT })) as any[];
 
   // old ChannelMap id -> { discord: newEndpointId, fluxer: newEndpointId }
   const endpointIdByOld = new Map();
@@ -129,7 +129,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
       returning: dialect === "postgres",
     } as any);
     const groupId = (
-      (await queryInterface.sequelize.query(`SELECT id FROM BridgeGroups ORDER BY id DESC LIMIT 1`, {
+      (await queryInterface.sequelize.query(`SELECT id FROM "BridgeGroups" ORDER BY id DESC LIMIT 1`, {
         type: QueryTypes.SELECT,
       })) as any[]
     )[0].id;
@@ -177,7 +177,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
       [discordEndpointId, fluxerEndpointId] = inserted.map(x => x.id);
     } else {
       const latest = (await queryInterface.sequelize.query(
-        `SELECT id, platform FROM BridgeEndpoints WHERE BridgeGroupId = ${groupId} ORDER BY id ASC`,
+        `SELECT id, platform FROM "BridgeEndpoints" WHERE "BridgeGroupId" = ${groupId} ORDER BY id ASC`,
         { type: QueryTypes.SELECT }
       )) as any[];
       discordEndpointId = latest.find(x => x.platform === "discord")?.id;
