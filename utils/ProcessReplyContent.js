@@ -9,7 +9,7 @@ import { parseMentions } from "./MessageContentParser.js";
 export async function processReplyContent(message) {
   if (message.content.trim().length === 0)
     if (message.stickers.length > 0) return "*Sticker*";
-    else if (message.attachments.size > 0) return "*Attachment*";
+    else if (message.attachments.length > 0) return "*Attachment*";
     else return "*Empty message*";
   const firstProcess = (await traverseMessageLinks(await parseMentions(message))).split("\n")[0];
   const cleaned = flattenMarkdownLinks(sanitizeLinks(sanitizePings(firstProcess))).replace(/<a?:([^:\s]+):\d+>/g, ":$1:");

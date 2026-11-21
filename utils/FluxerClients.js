@@ -72,6 +72,7 @@ export async function setupFluxerClients(wireEvents, presenceText) {
         api: inst.FluxerAPIBaseURL,
         userAgent: buildFluxerUserAgent(),
         retryPolicy: fluxerRetryPolicy,
+        timeout: inst.FluxerAPITimeout ?? Config.FluxerAPITimeout,
       },
       ...(inst.discovery ? { discovery: inst.discovery } : {}),
       ...(inst.instance ? { instance: inst.instance } : {}),

@@ -9,6 +9,7 @@ import { sendFluxerWebhook, editFluxerWebhook } from "../FluxerWebhookSend.js";
 import { withFluxerRateLimit, isFluxerRateLimitError } from "../FluxerRateLimit.js";
 import { Routes as FluxerRoutes } from "@fluxerjs/core";
 import { resolveFluxerClient } from "../FluxerClients.js";
+import { knownSuppressState, markSuppressWrite } from "../SuppressState.js";
 import { renderForTarget, FLUXER_MAX_ATTACHMENT_SIZE, DISCORD_MAX_ATTACHMENT_SIZE } from "./render.js";
 import { resolveDiscordReference, resolveFluxerReference } from "./references.js";
 import { log } from "../Logger.js";
@@ -79,7 +80,9 @@ export async function handleEdit(umsg) {
                 `channel:${targetEndpoint.channelId}`
               );
               const originalFlags = current?.flags ?? 0;
-              if (Boolean(originalFlags & 4) !== suppressed) {
+              const originalSuppressed = knownSuppressState(other.messageId) ?? Boolean(originalFlags & 4);
+              if (originalSuppressed !== suppressed) {
+                markSuppressWrite(other.messageId, suppressed);
                 await withFluxerRateLimit(
                   () =>
                     fluxerClient.rest.patch(FluxerRoutes.channelMessage(targetEndpoint.channelId, other.messageId), {
@@ -91,8 +94,13 @@ export async function handleEdit(umsg) {
             } else {
               const channel = await umsg.ctx.discordClient.channels.fetch(targetEndpoint.channelId).catch(() => null);
               const original = await channel?.messages?.fetch?.(other.messageId).catch(() => null);
-              if (original && original.flags?.has?.(MessageFlags.SuppressEmbeds) !== suppressed) {
-                await original.suppressEmbeds(suppressed);
+              if (original) {
+                const originalSuppressed =
+                  knownSuppressState(original.id) ?? original.flags?.has?.(MessageFlags.SuppressEmbeds) ?? false;
+                if (originalSuppressed !== suppressed) {
+                  markSuppressWrite(original.id, suppressed);
+                  await original.suppressEmbeds(suppressed);
+                }
               }
             }
           } catch (e) {
@@ -160,6 +168,7 @@ export async function handleEdit(umsg) {
                 return;
               }
 
+              markSuppressWrite(other.messageId, Boolean(nextFlags & 4));
               if (targetEndpoint.webhookId) {
                 await editFluxerWebhook(targetEndpoint.webhookId, targetEndpoint.webhookToken, fluxerClient, other.messageId, {
                   content: render.content,
@@ -182,6 +191,7 @@ export async function handleEdit(umsg) {
             } else {
               const webhook = await getDiscordWebhook(umsg.ctx.discordClient, targetEndpoint);
               if (!webhook) return;
+              markSuppressWrite(other.messageId, Boolean(render.flags & 4));
               await webhook.editMessage(other.messageId, {
                 content: render.content,
                 embeds: render.embeds,

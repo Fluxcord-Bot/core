@@ -106,26 +106,18 @@ const command = {
         }
       }
 
-      /** @type {{ name: string, value: string, inline: boolean }[]} */
-      const fields = [];
+      const sections = [];
       for (const [grp, list] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        fields.push({
-          name: `${prefix}${grp}`,
-          value: list
-            .map(x => {
-              const bare = x.topLevelAliases && x.topLevelAliases.length > 0 ? ` (or \`${prefix}${x.topLevelAliases[0]}\`)` : "";
-              return `\`${prefix}${grp} ${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}${bare}`;
-            })
-            .join("\n"),
-          inline: false,
+        const lines = list.map(x => {
+          const bare = x.topLevelAliases && x.topLevelAliases.length > 0 ? ` (or \`${prefix}${x.topLevelAliases[0]}\`)` : "";
+          return `\`${prefix}${grp} ${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}${bare}`;
         });
+        sections.push(`**${prefix}${grp}**\n` + lines.join("\n"));
       }
       if (ungrouped.length > 0) {
-        fields.push({
-          name: "general",
-          value: ungrouped.map(x => `\`${prefix}${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}`).join("\n"),
-          inline: false,
-        });
+        sections.push(
+          `**general**\n` + ungrouped.map(x => `\`${prefix}${x.name}${x.params ? " " + x.params : ""}\`: ${x.description}`).join("\n")
+        );
       }
 
       await message.reply({
@@ -134,9 +126,9 @@ const command = {
           new EmbedBuilder()
             .setTitle("Fluxcord")
             .setDescription(
-              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.`
+              `Fluxcord is a bridge that bridges a Discord channel and a Fluxer channel.\n\nPrefix is \`${prefix}\`. To be able to configure the bot's bridging features, you will need the Manage Server/Community permission.\n\n` +
+                sections.join("\n\n")
             )
-            .addFields(...fields)
             .setFooter(
               embedFooterForMessage(message)
                 ? {

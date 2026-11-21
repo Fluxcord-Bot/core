@@ -1,4 +1,6 @@
 /.forgejo/.*            @jbcarreon123
 /utils/.*voice.*        @vesaber
 
+/FUNDING.yml             @jbcarreon123
+
 .*                      @Fluxcord/Owners

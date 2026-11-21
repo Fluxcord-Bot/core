@@ -19,7 +19,7 @@ import { instanceIdOfClient, resolveFluxerClient } from "./FluxerClients.js";
  */
 export async function sendErrorMessage(message, discordClient, error, options = {}) {
   recordBridgeFailure(message.guildId);
-  const suppressReaction = isBridgeHealthDegraded(message.guildId);
+  const degraded = isBridgeHealthDegraded(message.guildId);
   const isFluxer = message instanceof FluxerMessage;
   const instanceId = options.instanceId ?? (isFluxer ? instanceIdOfClient(message.client) ?? "default" : "default");
 
@@ -28,7 +28,7 @@ export async function sendErrorMessage(message, discordClient, error, options = 
 
   try {
     if (guildMap) {
-      if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform) {
+      if (guildMap.errorLoggingChannelId && guildMap.errorLoggingPlatform && !degraded) {
         if (guildMap.errorLoggingPlatform === "fluxer") {
           const fluxerClient = resolveFluxerClient(instanceId);
           const channel = await fluxerClient.channels.fetch(guildMap.errorLoggingChannelId).catch(() => null);
@@ -71,10 +71,10 @@ export async function sendErrorMessage(message, discordClient, error, options = 
         }
       }
 
-      if (guildMap.errorReaction && !suppressReaction) {
+      if (guildMap.errorReaction && !degraded) {
         await message.react(guildMap.errorReaction);
       }
-    } else if (!suppressReaction) {
+    } else if (!degraded) {
       await message.react("⛓️‍💥");
     }
   } catch {}
