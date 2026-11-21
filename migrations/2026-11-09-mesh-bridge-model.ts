@@ -122,7 +122,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
     } as any);
   }
 
-  const now = new Date();
+  const now = new Date().toISOString().replace("T", " ").replace("Z", " +00:00");
   const endpointIdByOld = new Map<number, { discord?: number; fluxer?: number }>();
   const mapped = (await queryInterface.sequelize.query(`SELECT * FROM "${MAP_TABLE}"`, {
     type: QueryTypes.SELECT,
