@@ -34,7 +34,7 @@ function normalizeAttachment(attachment, platform) {
   };
 }
 
-function discordReference(message) {
+function normalizeReference(message) {
   const ref = message.reference ?? message.messageReference;
   if (!ref) return null;
   return {
@@ -44,17 +44,7 @@ function discordReference(message) {
   };
 }
 
-function fluxerReference(message) {
-  const ref = message.messageReference;
-  if (!ref) return null;
-  return {
-    messageId: ref.messageId ?? null,
-    type: ref.type ?? 0,
-    forwarded: ref.type === 1,
-  };
-}
-
-function discordFlags(message) {
+function messageFlags(message) {
   return {
     crosspost: message.flags?.has?.(2) ?? false,
     suppressEmbeds: message.flags?.has?.(4) ?? false,
@@ -62,17 +52,26 @@ function discordFlags(message) {
   };
 }
 
-function fluxerFlags(message) {
-  return {
-    crosspost: message.flags?.has?.(2) ?? false,
-    suppressEmbeds: message.flags?.has?.(4) ?? false,
-    silent: message.flags?.has?.(4096) ?? false,
-  };
+function forwardedSnapshotOf(message) {
+  if ((message.reference ?? message.messageReference)?.type !== 1) return null;
+  const snapshots = message.messageSnapshots;
+  return snapshots?.first?.() ?? snapshots?.[0] ?? null;
 }
 
-export function fromDiscord(message, options = {}) {
+const countOf = x => x?.size ?? x?.length ?? 0;
+
+function payloadSourceOf(message, snapshot) {
+  const hasPayload =
+    snapshot &&
+    (snapshot.content || countOf(snapshot.attachments) || countOf(snapshot.embeds) || countOf(snapshot.stickers));
+  return hasPayload ? snapshot : message;
+}
+
+function fromPlatform(platform, message, options = {}) {
+  const snapshot = forwardedSnapshotOf(message);
+  const source = payloadSourceOf(message, snapshot);
   return {
-    platform: "discord",
+    platform,
     instanceId: options.instanceId ?? "default",
     raw: message,
     id: message.id,
@@ -81,42 +80,15 @@ export function fromDiscord(message, options = {}) {
     author: normalizeAuthor(message.author),
     member: message.member ?? null,
     webhookId: message.webhookId ?? null,
-    content: message.content ?? "",
-    attachments: (message.attachments ?? []).map(a => normalizeAttachment(a, "discord")),
-    embeds: message.embeds ?? [],
-    stickers: message.stickers ?? [],
-    reference: discordReference(message),
-    forwardedSnapshot:
-      (message.reference ?? message.messageReference)?.type === 1 ? (message.messageSnapshots?.[0] ?? null) : null,
-    flags: discordFlags(message),
+    content: source.content ?? "",
+    attachments: (source.attachments ?? []).map(a => normalizeAttachment(a, platform)),
+    embeds: source.embeds ?? [],
+    stickers: source.stickers ?? [],
+    reference: normalizeReference(message),
+    forwardedSnapshot: snapshot,
+    flags: messageFlags(message),
     type: message.type ?? 0,
-    interaction: message.interaction ?? null,
-    channel: message.channel ?? null,
-    guild: message.guild ?? null,
-    client: message.client,
-  };
-}
-
-export function fromFluxer(message, options = {}) {
-  return {
-    platform: "fluxer",
-    instanceId: options.instanceId ?? "default",
-    raw: message,
-    id: message.id,
-    guildId: message.guildId ?? null,
-    channelId: message.channelId,
-    author: normalizeAuthor(message.author),
-    member: message.member ?? null,
-    webhookId: message.webhookId ?? null,
-    content: message.content ?? "",
-    attachments: (message.attachments ?? []).map(a => normalizeAttachment(a, "fluxer")),
-    embeds: message.embeds ?? [],
-    stickers: message.stickers ?? [],
-    reference: fluxerReference(message),
-    forwardedSnapshot: message.messageReference?.type === 1 ? (message.messageSnapshots?.[0] ?? null) : null,
-    flags: fluxerFlags(message),
-    type: message.type ?? 0,
-    interaction: null,
+    interaction: platform === "discord" ? (message.interaction ?? null) : null,
     channel: message.channel ?? null,
     guild: message.guild ?? null,
     client: message.client,
@@ -150,8 +122,8 @@ export function fromFluxerPartial(message, options = {}) {
 }
 
 export function normalizeMessage(message, options = {}) {
-  if (message instanceof DiscordMessage) return fromDiscord(message, options);
-  if (message instanceof FluxerMessage) return fromFluxer(message, options);
+  if (message instanceof DiscordMessage) return fromPlatform("discord", message, options);
+  if (message instanceof FluxerMessage) return fromPlatform("fluxer", message, options);
   if (message instanceof FluxerPartialMessage) return fromFluxerPartial(message, options);
   return null;
 }

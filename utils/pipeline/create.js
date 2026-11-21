@@ -110,8 +110,8 @@ export async function handleCreate(umsg, options = {}) {
 
   const kind = endpoints.some(e => e.kind === "thread") ? "thread" : "channel";
 
-  const bridgeContent =
-    umsg.platform === "discord" ? attemptParseBridgedMessage(umsg.raw) : { messageData: { parsedContent: umsg.content } };
+  const parsed = umsg.platform === "discord" ? await attemptParseBridgedMessage(umsg.raw) : null;
+  const bridgeContent = parsed?.isBridge || parsed?.isProxy ? parsed : { messageData: { parsedContent: umsg.content } };
 
   let refMessageId = null;
   let refMessage = null;
@@ -228,7 +228,7 @@ export async function handleCreate(umsg, options = {}) {
 
   if (sentAny) {
     resetBridgeHealth(umsg.guildId);
-    scheduleSourceVerification(umsg, bridgeContent?.messageData?.parsedContent ?? umsg.content ?? "");
+    scheduleSourceVerification(umsg, umsg.raw.content ?? "");
   }
 }
 

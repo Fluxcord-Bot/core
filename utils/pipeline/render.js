@@ -181,7 +181,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
   const canBridgePing = canUserPing && (await everyonePingEnabled(targetEndpoint));
 
   const parsedContent = await renderContent(umsg, targetEndpoint, {
-    parsedSeed: bridgeContent?.messageData?.parsedContent ?? null,
+    parsedSeed: bridgeContent?.messageData?.parsedContent ?? umsg.content ?? null,
     canBridgePing,
     forwarded,
     ctx: opts.ctx,
@@ -273,7 +273,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
       embeds.filter(x => !isPlatformPreviewEmbed(x, umsg.content)).map(x => discordEmbedToFluxer(x, targetClient))
     );
   } else if (umsg.platform === "fluxer" && targetPlatform === "discord") {
-    embeds = await fluxerEmbedToDiscord(umsg.raw, opts.ctx?.discordClient);
+    embeds = await fluxerEmbedToDiscord({ content: umsg.content, embeds }, opts.ctx?.discordClient);
   }
 
   if (umsg.platform === "discord" && umsg.type === MessageType.PollResult && targetPlatform === "fluxer") {
