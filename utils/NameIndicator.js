@@ -36,9 +36,12 @@ export async function resolveNameIndicator(receiverGuildId, senderGuildId) {
   });
   if (rows.length === 0) return null;
 
-  const styleRow = rows.find(x => x.nameIndicator);
-  const style = styleRow?.nameIndicator === "short" ? "short" : "full";
-  const senderRow = (senderGuildId && rows.find(x => x.guildId === senderGuildId)) ?? styleRow ?? rows[0];
+  const styledRows = rows.filter(x => x.nameIndicator === "full" || x.nameIndicator === "short");
+  if (styledRows.length === 0) return null;
+
+  const styleRow = styledRows[0];
+  const style = styleRow.nameIndicator === "short" ? "short" : "full";
+  const senderRow = (senderGuildId && rows.find(x => x.guildId === senderGuildId)) ?? styleRow;
 
   if (senderRow.guildType === "fluxer") {
     const instanceName = await getFluxerInstanceName(senderRow.fluxerInstanceId ?? "default");

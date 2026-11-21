@@ -161,6 +161,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
 
         const tagMap =
           row.tagMap == null ? null : typeof row.tagMap === "string" ? row.tagMap : JSON.stringify(row.tagMap);
+        const kind = row.parentChannelMapId ? "thread" : "channel";
         const inserted = (await queryInterface.bulkInsert(
           "BridgeEndpoints",
           [
@@ -171,7 +172,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
               guildId: row.discordGuildId,
               webhookId: row.discordWebhookId,
               webhookToken: row.discordWebhookToken,
-              kind: "channel",
+              kind,
               autoMirrored: row.autoMirrored ?? false,
               tagMap,
               BridgeGroupId: groupId,
@@ -186,7 +187,7 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
               guildId: row.fluxerGuildId,
               webhookId: row.fluxerWebhookId,
               webhookToken: row.fluxerWebhookToken,
-              kind: "channel",
+              kind,
               autoMirrored: row.autoMirrored ?? false,
               tagMap,
               BridgeGroupId: groupId,
