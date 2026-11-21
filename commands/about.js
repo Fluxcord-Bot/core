@@ -26,7 +26,11 @@ const command = {
   requireElevated: false,
   allowDM: true,
   async run(params, message, discordClient, fluxerClient) {
-    const channels = await BridgeEndpoint.count({ where: { kind: "channel" } });
+    const channels = await BridgeEndpoint.count({
+      distinct: true,
+      col: "BridgeGroupId",
+      where: { kind: "channel" },
+    });
 
     const container = new ContainerBuilder({
       accent_color: 0x5865f2,

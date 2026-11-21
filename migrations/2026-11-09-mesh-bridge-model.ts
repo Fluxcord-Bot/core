@@ -108,132 +108,216 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
   const hasOldTables = await queryInterface.tableExists("ChannelMaps");
   if (!hasOldTables) return;
 
-  const existingRows = (await queryInterface.sequelize.query(`SELECT COUNT(*) AS count FROM "BridgeEndpoints"`, {
-    type: QueryTypes.SELECT,
-  })) as any[];
-  const existingEndpoints = existingRows[0]?.count ?? 0;
-  if (existingEndpoints > 0) {
-    console.log("BridgeEndpoints already populated, skipping data copy");
-    return;
+  const escape = (value: any) => queryInterface.sequelize.escape(value);
+  const MAP_TABLE = "_MeshEndpointMigrationMap";
+  const CHANNEL_BATCH = 200;
+  const MESSAGE_BATCH = 5000;
+  const INSERT_BATCH = 1000;
+
+  if (!(await queryInterface.tableExists(MAP_TABLE))) {
+    await queryInterface.createTable(MAP_TABLE, {
+      oldChannelMapId: { type: DataTypes.INTEGER, primaryKey: true },
+      discordEndpointId: { type: DataTypes.INTEGER, allowNull: true },
+      fluxerEndpointId: { type: DataTypes.INTEGER, allowNull: true },
+    } as any);
   }
 
   const now = new Date();
-  const oldRows = (await queryInterface.sequelize.query(`SELECT * FROM "ChannelMaps"`, { type: QueryTypes.SELECT })) as any[];
-  const oldMessages = (await queryInterface.sequelize.query(`SELECT * FROM "MessageMaps"`, { type: QueryTypes.SELECT })) as any[];
+  const endpointIdByOld = new Map<number, { discord?: number; fluxer?: number }>();
+  const mapped = (await queryInterface.sequelize.query(`SELECT * FROM "${MAP_TABLE}"`, {
+    type: QueryTypes.SELECT,
+  })) as any[];
+  for (const entry of mapped) {
+    endpointIdByOld.set(Number(entry.oldChannelMapId), {
+      discord: entry.discordEndpointId ?? undefined,
+      fluxer: entry.fluxerEndpointId ?? undefined,
+    });
+  }
 
-  // old ChannelMap id -> { discord: newEndpointId, fluxer: newEndpointId }
-  const endpointIdByOld = new Map();
+  let lastChannelId = 0;
+  for (;;) {
+    const oldRows = (await queryInterface.sequelize.query(
+      `SELECT * FROM "ChannelMaps" WHERE id > ${lastChannelId} ORDER BY id ASC LIMIT ${CHANNEL_BATCH}`,
+      { type: QueryTypes.SELECT }
+    )) as any[];
+    if (oldRows.length === 0) break;
+    for (const row of oldRows) {
+      lastChannelId = Number(row.id);
+      if (endpointIdByOld.has(Number(row.id))) continue;
+      await queryInterface.sequelize.transaction(async transaction => {
+        const groupInserted = (await queryInterface.bulkInsert(
+          "BridgeGroups",
+          [{ bridgeType: row.bridgeType ?? "both", createdAt: now, updatedAt: now }],
+          { returning: dialect === "postgres", transaction } as any
+        )) as any;
+        let groupId = Array.isArray(groupInserted) && groupInserted[0]?.id != null ? groupInserted[0].id : null;
+        if (groupId == null) {
+          const latest = (await queryInterface.sequelize.query(
+            `SELECT id FROM "BridgeGroups" ORDER BY id DESC LIMIT 1`,
+            { type: QueryTypes.SELECT, transaction }
+          )) as any[];
+          groupId = latest[0]?.id;
+        }
 
-  for (const row of oldRows) {
-    await queryInterface.bulkInsert("BridgeGroups", [{ bridgeType: row.bridgeType ?? "both", createdAt: now, updatedAt: now }], {
-      returning: dialect === "postgres",
-    } as any);
-    const groupId = (
-      (await queryInterface.sequelize.query(`SELECT id FROM "BridgeGroups" ORDER BY id DESC LIMIT 1`, {
-        type: QueryTypes.SELECT,
-      })) as any[]
-    )[0].id;
+        const tagMap =
+          row.tagMap == null ? null : typeof row.tagMap === "string" ? row.tagMap : JSON.stringify(row.tagMap);
+        const inserted = (await queryInterface.bulkInsert(
+          "BridgeEndpoints",
+          [
+            {
+              platform: "discord",
+              instanceId: "default",
+              channelId: row.discordChannelId,
+              guildId: row.discordGuildId,
+              webhookId: row.discordWebhookId,
+              webhookToken: row.discordWebhookToken,
+              kind: "channel",
+              autoMirrored: row.autoMirrored ?? false,
+              tagMap,
+              BridgeGroupId: groupId,
+              ParentBridgeEndpointId: null,
+              createdAt: now,
+              updatedAt: now,
+            },
+            {
+              platform: "fluxer",
+              instanceId: "default",
+              channelId: row.fluxerChannelId,
+              guildId: row.fluxerGuildId,
+              webhookId: row.fluxerWebhookId,
+              webhookToken: row.fluxerWebhookToken,
+              kind: "channel",
+              autoMirrored: row.autoMirrored ?? false,
+              tagMap,
+              BridgeGroupId: groupId,
+              ParentBridgeEndpointId: null,
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+          { returning: dialect === "postgres", transaction } as any
+        )) as any;
 
-    const inserted = await queryInterface.bulkInsert(
-      "BridgeEndpoints",
-      [
-        {
-          platform: "discord",
-          instanceId: "default",
-          channelId: row.discordChannelId,
-          guildId: row.discordGuildId,
-          webhookId: row.discordWebhookId,
-          webhookToken: row.discordWebhookToken,
-          kind: "channel",
-          autoMirrored: row.autoMirrored ?? false,
-          tagMap: row.tagMap ?? null,
-          BridgeGroupId: groupId,
-          ParentBridgeEndpointId: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-        {
-          platform: "fluxer",
-          instanceId: "default",
-          channelId: row.fluxerChannelId,
-          guildId: row.fluxerGuildId,
-          webhookId: row.fluxerWebhookId,
-          webhookToken: row.fluxerWebhookToken,
-          kind: "channel",
-          autoMirrored: row.autoMirrored ?? false,
-          tagMap: row.tagMap ?? null,
-          BridgeGroupId: groupId,
-          ParentBridgeEndpointId: null,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ],
-      { returning: dialect === "postgres" } as any
-    );
+        let discordEndpointId;
+        let fluxerEndpointId;
+        if (Array.isArray(inserted) && inserted.length === 2) {
+          [discordEndpointId, fluxerEndpointId] = inserted.map((x: any) => x.id);
+        } else {
+          const latest = (await queryInterface.sequelize.query(
+            `SELECT id, platform FROM "BridgeEndpoints" WHERE "BridgeGroupId" = ${escape(groupId)} ORDER BY id ASC`,
+            { type: QueryTypes.SELECT, transaction }
+          )) as any[];
+          discordEndpointId = latest.find(x => x.platform === "discord")?.id;
+          fluxerEndpointId = latest.find(x => x.platform === "fluxer")?.id;
+        }
 
-    let discordEndpointId;
-    let fluxerEndpointId;
-    if (Array.isArray(inserted) && inserted.length === 2) {
-      [discordEndpointId, fluxerEndpointId] = inserted.map(x => x.id);
-    } else {
-      const latest = (await queryInterface.sequelize.query(
-        `SELECT id, platform FROM "BridgeEndpoints" WHERE "BridgeGroupId" = ${groupId} ORDER BY id ASC`,
-        { type: QueryTypes.SELECT }
-      )) as any[];
-      discordEndpointId = latest.find(x => x.platform === "discord")?.id;
-      fluxerEndpointId = latest.find(x => x.platform === "fluxer")?.id;
+        await queryInterface.bulkInsert(
+          MAP_TABLE,
+          [{ oldChannelMapId: row.id, discordEndpointId, fluxerEndpointId }],
+          { transaction } as any
+        );
+        endpointIdByOld.set(Number(row.id), { discord: discordEndpointId, fluxer: fluxerEndpointId });
+      });
+    }
+  }
+
+  lastChannelId = 0;
+  for (;;) {
+    const oldRows = (await queryInterface.sequelize.query(
+      `SELECT * FROM "ChannelMaps" WHERE id > ${lastChannelId} ORDER BY id ASC LIMIT ${CHANNEL_BATCH}`,
+      { type: QueryTypes.SELECT }
+    )) as any[];
+    if (oldRows.length === 0) break;
+    for (const row of oldRows) {
+      lastChannelId = Number(row.id);
+      if (!row.parentChannelMapId) continue;
+      const parent = endpointIdByOld.get(Number(row.parentChannelMapId));
+      const own = endpointIdByOld.get(Number(row.id));
+      if (!parent || !own) continue;
+      await queryInterface.bulkUpdate(
+        "BridgeEndpoints",
+        { ParentBridgeEndpointId: parent.discord, updatedAt: now },
+        { id: own.discord }
+      );
+      await queryInterface.bulkUpdate(
+        "BridgeEndpoints",
+        { ParentBridgeEndpointId: parent.fluxer, updatedAt: now },
+        { id: own.fluxer }
+      );
+    }
+  }
+
+  let lastMessageId = 0;
+  let copiedMessages = 0;
+  for (;;) {
+    const oldMessages = (await queryInterface.sequelize.query(
+      `SELECT * FROM "MessageMaps" WHERE id > ${lastMessageId} ORDER BY id ASC LIMIT ${MESSAGE_BATCH}`,
+      { type: QueryTypes.SELECT }
+    )) as any[];
+    if (oldMessages.length === 0) break;
+    lastMessageId = Number(oldMessages[oldMessages.length - 1].id);
+
+    const candidates = oldMessages.filter(msg => endpointIdByOld.has(Number(msg.ChannelMapId)));
+    if (candidates.length === 0) continue;
+
+    const messageIds: string[] = [];
+    for (const msg of candidates) {
+      if (msg.discordMessageId != null) messageIds.push(String(msg.discordMessageId));
+      if (msg.fluxerMessageId != null) messageIds.push(String(msg.fluxerMessageId));
     }
 
-    endpointIdByOld.set(row.id, { discord: discordEndpointId, fluxer: fluxerEndpointId });
-  }
+    const alreadyLinked = new Set<string>();
+    for (let i = 0; i < messageIds.length; i += INSERT_BATCH) {
+      const inList = messageIds.slice(i, i + INSERT_BATCH).map(id => escape(id)).join(",");
+      if (!inList) continue;
+      const rows = (await queryInterface.sequelize.query(
+        `SELECT DISTINCT "messageId" FROM "MessageLinks" WHERE "messageId" IN (${inList})`,
+        { type: QueryTypes.SELECT }
+      )) as any[];
+      for (const row of rows) {
+        if (row.messageId != null) alreadyLinked.add(String(row.messageId));
+      }
+    }
 
-  for (const row of oldRows) {
-    if (!row.parentChannelMapId) continue;
-    const parent = endpointIdByOld.get(row.parentChannelMapId);
-    const own = endpointIdByOld.get(row.id);
-    if (!parent || !own) continue;
-    await queryInterface.bulkUpdate(
-      "BridgeEndpoints",
-      { ParentBridgeEndpointId: parent.discord, updatedAt: now },
-      { id: own.discord }
-    );
-    await queryInterface.bulkUpdate(
-      "BridgeEndpoints",
-      { ParentBridgeEndpointId: parent.fluxer, updatedAt: now },
-      { id: own.fluxer }
-    );
-  }
+    const linkRows: any[] = [];
+    for (const msg of candidates) {
+      if (msg.discordMessageId != null && alreadyLinked.has(String(msg.discordMessageId))) continue;
+      if (msg.fluxerMessageId != null && alreadyLinked.has(String(msg.fluxerMessageId))) continue;
+      const endpointIds = endpointIdByOld.get(Number(msg.ChannelMapId));
+      if (!endpointIds) continue;
+      const uuid = randomUUID();
+      linkRows.push({
+        linkGroup: uuid,
+        messageId: msg.discordMessageId,
+        replyId: msg.discordReplyId ?? null,
+        authorId: msg.authorId ?? null,
+        BridgeEndpointId: endpointIds.discord,
+        createdAt: now,
+        updatedAt: now,
+      });
+      linkRows.push({
+        linkGroup: uuid,
+        messageId: msg.fluxerMessageId,
+        replyId: msg.fluxerReplyId ?? null,
+        authorId: msg.authorId ?? null,
+        BridgeEndpointId: endpointIds.fluxer,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
-  const linkRows = [];
-  for (const msg of oldMessages) {
-    const endpointIds = endpointIdByOld.get(msg.ChannelMapId);
-    if (!endpointIds) continue;
-    const uuid = randomUUID();
-    linkRows.push({
-      linkGroup: uuid,
-      messageId: msg.discordMessageId,
-      replyId: msg.discordReplyId ?? null,
-      authorId: msg.authorId ?? null,
-      BridgeEndpointId: endpointIds.discord,
-      createdAt: now,
-      updatedAt: now,
-    });
-    linkRows.push({
-      linkGroup: uuid,
-      messageId: msg.fluxerMessageId,
-      replyId: msg.fluxerReplyId ?? null,
-      authorId: msg.authorId ?? null,
-      BridgeEndpointId: endpointIds.fluxer,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-  for (let i = 0; i < linkRows.length; i += 500) {
-    await queryInterface.bulkInsert("MessageLinks", linkRows.slice(i, i + 500));
+    for (let i = 0; i < linkRows.length; i += INSERT_BATCH) {
+      await queryInterface.bulkInsert("MessageLinks", linkRows.slice(i, i + INSERT_BATCH));
+    }
+    copiedMessages += candidates.length;
+    if (copiedMessages % 50000 < MESSAGE_BATCH) {
+      console.log(`Mesh migration: copied ${copiedMessages} MessageMaps rows (up to id ${lastMessageId})`);
+    }
   }
 
   await queryInterface.dropTable("MessageMaps");
   await queryInterface.dropTable("ChannelMaps");
+  await queryInterface.sequelize.query(`DROP TABLE IF EXISTS "${MAP_TABLE}"`);
 }
 
 export async function down({ context: queryInterface }: { context: QueryInterface }) {

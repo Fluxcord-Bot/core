@@ -85,8 +85,12 @@ const command = {
     await discordClient.rest.get(Routes.currentApplication());
     const discordRestLatency = Date.now() - discordRestStart;
 
-    const messagesBridged = await MessageLink.count();
-    const channelsBridged = await BridgeEndpoint.count({ where: { kind: "channel" } });
+    const messagesBridged = await MessageLink.count({ distinct: true, col: "linkGroup" });
+    const channelsBridged = await BridgeEndpoint.count({
+      distinct: true,
+      col: "BridgeGroupId",
+      where: { kind: "channel" },
+    });
     const discordGuildCount = discordClient.guilds.cache.size;
     const discordMemberCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
     const discordPing =

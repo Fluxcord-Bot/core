@@ -482,7 +482,7 @@ function wireFluxerEvents(instanceId, fluxerClient) {
   fluxerClient.on(FluxerEvents.Ready, async () => {
     log("FLUXER", `[${instanceId}] ${fluxerClient.user?.username}#${fluxerClient.user?.discriminator} is ready!`);
 
-    const mapsCount = await BridgeEndpoint.count();
+    const mapsCount = await BridgeEndpoint.count({ distinct: true, col: "BridgeGroupId" });
     fluxerClient.user?.setPresence({
       status: "online",
       customStatus: {
@@ -711,8 +711,8 @@ async function onBothReady() {
       }
 
       const sendToGato = async () => {
-        const channels = await BridgeEndpoint.count();
-        const messages = await MessageLink.count();
+        const channels = await BridgeEndpoint.count({ distinct: true, col: "BridgeGroupId" });
+        const messages = await MessageLink.count({ distinct: true, col: "linkGroup" });
         const discordGuildCount = discordClient.guilds.cache.size;
         const discordUserCount = discordClient.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0);
         let fluxerGuildCount = 0;
@@ -768,7 +768,7 @@ async function onBothReady() {
     await motdLoop();
   }
 
-  const mapsCount = await BridgeEndpoint.count();
+  const mapsCount = await BridgeEndpoint.count({ distinct: true, col: "BridgeGroupId" });
   void mapsCount;
 
   const inviteLines = ["To invite Fluxcord to your server, here's the invite links:", ""];
@@ -794,7 +794,7 @@ discordClient.on(DiscordEvents.ClientReady, async () => {
     log("DISCORD", "Failed to register application commands:", e);
   }
 
-  const mapsCount = await BridgeEndpoint.count();
+  const mapsCount = await BridgeEndpoint.count({ distinct: true, col: "BridgeGroupId" });
   discordClient.user?.setActivity(`${Config.BotPrefix}help | bridging ${mapsCount} channel${mapsCount > 1 ? "s" : ""}`);
 
   discordReady = true;
