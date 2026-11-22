@@ -110,6 +110,42 @@ export async function backfillMirroredThread(thread, bridgeMessage, guildId, opt
   return runBackfill(guildId, () => backfillThreadMessages(thread, bridgeMessage));
 }
 
+const resumedThreads = new Set();
+
+/**
+ * @param {any} thread
+ * @param {"discord" | "fluxer"} platform
+ * @param {(message: any) => Promise<void>} bridgeMessage
+ * @param {string} currentMessageId
+ * @param {string | null} relayWebhookId
+ * @returns {Promise<boolean>}
+ */
+export async function resumeThreadBackfill(thread, platform, bridgeMessage, currentMessageId, relayWebhookId = null) {
+  const key = `${platform}:${thread.id}`;
+  if (resumedThreads.has(key)) return false;
+  try {
+    const rows = await BridgeEndpoint.findAll({ where: { platform, channelId: thread.id, kind: "thread" } });
+    if (rows.length === 0) return false;
+    if (relayWebhookId && rows.some(row => row.webhookId === relayWebhookId)) return false;
+    resumedThreads.add(key);
+    const page = [...(await thread.messages.fetch({ limit: 100 })).values()].filter(m => m.id !== currentMessageId);
+    if (page.length === 0) return false;
+    const linked = await MessageLink.findAll({
+      where: { messageId: { [Op.in]: page.map(m => m.id) }, endpointId: { [Op.in]: rows.map(row => row.id) } },
+      attributes: ["messageId"],
+      raw: true,
+    });
+    const linkedIds = new Set(linked.map(row => row.messageId));
+    if (page.every(m => linkedIds.has(m.id))) return false;
+    log("DEBUG", `resumeThreadBackfill ${platform} thread=${thread.id} unbridged=${page.filter(m => !linkedIds.has(m.id)).length}`);
+    await backfillMirroredThread(thread, bridgeMessage, thread.guildId);
+    return true;
+  } catch (e) {
+    log("DEBUG", `resumeThreadBackfill failed ${platform} thread=${thread.id}`, e);
+    return false;
+  }
+}
+
 /**
  * @param {"discord" | "fluxer"} platform
  * @param {string} threadId

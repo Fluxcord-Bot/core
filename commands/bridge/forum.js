@@ -183,10 +183,8 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
 
       const { endpoints } = await setupBridgePair(
         "both",
-        [
-          { platform: myPlatform, instanceId: myInstanceId, channel: myForum },
-          { platform: otherPlatform, instanceId: otherInstanceId, channel: otherForum },
-        ],
+        { platform: myPlatform, instanceId: myInstanceId, channel: myForum },
+        { platform: otherPlatform, instanceId: otherInstanceId, channel: otherForum },
         discordClient
       );
 

@@ -1,4 +1,8 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 const MAX_ACTIVE_BACKFILLS = 1;
+
+const runningGuild = new AsyncLocalStorage();
 
 const guildQueues = new Map();
 
@@ -18,7 +22,7 @@ function pump(key, queue) {
     queue.active++;
     (async () => {
       try {
-        item.resolve(await item.task());
+        item.resolve(await runningGuild.run(key, item.task));
       } catch (e) {
         item.reject(e);
       } finally {
@@ -34,6 +38,7 @@ function pump(key, queue) {
 }
 
 export function runBackfill(guildId, task) {
+  if (runningGuild.getStore() === String(guildId ?? "unknown")) return Promise.resolve().then(task);
   const { key, queue } = getQueue(guildId);
   return new Promise((resolve, reject) => {
     queue.items.push({ task, resolve, reject });
