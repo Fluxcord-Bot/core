@@ -2,9 +2,10 @@ import Config from "../../utils/ConfigHandler.js";
 import { BridgeEndpoint, MessageLink } from "../../db/index.js";
 import { Op } from "sequelize";
 import { Message as FluxerMessage } from "@fluxerjs/core";
+import { ChannelType } from "discord.js";
 import { pipelineCreate } from "../../utils/pipeline/adapters.js";
 import { pendingBackfills, runBackfill } from "../../utils/BackfillQueue.js";
-import { resolveFluxerClient } from "../../utils/FluxerClients.js";
+import { backfillMirroredThread, ensureThreadFannedOut } from "../../utils/ThreadMirror.js";
 
 const activeBackfills = new Map();
 const fetchPageSize = 100;
@@ -80,10 +81,29 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
     const ahead = pendingBackfills(guildId);
     if (ahead > 0) await message.reply(`Queued behind ${ahead} backfill(s) in this guild.`);
 
+    const isParentForum =
+      message.channel?.isThread?.() === false &&
+      (isFluxer
+        ? isFluxerForumLike(message.channel)
+        : message.channel?.type === ChannelType.GuildForum || message.channel?.type === ChannelType.GuildMedia);
+
     await runBackfill(guildId, async () => {
       try {
         if (state.cancelled) {
           await message.reply("Backfill cancelled before it started.");
+          return;
+        }
+        if (isParentForum) {
+          await backfillForumPosts(
+            message,
+            isFluxer,
+            endpoints,
+            numOfMessages,
+            state,
+            guildId,
+            discordClient,
+            fluxerClient
+          );
           return;
         }
         const collected = [];
@@ -158,6 +178,74 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isFluxerForumLike(channel) {
+  if (!channel) return false;
+  if (typeof channel.isForum === "function" && channel.isForum()) return true;
+  return typeof channel.isMedia === "function" && channel.isMedia();
+}
+
+function collectionValues(result) {
+  const threads = result?.threads ?? result;
+  if (!threads) return [];
+  if (Array.isArray(threads)) return threads;
+  if (typeof threads.values === "function") return [...threads.values()];
+  return [];
+}
+
+async function fetchForumPosts(channel) {
+  const active = await channel.threads.fetchActive().catch(() => null);
+  const archived = await channel.threads.fetchArchived({ type: "public", limit: 100 }).catch(() => null);
+  return [...collectionValues(active), ...collectionValues(archived)];
+}
+
+async function backfillForumPosts(message, isFluxer, endpoints, numOfMessages, state, guildId, discordClient, fluxerClient) {
+  const platform = isFluxer ? "fluxer" : "discord";
+  const instanceId = endpoints.find(e => e.platform === platform)?.instanceId ?? "default";
+  const posts = (await fetchForumPosts(message.channel)).slice(0, numOfMessages);
+  if (posts.length === 0) {
+    await message.reply("No forum posts found to backfill.");
+    return;
+  }
+
+  const statusMsg = await message.reply(`Backfilling ${posts.length} forum posts...`);
+  const bridgeMessage = msg => pipelineCreate(msg, { instanceId, execCommands: false });
+  let success = 0;
+  for (const [i, thread] of posts.entries()) {
+    if (state.cancelled) break;
+    try {
+      await statusMsg.edit({
+        content: `Backfilling forum post ${thread.id}... (${i + 1}/${posts.length}, ${success} successful)`,
+      });
+    } catch {}
+    try {
+      const made = await ensureThreadFannedOut(thread, {
+        platform,
+        discordClient,
+        fluxerClient,
+        instanceId,
+        bridgeMessage,
+        backfillOptions: { immediate: true },
+      });
+      if (made.length > 0) {
+        success++;
+      } else {
+        const copies = await BridgeEndpoint.count({ where: { platform, channelId: thread.id, kind: "thread" } });
+        if (copies > 0) {
+          await backfillMirroredThread(thread, bridgeMessage, guildId, { immediate: true });
+          success++;
+        }
+      }
+    } catch {}
+    await sleep(2000);
+  }
+
+  if (state.cancelled) {
+    await statusMsg.edit({ content: `Backfill cancelled after ${success} forum posts.` });
+  } else {
+    await statusMsg.edit({ content: `🎉 Successfully backfilled ${success} forum posts!` });
+  }
 }
 
 export default command;

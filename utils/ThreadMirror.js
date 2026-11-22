@@ -1,7 +1,7 @@
 import Config from "./ConfigHandler.js";
 import { ChannelType as FluxerChannelType } from "@fluxerjs/core";
 import { ChannelType as DiscordChannelType } from "discord.js";
-import { BridgeEndpoint, MessageLink } from "../db/index.js";
+import { BridgeEndpoint, BridgeGroup, MessageLink } from "../db/index.js";
 import { Op } from "sequelize";
 import { sanitizePings } from "./SanitizePings.js";
 import { sendFluxerWebhook } from "./FluxerWebhookSend.js";
@@ -81,30 +81,33 @@ async function downloadPostAttachment(url) {
  * @param {string | null} guildId
  * @returns {Promise<void>}
  */
-export async function backfillMirroredThread(thread, bridgeMessage, guildId) {
-  return runBackfill(guildId, async () => {
-    const messages = [];
-    let before = null;
-    while (messages.length < Config.MaxBackfillMessages) {
-      const page = await thread.messages.fetch({
-        limit: Math.min(100, Config.MaxBackfillMessages - messages.length),
-        ...(before ? { before } : {}),
-      });
-      const batch = [...page.values()];
-      if (batch.length === 0) break;
-      messages.push(...batch);
-      before = batch[batch.length - 1].id;
-      if (batch.length < 100) break;
-    }
-    for (const message of messages.reverse()) {
-      const existing = await MessageLink.findOne({ where: { messageId: message.id } });
-      if (existing) continue;
-      try {
-        await bridgeMessage(message);
-      } catch {}
-      await delay(2000);
-    }
-  });
+async function backfillThreadMessages(thread, bridgeMessage) {
+  const messages = [];
+  let before = null;
+  while (messages.length < Config.MaxBackfillMessages) {
+    const page = await thread.messages.fetch({
+      limit: Math.min(100, Config.MaxBackfillMessages - messages.length),
+      ...(before ? { before } : {}),
+    });
+    const batch = [...page.values()];
+    if (batch.length === 0) break;
+    messages.push(...batch);
+    before = batch[batch.length - 1].id;
+    if (batch.length < 100) break;
+  }
+  for (const message of messages.reverse()) {
+    const existing = await MessageLink.findOne({ where: { messageId: message.id } });
+    if (existing) continue;
+    try {
+      await bridgeMessage(message);
+    } catch {}
+    await delay(2000);
+  }
+}
+
+export async function backfillMirroredThread(thread, bridgeMessage, guildId, options = {}) {
+  if (options.immediate) return backfillThreadMessages(thread, bridgeMessage);
+  return runBackfill(guildId, () => backfillThreadMessages(thread, bridgeMessage));
 }
 
 /**
@@ -177,21 +180,39 @@ async function persistTagMap(endpoint, tagMap) {
   await row.save();
 }
 
+function tagMapObject(tagMap) {
+  if (tagMap && !Array.isArray(tagMap) && tagMap.targets) return { version: 2, targets: { ...tagMap.targets } };
+  return { version: 2, targets: {} };
+}
+
+function tagEntriesFor(tagMap, targetEndpointId) {
+  const entries = tagMapObject(tagMap).targets[targetEndpointId];
+  return Array.isArray(entries) ? entries : [];
+}
+
+async function persistTagEntries(anchorEndpoint, targetEndpointId, entries) {
+  const tagMap = tagMapObject(anchorEndpoint.tagMap);
+  tagMap.targets[targetEndpointId] = entries;
+  anchorEndpoint.set("tagMap", tagMap);
+  await persistTagMap(anchorEndpoint, tagMap);
+}
+
 /**
  * @param {BridgeEndpoint} anchorEndpoint
+ * @param {BridgeEndpoint} targetEndpoint
  * @param {string[]} tagIds
  * @param {BridgeEndpoint} discordParent
  * @param {BridgeEndpoint} fluxerParent
  * @returns {Promise<string[]>} fluxer tag ids
  */
-export async function mapTagsToFluxer(anchorEndpoint, tagIds, discordParent, fluxerParent) {
-  if (!tagIds?.length || !fluxerParent) return [];
-  const tagMap = Array.isArray(anchorEndpoint.tagMap) ? anchorEndpoint.tagMap : [];
+export async function mapTagsToFluxer(anchorEndpoint, targetEndpoint, tagIds, discordParent, fluxerParent) {
+  if (!tagIds?.length || !fluxerParent || !targetEndpoint) return [];
+  const entries = [...tagEntriesFor(anchorEndpoint.tagMap, targetEndpoint.id)];
   const sourceTags = discordParent ? readTags(discordParent, "discord") : [];
   let changed = false;
   const ids = [];
   for (const id of tagIds.slice(0, MAX_POST_TAGS)) {
-    let entry = tagMap.find(t => t.discordId === id);
+    let entry = entries.find(t => t.discordId === id);
     if (!entry) {
       const sourceTag = sourceTags.find(t => t.id === id);
       if (!sourceTag) continue;
@@ -203,30 +224,31 @@ export async function mapTagsToFluxer(anchorEndpoint, tagIds, discordParent, flu
         moderated: sourceTag.moderated,
         emojiName: sourceTag.emojiName ?? null,
       };
-      tagMap.push(entry);
+      entries.push(entry);
       changed = true;
     }
     if (entry.fluxerId) ids.push(entry.fluxerId);
   }
-  if (changed) await persistTagMap(anchorEndpoint, tagMap);
+  if (changed) await persistTagEntries(anchorEndpoint, targetEndpoint.id, entries);
   return ids;
 }
 
 /**
  * @param {BridgeEndpoint} anchorEndpoint
+ * @param {BridgeEndpoint} targetEndpoint
  * @param {string[]} tagIds
  * @param {BridgeEndpoint} fluxerParent
  * @param {BridgeEndpoint} discordParent
  * @returns {Promise<string[]>} discord tag ids
  */
-export async function mapTagsToDiscord(anchorEndpoint, tagIds, fluxerParent, discordParent) {
-  if (!tagIds?.length || !discordParent) return [];
-  const tagMap = Array.isArray(anchorEndpoint.tagMap) ? anchorEndpoint.tagMap : [];
+export async function mapTagsToDiscord(anchorEndpoint, targetEndpoint, tagIds, fluxerParent, discordParent) {
+  if (!tagIds?.length || !discordParent || !targetEndpoint) return [];
+  const entries = [...tagEntriesFor(anchorEndpoint.tagMap, targetEndpoint.id)];
   const sourceTags = fluxerParent ? readTags(fluxerParent, "fluxer") : [];
   let changed = false;
   const ids = [];
   for (const id of tagIds.slice(0, MAX_POST_TAGS)) {
-    let entry = tagMap.find(t => t.fluxerId === id);
+    let entry = entries.find(t => t.fluxerId === id);
     if (!entry) {
       const sourceTag = sourceTags.find(t => t.id === id);
       if (!sourceTag) continue;
@@ -238,54 +260,15 @@ export async function mapTagsToDiscord(anchorEndpoint, tagIds, fluxerParent, dis
         moderated: sourceTag.moderated,
         emojiName: sourceTag.emojiName ?? null,
       };
-      tagMap.push(entry);
+      entries.push(entry);
       changed = true;
     }
     if (entry.discordId) ids.push(entry.discordId);
   }
-  if (changed) await persistTagMap(anchorEndpoint, tagMap);
+  if (changed) await persistTagEntries(anchorEndpoint, targetEndpoint.id, entries);
   return ids;
 }
 
-/**
- * @param {import("@fluxerjs/core").Client} fluxerClient
- * @param {BridgeEndpoint} endpoint
- * @returns {Promise<string | null>}
- */
-export async function fluxerThreadIdFor(fluxerClient, endpoint) {
-  if (!endpoint?.autoMirrored) return null;
-  const siblings = await BridgeEndpoint.findAll({
-    where: { groupId: endpoint.groupId, platform: "fluxer", kind: "thread", channelId: { [Op.ne]: endpoint.channelId } },
-  });
-  const sibling = siblings[0];
-  if (!sibling) return null;
-  let channel;
-  try {
-    channel = await fluxerClient.channels.fetch(sibling.channelId);
-  } catch {
-    return null;
-  }
-  if (typeof channel?.isThread !== "function" || !channel.isThread()) return null;
-  if (channel.archived && !channel.locked) {
-    try {
-      await channel.setArchived(false);
-    } catch (e) {
-      log("FLUXER", `Failed to unarchive bridged Fluxer thread ${sibling.channelId}`, e);
-    }
-  }
-  return sibling.channelId;
-}
-
-/**
- * @param {BridgeEndpoint} endpoint
- * @returns {Promise<string | null>}
- */
-export async function fluxerWebhookChannelIdFor(endpoint) {
-  if (!endpoint) return null;
-  if (endpoint.kind !== "thread" || !endpoint.parentEndpointId) return endpoint.channelId;
-  const parent = await BridgeEndpoint.findByPk(endpoint.parentEndpointId);
-  return parent?.channelId ?? endpoint.channelId;
-}
 async function pairedParentEndpoints(parentEndpoint) {
   const siblings = await BridgeEndpoint.findAll({
     where: { groupId: parentEndpoint.groupId, kind: "channel", channelId: { [Op.ne]: parentEndpoint.channelId } },
@@ -293,14 +276,7 @@ async function pairedParentEndpoints(parentEndpoint) {
   return siblings.filter(s => s.channelId !== parentEndpoint.channelId);
 }
 
-function createThreadEndpointPair(parents) {
-  const discordParent = parents.find(p => p.platform === "discord") ?? parents[0];
-  const group = discordParent ? discordParent.groupId : parents[0].groupId;
-  const guildIdFor = platform => parents.find(p => p.platform === platform)?.guildId ?? "";
-  return { discordParent, group, guildIdFor };
-}
-
-async function ensureThreadFamilyLink(sourceRow, sourceMessageId, targetRow, targetMessageId, authorId = null) {
+export async function ensureThreadFamilyLink(sourceRow, sourceMessageId, targetRow, targetMessageId, authorId = null) {
   try {
     const existing = await MessageLink.findOne({ where: { messageId: sourceMessageId, endpointId: sourceRow.id } });
     if (existing) {
@@ -317,23 +293,88 @@ async function ensureThreadFamilyLink(sourceRow, sourceMessageId, targetRow, tar
   }
 }
 
-async function findOrCreateThreadRow(groupId, { platform, instanceId, channelId, guildId, webhookId, webhookToken, parentEndpointId }) {  const [existing] = await BridgeEndpoint.findAll({
-    where: { groupId, platform, kind: "thread", channelId },
-    limit: 1,
+export async function ensureThreadRows(specs) {
+  const existing = [];
+  const groupIds = [];
+  for (const spec of specs) {
+    const [row] = await BridgeEndpoint.findAll({
+      where: { platform: spec.platform, channelId: spec.channelId, kind: "thread" },
+      limit: 1,
+    });
+    existing.push(row ?? null);
+    if (row?.groupId != null) groupIds.push(row.groupId);
+  }
+
+  let groupId = groupIds[0];
+  const groupHasChannels =
+    groupId == null ? false : (await BridgeEndpoint.count({ where: { groupId, kind: "channel" } })) > 0;
+  if (groupId == null || groupHasChannels) {
+    const parentGroupId = specs.find(spec => spec.parentEndpoint?.groupId != null)?.parentEndpoint.groupId;
+    const sourceGroupId = groupId ?? parentGroupId;
+    const sourceGroup = sourceGroupId != null ? await BridgeGroup.findByPk(sourceGroupId) : null;
+    const group = await BridgeGroup.create({ bridgeType: sourceGroup?.bridgeType ?? "both" });
+    groupId = group.id;
+  }
+
+  const extraGroupIds = [...new Set(groupIds)].filter(id => id !== groupId);
+  for (const extraGroupId of extraGroupIds) {
+    const hasChannels = (await BridgeEndpoint.count({ where: { groupId: extraGroupId, kind: "channel" } })) > 0;
+    if (hasChannels) continue;
+    await BridgeEndpoint.update({ groupId }, { where: { groupId: extraGroupId, kind: "thread" } });
+    await BridgeGroup.destroy({ where: { id: extraGroupId } });
+  }
+
+  const rows = [];
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+    if (existing[i]) {
+      if (existing[i].groupId !== groupId) {
+        existing[i].groupId = groupId;
+        await existing[i].save();
+      }
+      rows.push(existing[i]);
+      continue;
+    }
+    rows.push(
+      await BridgeEndpoint.create({
+        groupId,
+        platform: spec.platform,
+        instanceId: spec.instanceId ?? "default",
+        channelId: spec.channelId,
+        guildId: spec.guildId,
+        webhookId: spec.webhookId,
+        webhookToken: spec.webhookToken,
+        kind: "thread",
+        autoMirrored: true,
+        parentEndpointId: spec.parentEndpoint?.id ?? null,
+      })
+    );
+  }
+  return rows;
+}
+
+async function existingThreadCopy(destParentEndpoint, sourcePlatform, sourceThreadId) {
+  const sourceRows = await BridgeEndpoint.findAll({
+    where: { platform: sourcePlatform, channelId: sourceThreadId, kind: "thread" },
+    attributes: ["id"],
   });
-  if (existing) return existing;
-  return BridgeEndpoint.create({
-    groupId,
-    platform,
-    instanceId: instanceId ?? "default",
-    channelId,
-    guildId,
-    webhookId,
-    webhookToken,
-    kind: "thread",
-    autoMirrored: true,
-    parentEndpointId,
+  if (sourceRows.length === 0) return null;
+  const sourceLinks = await MessageLink.findAll({
+    where: { endpointId: { [Op.in]: sourceRows.map(row => row.id) } },
+    attributes: ["linkGroup"],
+    raw: true,
+    limit: 200,
   });
+  const linkGroups = [...new Set(sourceLinks.map(row => row.linkGroup))];
+  if (linkGroups.length === 0) return null;
+  const destRows = await BridgeEndpoint.findAll({
+    where: { parentEndpointId: destParentEndpoint.id, kind: "thread" },
+  });
+  if (destRows.length === 0) return null;
+  const sibling = await MessageLink.findOne({
+    where: { linkGroup: { [Op.in]: linkGroups }, endpointId: { [Op.in]: destRows.map(row => row.id) } },
+  });
+  return sibling ? (destRows.find(row => row.id === sibling.endpointId) ?? null) : null;
 }
 
 async function mapTagsSamePlatformByName(thread, sourceParentEndpoint, sourceParent, targetParent, platform) {
@@ -352,6 +393,7 @@ async function mapTagsSamePlatformByName(thread, sourceParentEndpoint, sourcePar
 
 async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEndpoint, srcClient, dstClient, claim) {
   const made = [];
+  if (await existingThreadCopy(targetParentEndpoint, "fluxer", thread.id)) return made;
   const targetParent = await dstClient.channels.fetch(targetParentEndpoint.channelId).catch(() => null);
   if (!targetParent) return made;
   const isForumParent =
@@ -403,24 +445,26 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
 
     selfCreatedThreads.add("fluxer:" + newThreadId);
     try {
-      const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
-        platform: "fluxer",
-        instanceId: parentEndpoint.instanceId,
-        channelId: thread.id,
-        guildId: parentEndpoint.guildId,
-        webhookId: parentEndpoint.webhookId,
-        webhookToken: parentEndpoint.webhookToken,
-        parentEndpointId: parentEndpoint.id,
-      });
-      const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
-        platform: "fluxer",
-        instanceId: targetParentEndpoint.instanceId,
-        channelId: newThreadId,
-        guildId: targetParentEndpoint.guildId,
-        webhookId: targetParentEndpoint.webhookId,
-        webhookToken: targetParentEndpoint.webhookToken,
-        parentEndpointId: targetParentEndpoint.id,
-      });
+      const [srcRow, dstRow] = await ensureThreadRows([
+        {
+          parentEndpoint,
+          platform: "fluxer",
+          instanceId: parentEndpoint.instanceId,
+          channelId: thread.id,
+          guildId: parentEndpoint.guildId,
+          webhookId: parentEndpoint.webhookId,
+          webhookToken: parentEndpoint.webhookToken,
+        },
+        {
+          parentEndpoint: targetParentEndpoint,
+          platform: "fluxer",
+          instanceId: targetParentEndpoint.instanceId,
+          channelId: newThreadId,
+          guildId: targetParentEndpoint.guildId,
+          webhookId: targetParentEndpoint.webhookId,
+          webhookToken: targetParentEndpoint.webhookToken,
+        },
+      ]);
       made.push(srcRow, dstRow);
       log(
         "DEBUG",
@@ -491,10 +535,12 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
   if (headGone) headContent = "-# Deleted message";
 
   let appliedTags = [];
+  let moderatedTags = [];
   try {
     const sourceParent = await srcClient.channels.fetch(parentEndpoint.channelId);
     const tags = await mapTagsSamePlatformByName(thread, parentEndpoint, sourceParent, targetParent, "fluxer");
-    appliedTags = tags.map(t => t.id);
+    appliedTags = tags.filter(t => !t.moderated).map(t => t.id);
+    moderatedTags = tags.filter(t => t.moderated).map(t => t.id);
   } catch {}
 
   let resolveSelfCreate;
@@ -531,26 +577,37 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
   resolveSelfCreate(newThreadId);
   if (!newThreadId) return made;
 
+  if (moderatedTags.length > 0) {
+    try {
+      const post = await dstClient.channels.fetch(newThreadId);
+      await post.edit({ appliedTags: [...appliedTags, ...moderatedTags] });
+    } catch (e) {
+      log("FLUXER", `Failed to apply moderated tags on mirrored post ${newThreadId}`, e);
+    }
+  }
+
   selfCreatedThreads.add("fluxer:" + newThreadId);
   try {
-    const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
-      platform: "fluxer",
-      instanceId: parentEndpoint.instanceId,
-      channelId: thread.id,
-      guildId: parentEndpoint.guildId,
-      webhookId: parentEndpoint.webhookId,
-      webhookToken: parentEndpoint.webhookToken,
-      parentEndpointId: parentEndpoint.id,
-    });
-    const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
-      platform: "fluxer",
-      instanceId: targetParentEndpoint.instanceId,
-      channelId: newThreadId,
-      guildId: targetParentEndpoint.guildId,
-      webhookId: targetParentEndpoint.webhookId,
-      webhookToken: targetParentEndpoint.webhookToken,
-      parentEndpointId: targetParentEndpoint.id,
-    });
+    const [srcRow, dstRow] = await ensureThreadRows([
+      {
+        parentEndpoint,
+        platform: "fluxer",
+        instanceId: parentEndpoint.instanceId,
+        channelId: thread.id,
+        guildId: parentEndpoint.guildId,
+        webhookId: parentEndpoint.webhookId,
+        webhookToken: parentEndpoint.webhookToken,
+      },
+      {
+        parentEndpoint: targetParentEndpoint,
+        platform: "fluxer",
+        instanceId: targetParentEndpoint.instanceId,
+        channelId: newThreadId,
+        guildId: targetParentEndpoint.guildId,
+        webhookId: targetParentEndpoint.webhookId,
+        webhookToken: targetParentEndpoint.webhookToken,
+      },
+    ]);
     made.push(srcRow, dstRow);
     log(
       "DEBUG",
@@ -569,6 +626,7 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
 
 async function mirrorDiscordThreadToDiscord(thread, parentEndpoint, targetParentEndpoint, discordClient, claim) {
   const made = [];
+  if (await existingThreadCopy(targetParentEndpoint, "discord", thread.id)) return made;
   const targetParent = await discordClient.channels.fetch(targetParentEndpoint.channelId).catch(() => null);
   if (!targetParent) return made;
   const isForumParent =
@@ -623,24 +681,26 @@ async function mirrorDiscordThreadToDiscord(thread, parentEndpoint, targetParent
 
     selfCreatedThreads.add("discord:" + newThreadId);
     try {
-      const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
-        platform: "discord",
-        instanceId: parentEndpoint.instanceId,
-        channelId: thread.id,
-        guildId: parentEndpoint.guildId,
-        webhookId: parentEndpoint.webhookId,
-        webhookToken: parentEndpoint.webhookToken,
-        parentEndpointId: parentEndpoint.id,
-      });
-      const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
-        platform: "discord",
-        instanceId: targetParentEndpoint.instanceId ?? "default",
-        channelId: newThreadId,
-        guildId: targetParentEndpoint.guildId,
-        webhookId: targetParentEndpoint.webhookId,
-        webhookToken: targetParentEndpoint.webhookToken,
-        parentEndpointId: targetParentEndpoint.id,
-      });
+      const [srcRow, dstRow] = await ensureThreadRows([
+        {
+          parentEndpoint,
+          platform: "discord",
+          instanceId: parentEndpoint.instanceId,
+          channelId: thread.id,
+          guildId: parentEndpoint.guildId,
+          webhookId: parentEndpoint.webhookId,
+          webhookToken: parentEndpoint.webhookToken,
+        },
+        {
+          parentEndpoint: targetParentEndpoint,
+          platform: "discord",
+          instanceId: targetParentEndpoint.instanceId ?? "default",
+          channelId: newThreadId,
+          guildId: targetParentEndpoint.guildId,
+          webhookId: targetParentEndpoint.webhookId,
+          webhookToken: targetParentEndpoint.webhookToken,
+        },
+      ]);
       made.push(srcRow, dstRow);
       log(
         "DEBUG",
@@ -768,24 +828,26 @@ async function mirrorDiscordThreadToDiscord(thread, parentEndpoint, targetParent
 
   selfCreatedThreads.add("discord:" + newThreadId);
   try {
-    const srcRow = await findOrCreateThreadRow(parentEndpoint.groupId, {
-      platform: "discord",
-      instanceId: parentEndpoint.instanceId,
-      channelId: thread.id,
-      guildId: parentEndpoint.guildId,
-      webhookId: parentEndpoint.webhookId,
-      webhookToken: parentEndpoint.webhookToken,
-      parentEndpointId: parentEndpoint.id,
-    });
-    const dstRow = await findOrCreateThreadRow(targetParentEndpoint.groupId, {
-      platform: "discord",
-      instanceId: targetParentEndpoint.instanceId ?? "default",
-      channelId: newThreadId,
-      guildId: targetParentEndpoint.guildId,
-      webhookId: targetParentEndpoint.webhookId,
-      webhookToken: targetParentEndpoint.webhookToken,
-      parentEndpointId: targetParentEndpoint.id,
-    });
+    const [srcRow, dstRow] = await ensureThreadRows([
+      {
+        parentEndpoint,
+        platform: "discord",
+        instanceId: parentEndpoint.instanceId,
+        channelId: thread.id,
+        guildId: parentEndpoint.guildId,
+        webhookId: parentEndpoint.webhookId,
+        webhookToken: parentEndpoint.webhookToken,
+      },
+      {
+        parentEndpoint: targetParentEndpoint,
+        platform: "discord",
+        instanceId: targetParentEndpoint.instanceId ?? "default",
+        channelId: newThreadId,
+        guildId: targetParentEndpoint.guildId,
+        webhookId: targetParentEndpoint.webhookId,
+        webhookToken: targetParentEndpoint.webhookToken,
+      },
+    ]);
     made.push(srcRow, dstRow);
     log(
       "DEBUG",
@@ -820,9 +882,6 @@ export async function autoBridgeDiscordThread(thread, parentEndpoints, discordCl
 
   for (const parentEndpoint of parentEndpoints) {
     try {
-      const [existing] = await BridgeEndpoint.findAll({ where: { platform: "discord", channelId: thread.id, groupId: parentEndpoint.groupId }, limit: 1 });
-      if (existing) continue;
-
       const fluxerParents = await pairedParentEndpoints(parentEndpoint);
 
       for (const sibling of fluxerParents) {
@@ -855,6 +914,7 @@ export async function autoBridgeDiscordThread(thread, parentEndpoints, discordCl
 
 async function mirrorDiscordThreadToFluxer(thread, parentEndpoint, fluxerParentEndpoint, discordClient, fluxerClient, claim) {
   const made = [];
+  if (await existingThreadCopy(fluxerParentEndpoint, "discord", thread.id)) return made;
   const fluxerParent = await fluxerClient.channels.fetch(fluxerParentEndpoint.channelId);
   if (!fluxerParent) return made;
 
@@ -890,7 +950,13 @@ async function mirrorDiscordThreadToFluxer(thread, parentEndpoint, fluxerParentE
       try {
         discordParentChannel = await discordClient.channels.fetch(parentEndpoint.channelId);
       } catch {}
-      const appliedTags = await mapTagsToFluxer(parentEndpoint, thread.appliedTags ?? [], discordParentChannel, fluxerParent);
+      const appliedTags = await mapTagsToFluxer(
+        parentEndpoint,
+        fluxerParentEndpoint,
+        thread.appliedTags ?? [],
+        discordParentChannel,
+        fluxerParent
+      );
       const moderatedTags = (fluxerParent.availableTags ?? [])
         .filter(t => appliedTags.includes(t.id) && t.moderated)
         .map(t => t.id);
@@ -1040,70 +1106,35 @@ async function mirrorDiscordThreadToFluxer(thread, parentEndpoint, fluxerParentE
 
   selfCreatedThreads.add("fluxer:" + fluxerThreadId);
   try {
-    const rows = await BridgeGroupSafeCreate({
-      discordParent: parentEndpoint,
-      fluxerParent: fluxerParentEndpoint,
-      discordThreadId: thread.id,
-      fluxerThreadId,
-    });
-    made.push(...rows);
-    log(
-      "DEBUG",
-      `autoBridgeDiscordThread mirrored discord=${thread.id} fluxer=${fluxerThreadId} group=${parentEndpoint.groupId}`
-    );
+    const [discordRow, fluxerRow] = await ensureThreadRows([
+      {
+        parentEndpoint,
+        platform: "discord",
+        instanceId: parentEndpoint.instanceId ?? "default",
+        channelId: thread.id,
+        guildId: parentEndpoint.guildId,
+        webhookId: parentEndpoint.webhookId,
+        webhookToken: parentEndpoint.webhookToken,
+      },
+      {
+        parentEndpoint: fluxerParentEndpoint,
+        platform: "fluxer",
+        instanceId: fluxerParentEndpoint.instanceId,
+        channelId: fluxerThreadId,
+        guildId: fluxerParentEndpoint.guildId,
+        webhookId: fluxerParentEndpoint.webhookId,
+        webhookToken: fluxerParentEndpoint.webhookToken,
+      },
+    ]);
+    made.push(discordRow, fluxerRow);
+    log("DEBUG", `autoBridgeDiscordThread mirrored discord=${thread.id} fluxer=${fluxerThreadId} group=${discordRow.groupId}`);
 
-    const discordRow = rows.find(r => r.platform === "discord");
-    const fluxerRow = rows.find(r => r.platform === "fluxer");
-    if (discordRow && fluxerRow) {
-      await ensureThreadFamilyLink(discordRow, thread.id, fluxerRow, starterMessageId ?? fluxerThreadId, headAuthorId);
-    }
+    await ensureThreadFamilyLink(discordRow, thread.id, fluxerRow, starterMessageId ?? fluxerThreadId, headAuthorId);
   } finally {
     selfCreatedThreads.delete("fluxer:" + fluxerThreadId);
   }
 
   return made;
-}
-
-async function BridgeGroupSafeCreate({ discordParent, fluxerParent, discordThreadId, fluxerThreadId }) {
-  const [discordThreadEndpoint] = await BridgeEndpoint.findAll({
-    where: { groupId: discordParent.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
-    limit: 1,
-  });
-  const [fluxerThreadEndpoint] = await BridgeEndpoint.findAll({
-    where: { groupId: discordParent.groupId, platform: "fluxer", kind: "thread", channelId: fluxerThreadId },
-    limit: 1,
-  });
-  if (discordThreadEndpoint && fluxerThreadEndpoint) return [discordThreadEndpoint, fluxerThreadEndpoint];
-
-  const row =
-    discordThreadEndpoint ??
-    (await BridgeEndpoint.create({
-    groupId: discordParent.groupId,
-    platform: "discord",
-    instanceId: "default",
-    channelId: discordThreadId,
-    guildId: discordParent.guildId,
-    webhookId: discordParent.webhookId,
-    webhookToken: discordParent.webhookToken,
-    kind: "thread",
-    autoMirrored: true,
-    parentEndpointId: discordParent.id,
-  }));
-  const fluxerRow =
-    fluxerThreadEndpoint ??
-    (await BridgeEndpoint.create({
-      groupId: discordParent.groupId,
-      platform: "fluxer",
-      instanceId: fluxerParent.instanceId,
-      channelId: fluxerThreadId,
-      guildId: fluxerParent.guildId,
-      webhookId: fluxerParent.webhookId,
-      webhookToken: fluxerParent.webhookToken,
-      kind: "thread",
-      autoMirrored: true,
-      parentEndpointId: fluxerParent.id,
-    }));
-  return [row, fluxerRow];
 }
 
 /**
@@ -1125,12 +1156,6 @@ export async function autoBridgeFluxerThread(thread, parentEndpoints, discordCli
 
   for (const parentEndpoint of parentEndpoints) {
     try {
-      const [existing] = await BridgeEndpoint.findAll({
-        where: { platform: "fluxer", channelId: thread.id, groupId: parentEndpoint.groupId },
-        limit: 1,
-      });
-      if (existing) continue;
-
       const discordParents = await pairedParentEndpoints(parentEndpoint);
 
       for (const sibling of discordParents) {
@@ -1161,8 +1186,38 @@ export async function autoBridgeFluxerThread(thread, parentEndpoints, discordCli
   return made;
 }
 
+export async function ensureThreadFannedOut(
+  thread,
+  { platform, discordClient, fluxerClient, instanceId, bridgeMessage, backfillOptions }
+) {
+  if (!thread?.parentId) return [];
+  const where = { platform, channelId: thread.parentId, kind: "channel" };
+  if (platform === "fluxer" && instanceId) where.instanceId = instanceId;
+  const parentEndpoints = await BridgeEndpoint.findAll({ where });
+  const made = [];
+  for (const parentEndpoint of parentEndpoints) {
+    try {
+      const group = await BridgeGroup.findByPk(parentEndpoint.groupId);
+      if (!group) continue;
+      if (platform === "fluxer" ? group.bridgeType === "discord2fluxer" : group.bridgeType === "fluxer2discord") continue;
+      const rows =
+        platform === "fluxer"
+          ? await autoBridgeFluxerThread(thread, [parentEndpoint], discordClient, fluxerClient)
+          : await autoBridgeDiscordThread(thread, [parentEndpoint], discordClient);
+      if (rows) made.push(...rows);
+    } catch (e) {
+      log("DEBUG", `ensureThreadFannedOut failed ${platform} thread=${thread.id} parent=${parentEndpoint.channelId}`, e);
+    }
+  }
+  if (made.length > 0 && bridgeMessage) {
+    await backfillMirroredThread(thread, bridgeMessage, thread.guildId, backfillOptions);
+  }
+  return made;
+}
+
 async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParentEndpoint, discordClient, fluxerClient, claim) {
   const made = [];
+  if (await existingThreadCopy(discordParentEndpoint, "fluxer", thread.id)) return made;
   const discordParent = await discordClient.channels.fetch(discordParentEndpoint.channelId);
   if (!discordParent) return made;
 
@@ -1240,7 +1295,13 @@ async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParent
           resolveSelfCreate = r;
         })
       );
-      const appliedTags = await mapTagsToDiscord(parentEndpoint, thread.appliedTags ?? [], fluxerSourceParent, discordParent);
+      const appliedTags = await mapTagsToDiscord(
+        parentEndpoint,
+        discordParentEndpoint,
+        thread.appliedTags ?? [],
+        fluxerSourceParent,
+        discordParent
+      );
       const moderatedTags = (discordParent.availableTags ?? [])
         .filter(t => appliedTags.includes(t.id) && t.moderated)
         .map(t => t.id);
@@ -1369,48 +1430,30 @@ async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParent
 
   selfCreatedThreads.add("discord:" + discordThreadId);
   try {
-    const [fluxerThreadEndpoint] = await BridgeEndpoint.findAll({
-      where: { groupId: parentEndpoint.groupId, platform: "fluxer", kind: "thread", channelId: thread.id },
-      limit: 1,
-    });
-    let row = fluxerThreadEndpoint;
-    if (!row) {
-      row = await BridgeEndpoint.create({
-        groupId: parentEndpoint.groupId,
+    const [row, discordThreadEndpoint] = await ensureThreadRows([
+      {
+        parentEndpoint,
         platform: "fluxer",
         instanceId: instanceIdFor,
         channelId: thread.id,
         guildId: parentEndpoint.guildId,
         webhookId: parentEndpoint.webhookId,
         webhookToken: parentEndpoint.webhookToken,
-        kind: "thread",
-        autoMirrored: true,
-        parentEndpointId: parentEndpoint.id,
-      });
-    }
-    made.push(row);
-    log("DEBUG", `autoBridgeFluxerThread mirrored discord=${discordThreadId} fluxer=${thread.id} endpointId=${row?.id}`);
-
-    let discordThreadEndpoint = await BridgeEndpoint.findOne({
-      where: { groupId: row.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
-    });
-    if (!discordThreadEndpoint) {
-      discordThreadEndpoint = await BridgeEndpoint.create({
-        groupId: row.groupId,
+      },
+      {
+        parentEndpoint: discordParentEndpoint,
         platform: "discord",
         instanceId: "default",
         channelId: discordThreadId,
         guildId: discordParentEndpoint.guildId,
         webhookId: discordParentEndpoint.webhookId,
         webhookToken: discordParentEndpoint.webhookToken,
-        kind: "thread",
-        autoMirrored: true,
-        parentEndpointId: discordParentEndpoint.id,
-      });
-    }
-    if (discordThreadEndpoint) {
-      await ensureThreadFamilyLink(row, thread.id, discordThreadEndpoint, discordThreadId, headAuthorId);
-    }
+      },
+    ]);
+    made.push(row, discordThreadEndpoint);
+    log("DEBUG", `autoBridgeFluxerThread mirrored discord=${discordThreadId} fluxer=${thread.id} endpointId=${row?.id}`);
+
+    await ensureThreadFamilyLink(row, thread.id, discordThreadEndpoint, discordThreadId, headAuthorId);
 
     if (!attachedToStarter && row) {
       const fluxerRow = await MessageLink.findOne({ where: { messageId: thread.id, endpointId: row.id } }).catch(() => null);
@@ -1477,6 +1520,127 @@ export async function cleanupMirroredRow(endpoint, discordClient, platform) {
   }
 }
 
+const selfEditedThreads = new Map();
+const SELF_EDIT_TTL_MS = 8000;
+
+export function markSelfEditedThread(platform, threadId) {
+  selfEditedThreads.set(`${platform}:${threadId}`, Date.now());
+  if (selfEditedThreads.size > 2000) {
+    const now = Date.now();
+    for (const [key, at] of selfEditedThreads) {
+      if (now - at > SELF_EDIT_TTL_MS) selfEditedThreads.delete(key);
+    }
+  }
+}
+
+export function isSelfEditedThread(platform, threadId) {
+  const at = selfEditedThreads.get(`${platform}:${threadId}`);
+  if (!at) return false;
+  if (Date.now() - at > SELF_EDIT_TTL_MS) {
+    selfEditedThreads.delete(`${platform}:${threadId}`);
+    return false;
+  }
+  return true;
+}
+
+function threadFlags(thread) {
+  return typeof thread?.flags === "number" ? thread.flags : (thread?.flags?.bitfield ?? 0);
+}
+
+async function applyThreadUpdate(sibling, sourceEndpoint, oldThread, newThread, discordClient) {
+  const client = sibling.platform === "discord" ? discordClient : getFluxerClient(sibling.instanceId);
+  if (!client) return;
+  const target = await client.channels.fetch(sibling.channelId).catch(() => null);
+  if (!target || typeof target.isThread !== "function" || !target.isThread()) return;
+
+  if (oldThread.name !== newThread.name) {
+    try {
+      if (sibling.platform === "discord") await target.setName((newThread.name ?? "").slice(0, 100));
+      else await target.edit({ name: (newThread.name ?? "").slice(0, 100) });
+    } catch (e) {
+      log("DEBUG", `Failed to rename mirrored thread ${sibling.platform}:${sibling.channelId}`, e);
+    }
+  }
+
+  const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
+  if (tagsChanged) {
+    const sourceParentEndpoint = sourceEndpoint.parentEndpointId
+      ? await BridgeEndpoint.findByPk(sourceEndpoint.parentEndpointId)
+      : null;
+    const targetParentEndpoint = sibling.parentEndpointId ? await BridgeEndpoint.findByPk(sibling.parentEndpointId) : null;
+    const sourceClient =
+      sourceEndpoint.platform === "discord" ? discordClient : getFluxerClient(sourceEndpoint.instanceId);
+    if (sourceParentEndpoint && targetParentEndpoint && sourceClient) {
+      const sourceParent = await sourceClient.channels.fetch(sourceParentEndpoint.channelId).catch(() => null);
+      const targetParent = await client.channels.fetch(targetParentEndpoint.channelId).catch(() => null);
+      if (sourceParent && targetParent) {
+        const sourceIds = newThread.appliedTags ?? [];
+        let ids = [];
+        if (sibling.platform === sourceEndpoint.platform) {
+          const mapped = await mapTagsSamePlatformByName(
+            { appliedTags: sourceIds },
+            sourceParentEndpoint,
+            sourceParent,
+            targetParent,
+            sourceEndpoint.platform
+          );
+          ids = mapped.map(tag => tag.id);
+        } else if (sibling.platform === "fluxer") {
+          ids = await mapTagsToFluxer(sourceParentEndpoint, targetParentEndpoint, sourceIds, sourceParent, targetParent);
+        } else {
+          ids = await mapTagsToDiscord(sourceParentEndpoint, targetParentEndpoint, sourceIds, sourceParent, targetParent);
+        }
+        if (ids.length > 0 || sourceIds.length === 0) {
+          try {
+            if (sibling.platform === "discord") await target.setAppliedTags(ids);
+            else await target.edit({ appliedTags: ids });
+          } catch (e) {
+            log("DEBUG", `Failed to update tags on mirrored thread ${sibling.platform}:${sibling.channelId}`, e);
+          }
+        }
+      }
+    }
+  }
+
+  const archivedChanged = oldThread.archived !== newThread.archived;
+  const lockedChanged = oldThread.locked !== newThread.locked;
+  if (archivedChanged || lockedChanged) {
+    const patch = {};
+    if (archivedChanged && target.archived !== newThread.archived) patch.archived = newThread.archived;
+    if (lockedChanged && target.locked !== newThread.locked) patch.locked = newThread.locked;
+    if (patch.archived !== undefined || patch.locked !== undefined) {
+      try {
+        await target.edit(patch);
+      } catch (e) {
+        log("DEBUG", `Failed to mirror thread close/lock ${sibling.platform}:${sibling.channelId}`, e);
+      }
+    }
+  }
+
+  const pinChanged = (threadFlags(oldThread) & PINNED_POST_FLAG) !== (threadFlags(newThread) & PINNED_POST_FLAG);
+  if (pinChanged) {
+    const want = (threadFlags(newThread) & PINNED_POST_FLAG) !== 0;
+    const flags = threadFlags(target);
+    if (((flags & PINNED_POST_FLAG) !== 0) !== want) {
+      try {
+        await target.edit({ flags: (flags & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0) });
+      } catch (e) {
+        log("DEBUG", `Failed to mirror thread pin ${sibling.platform}:${sibling.channelId}`, e);
+      }
+    }
+  }
+}
+
+export async function mirrorThreadUpdate(sourceEndpoint, oldThread, newThread, { discordClient }) {
+  if (isSelfEditedThread(sourceEndpoint.platform, newThread.id)) return;
+  const siblings = await BridgeEndpoint.findAll({
+    where: { groupId: sourceEndpoint.groupId, kind: "thread", id: { [Op.ne]: sourceEndpoint.id } },
+  });
+  for (const sibling of siblings) {
+    await applyThreadUpdate(sibling, sourceEndpoint, oldThread, newThread, discordClient);
+  }
+}
+
 /**
  * @param {any} oldThread
  * @param {any} newThread
@@ -1484,83 +1648,11 @@ export async function cleanupMirroredRow(endpoint, discordClient, platform) {
  * @returns {Promise<void>}
  */
 export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordClient) {
-  const nameChanged = oldThread.name !== newThread.name;
-  const tagsChanged = JSON.stringify(oldThread.appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
-  const archivedChanged = oldThread.archived !== newThread.archived;
-  const lockedChanged = oldThread.locked !== newThread.locked;
-  const pinChanged =
-    ((oldThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG);
-  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged && !pinChanged) return;
-
   const endpoints = await BridgeEndpoint.findAll({
     where: { platform: "discord", channelId: newThread.id, autoMirrored: true },
   });
-
   for (const endpoint of endpoints) {
-    const fluxerSiblings = await BridgeEndpoint.findAll({
-      where: { groupId: endpoint.groupId, platform: "fluxer" },
-    });
-    for (const fluxerEndpoint of fluxerSiblings) {
-      const fluxerClient = getFluxerClient(fluxerEndpoint.instanceId);
-      if (!fluxerClient) continue;
-      const fluxerThread = await fluxerClient.channels.fetch(fluxerEndpoint.channelId).catch(() => null);
-      if (!fluxerThread || typeof fluxerThread.isThread !== "function" || !fluxerThread.isThread()) continue;
-      if (nameChanged) {
-        try {
-          await fluxerThread.edit({ name: newThread.name.slice(0, 100) });
-        } catch (e) {
-          log("FLUXER", `Failed to rename mirrored Fluxer thread ${fluxerEndpoint.channelId}`, e);
-        }
-      }
-      if (tagsChanged) {
-        let discordParent = null;
-        try {
-          discordParent = endpoint.parentEndpointId
-            ? await discordClient.channels.fetch((await BridgeEndpoint.findByPk(endpoint.parentEndpointId))?.channelId)
-            : null;
-        } catch {}
-        let fluxerForum = null;
-        try {
-          fluxerForum = fluxerEndpoint.parentEndpointId
-            ? await fluxerClient.channels.fetch((await BridgeEndpoint.findByPk(fluxerEndpoint.parentEndpointId))?.channelId)
-            : null;
-        } catch {}
-        if (discordParent && fluxerForum) {
-          const sourceIds = newThread.appliedTags ?? [];
-          const mapped = await mapTagsToFluxer(discordParent, sourceIds, discordParent, fluxerForum);
-          if (mapped.length > 0 || sourceIds.length === 0) {
-            try {
-              await fluxerThread.edit({ appliedTags: mapped });
-            } catch (e) {
-              log("FLUXER", `Failed to update tags on mirrored Fluxer thread ${fluxerEndpoint.channelId}`, e);
-            }
-          }
-        }
-      }
-      if (archivedChanged || lockedChanged) {
-        const patch = {};
-        if (archivedChanged && fluxerThread.archived !== newThread.archived) patch.archived = newThread.archived;
-        if (lockedChanged && fluxerThread.locked !== newThread.locked) patch.locked = newThread.locked;
-        if (patch.archived !== undefined || patch.locked !== undefined) {
-          try {
-            await fluxerThread.edit(patch);
-          } catch (e) {
-            log("FLUXER", `Failed to mirror Discord thread close/lock ${fluxerEndpoint.channelId}`, e);
-          }
-        }
-      }
-      if (pinChanged) {
-        const want = ((newThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
-        const has = (fluxerThread.flags & PINNED_POST_FLAG) !== 0;
-        if (has !== want) {
-          try {
-            await fluxerThread.edit({ flags: (fluxerThread.flags & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0) });
-          } catch (e) {
-            log("FLUXER", `Failed to mirror Discord thread pin ${fluxerEndpoint.channelId}`, e);
-          }
-        }
-      }
-    }
+    await mirrorThreadUpdate(endpoint, oldThread, newThread, { discordClient });
   }
 }
 
@@ -1572,83 +1664,11 @@ export async function mirrorDiscordThreadUpdate(oldThread, newThread, discordCli
  * @returns {Promise<void>}
  */
 export async function mirrorFluxerThreadUpdate(oldThread, newThread, discordClient, fluxerClient) {
-  const nameChanged = oldThread.name !== newThread.name;
-  const tagsChanged =
-    JSON.stringify( (oldThread).appliedTags ?? []) !== JSON.stringify(newThread.appliedTags ?? []);
-  const archivedChanged =  (oldThread).archived !== newThread.archived;
-  const lockedChanged =  (oldThread).locked !== newThread.locked;
-  const pinChanged = ((oldThread.flags ?? 0) & PINNED_POST_FLAG) !== ((newThread.flags ?? 0) & PINNED_POST_FLAG);
-  if (!nameChanged && !tagsChanged && !archivedChanged && !lockedChanged && !pinChanged) return;
-
   const endpoints = await BridgeEndpoint.findAll({
     where: { platform: "fluxer", channelId: newThread.id, autoMirrored: true },
   });
-
   for (const endpoint of endpoints) {
-    const discordSiblings = await BridgeEndpoint.findAll({
-      where: { groupId: endpoint.groupId, platform: "discord" },
-    });
-    for (const discordEndpoint of discordSiblings) {
-      const discordThread = await discordClient.channels.fetch(discordEndpoint.channelId).catch(() => null);
-      if (!discordThread?.isThread?.()) continue;
-      if (nameChanged) {
-        try {
-          await discordThread.setName((newThread.name ?? "").slice(0, 100));
-        } catch (e) {
-          log("DISCORD", `Failed to rename mirrored Discord thread ${discordEndpoint.channelId}`, e);
-        }
-      }
-      if (tagsChanged) {
-        let fluxerParent = null;
-        try {
-          fluxerParent = endpoint.parentEndpointId
-            ? await fluxerClient.channels.fetch((await BridgeEndpoint.findByPk(endpoint.parentEndpointId))?.channelId)
-            : null;
-        } catch {}
-        let discordForum = null;
-        try {
-          discordForum = discordEndpoint.parentEndpointId
-            ? await discordClient.channels.fetch((await BridgeEndpoint.findByPk(discordEndpoint.parentEndpointId))?.channelId)
-            : null;
-        } catch {}
-        if (fluxerParent && discordForum) {
-          const sourceIds = newThread.appliedTags ?? [];
-          const mapped = await mapTagsToDiscord(fluxerParent, sourceIds, fluxerParent, discordForum);
-          if (mapped.length > 0 || sourceIds.length === 0) {
-            try {
-              await discordThread.setAppliedTags(mapped);
-            } catch (e) {
-              log("DISCORD", `Failed to update tags on mirrored Discord thread ${discordEndpoint.channelId}`, e);
-            }
-          }
-        }
-      }
-      if (archivedChanged || lockedChanged) {
-        const patch = {};
-        if (archivedChanged && discordThread.archived !== newThread.archived) patch.archived = newThread.archived;
-        if (lockedChanged && discordThread.locked !== newThread.locked) patch.locked = newThread.locked;
-        if (patch.archived !== undefined || patch.locked !== undefined) {
-          try {
-            await discordThread.edit(patch);
-          } catch (e) {
-            log("DISCORD", `Failed to mirror Fluxer thread close/lock ${discordEndpoint.channelId}`, e);
-          }
-        }
-      }
-      if (pinChanged) {
-        const want = (newThread.flags & PINNED_POST_FLAG) !== 0;
-        const has = ((discordThread.flags?.bitfield ?? 0) & PINNED_POST_FLAG) !== 0;
-        if (has !== want) {
-          try {
-            await discordThread.edit({
-              flags: ((discordThread.flags?.bitfield ?? 0) & ~PINNED_POST_FLAG) | (want ? PINNED_POST_FLAG : 0),
-            });
-          } catch (e) {
-            log("DISCORD", `Failed to mirror Fluxer thread pin ${discordEndpoint.channelId}`, e);
-          }
-        }
-      }
-    }
+    await mirrorThreadUpdate(endpoint, oldThread, newThread, { discordClient, fluxerClient });
   }
 }
 
@@ -1704,7 +1724,7 @@ async function syncTagsBetween(sourceEndpoint, sourceClient, targetEndpoint, tar
   const targetTags = readTags(target, targetPlatform);
   const targetByName = new Map(targetTags.map(t => [t.name.toLowerCase(), t]));
   const sourceByName = new Map(sourceTags.map(t => [t.name.toLowerCase(), t]));
-  const prevTagMap = Array.isArray(sourceEndpoint.tagMap) ? sourceEndpoint.tagMap : [];
+  const prevTagMap = tagEntriesFor(sourceEndpoint.tagMap, targetEndpoint.id);
 
   const added = sourceTags.filter(t => !targetByName.has(t.name.toLowerCase()));
   const removed = targetTags.filter(t => {
@@ -1796,6 +1816,6 @@ async function syncTagsBetween(sourceEndpoint, sourceClient, targetEndpoint, tar
     });
   }
   if (JSON.stringify(tagMap) !== JSON.stringify(prevTagMap)) {
-    persistTagMap(sourceEndpoint, tagMap);
+    await persistTagEntries(sourceEndpoint, targetEndpoint.id, tagMap);
   }
 }

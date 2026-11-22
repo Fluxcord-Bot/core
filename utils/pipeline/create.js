@@ -1,4 +1,4 @@
-import { MessageLink, BridgeEndpoint, BridgeGroup } from "../../db/index.js";
+import { MessageLink, BridgeEndpoint } from "../../db/index.js";
 import { MessageType } from "discord.js";
 import { sendErrorMessage } from "../SendErrorMessage.js";
 import { findEndpoints, newLinkGroup, ensureLink } from "../Bridging.js";
@@ -9,12 +9,7 @@ import { getGuildPrefix } from "../GetGuildPrefix.js";
 import { CommandHandler } from "../CommandHandler.js";
 import { cacheUser } from "../MentionResolver.js";
 import { log } from "../Logger.js";
-import {
-  waitForPendingMirror,
-  autoBridgeDiscordThread,
-  autoBridgeFluxerThread,
-  backfillMirroredThread,
-} from "../ThreadMirror.js";
+import { waitForPendingMirror, ensureThreadFannedOut } from "../ThreadMirror.js";
 import { collectTargets, linkedThreadFamilyEndpoints } from "./targets.js";
 import { classifyWebhookMessage, propagateRelayEcho } from "./relay.js";
 import { renderForTarget, renderEarlyBridge, countCustomEmojis } from "./render.js";
@@ -65,20 +60,31 @@ export async function handleCreate(umsg, options = {}) {
     return;
   }
 
-  if (umsg.raw?.channel?.isThread?.()) {
+  const thread = umsg.raw?.channel?.isThread?.() ? umsg.raw.channel : null;
+  if (thread) {
     await waitForPendingMirror(umsg.platform, umsg.channelId);
+    if (!(umsg.platform === "fluxer" && thread.type === 12)) {
+      const made = await ensureThreadFannedOut(thread, {
+        platform: umsg.platform,
+        discordClient: umsg.ctx.discordClient,
+        fluxerClient: umsg.client,
+        instanceId: umsg.instanceId,
+        bridgeMessage: msg => pipelineCreateDynamic(msg, umsg),
+      });
+      if (made.length > 0) {
+        log("DEBUG", `Create fanout thread ${thread.id} count=${made.length}`);
+        return;
+      }
+    }
   }
 
   let endpoints = await findEndpoints(umsg.platform, umsg.channelId);
 
-  if (endpoints.length === 0 && umsg.raw?.channel?.isThread?.()) {
+  if (endpoints.length === 0 && thread) {
     const pending = await waitForPendingMirror(umsg.platform, umsg.channelId);
     if (pending?.length) {
       endpoints = pending;
       log("DEBUG", `Create ${umsg.platform} id=${umsg.id} resolved pending mirror for thread ${umsg.channelId}`);
-    } else {
-      const mirrored = await mirrorExistingThreadForCreate(umsg);
-      if (mirrored) return;
     }
   }
 
@@ -246,36 +252,6 @@ async function resolveRefMessageById(messageId, umsg) {
     return await channel.messages.fetch(row.messageId);
   } catch {
     return null;
-  }
-}
-
-async function mirrorExistingThreadForCreate(umsg) {
-  try {
-    let thread = umsg.raw.channel?.isThread?.() ? umsg.raw.channel : null;
-    if (!thread) thread = await umsg.client.channels.fetch(umsg.channelId).catch(() => null);
-    if (!thread?.isThread?.() || !thread.parentId) return false;
-    if (umsg.platform === "fluxer" && thread.type === 12) return false;
-
-    const parentEndpoints = await findEndpoints(umsg.platform, thread.parentId);
-    if (parentEndpoints.length === 0) return false;
-    const anchor = parentEndpoints[0];
-    const group = await BridgeGroup.findByPk(anchor.groupId ?? anchor.BridgeGroupId);
-    if (!group || (umsg.platform === "fluxer" ? group.bridgeType === "discord2fluxer" : group.bridgeType === "fluxer2discord")) {
-      return false;
-    }
-
-    const made =
-      umsg.platform === "fluxer"
-        ? await autoBridgeFluxerThread(thread, parentEndpoints, umsg.ctx.discordClient, umsg.client)
-        : await autoBridgeDiscordThread(thread, parentEndpoints, umsg.ctx.discordClient);
-    if (!made?.length) return false;
-    log("DEBUG", `Create mirrored on activity thread ${thread.id} count=${made.length}`);
-
-    await backfillMirroredThread(thread, msg => pipelineCreateDynamic(msg, umsg), umsg.guildId);
-    return true;
-  } catch (e) {
-    log("DEBUG", `mirrorExistingThreadForCreate failed ${umsg.platform} thread=${umsg.channelId}`, e);
-    return false;
   }
 }
 

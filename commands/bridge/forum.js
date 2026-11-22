@@ -3,11 +3,10 @@ import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
 import { genAuthLink } from "../../utils/GenAuthLink.js";
-import { BridgeEndpoint, MessageLink } from "../../db/index.js";
-import { syncForumTags } from "../../utils/ThreadMirror.js";
+import { BridgeEndpoint } from "../../db/index.js";
+import { ensureThreadFamilyLink, ensureThreadRows, syncForumTags } from "../../utils/ThreadMirror.js";
 import { Op } from "sequelize";
-import { createBridgeGroup } from "../../utils/SetupHelper.js";
-import { newLinkGroup } from "../../utils/Bridging.js";
+import { setupBridgePair } from "../../utils/SetupHelper.js";
 import { instanceIdOfClient, getFluxerClient } from "../../utils/FluxerClients.js";
 import { ChannelType } from "discord.js";
 import changeBotBio from "../../utils/ChangeBotBio.js";
@@ -127,8 +126,6 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      const samePlatform = setup.isFluxer === isFluxer;
-
       let otherForum;
       try {
         const otherClient = setup.isFluxer ? getFluxerClient(setup.instanceId ?? "default") : discordClient;
@@ -161,82 +158,65 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
-      const existing = await BridgeEndpoint.findAll({
-        where: {
-          [Op.or]: [
-            { platform: isFluxer ? "fluxer" : "discord", channelId: forum.id, kind: "channel" },
-            { platform: setup.isFluxer ? "fluxer" : "discord", channelId: otherForum.id, kind: "channel" },
-          ],
-        },
-      });
-      const sharedGroup = existing
-        .map(e => e.groupId)
-        .filter(id => existing.filter(x => x.groupId === id).length > 1);
-      if (existing.length > 0 && sharedGroup.length > 0) {
-        await message.reply("One of these forums is already bridged. Unbridge it first, then run this command again.");
-        PendingSetup.delete(directionOrCode);
-        return;
-      }
-
       const myForum = forum;
       const myInstanceId = isFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default";
       const otherInstanceId = setup.isFluxer ? (setup.instanceId ?? "default") : "default";
       const myPlatform = isFluxer ? "fluxer" : "discord";
       const otherPlatform = setup.isFluxer ? "fluxer" : "discord";
 
-      const { endpoints } = await createBridgeGroup("both", [
-        { platform: myPlatform, instanceId: myInstanceId, channel: myForum },
-        { platform: otherPlatform, instanceId: otherInstanceId, channel: otherForum },
-      ]);
+      const existing = await BridgeEndpoint.findAll({
+        where: {
+          [Op.or]: [
+            { platform: myPlatform, channelId: forum.id, kind: "channel" },
+            { platform: otherPlatform, channelId: otherForum.id, kind: "channel" },
+          ],
+        },
+      });
+      const groupsOf = (platform, channelId) =>
+        new Set(existing.filter(e => e.platform === platform && e.channelId === channelId).map(e => e.groupId));
+      const otherGroups = groupsOf(otherPlatform, otherForum.id);
+      if ([...groupsOf(myPlatform, forum.id)].some(id => otherGroups.has(id))) {
+        await message.reply("One of these forums is already bridged. Unbridge it first, then run this command again.");
+        PendingSetup.delete(directionOrCode);
+        return;
+      }
 
-      const myForumEndpoint = endpoints.find(e => e.platform === myPlatform);
-      const otherForumEndpoint = endpoints.find(e => e.platform === otherPlatform);
+      const { endpoints } = await setupBridgePair(
+        "both",
+        [
+          { platform: myPlatform, instanceId: myInstanceId, channel: myForum },
+          { platform: otherPlatform, instanceId: otherInstanceId, channel: otherForum },
+        ],
+        discordClient
+      );
+
+      const myForumEndpoint = endpoints.find(e => e.platform === myPlatform && e.channelId === myForum.id);
+      const otherForumEndpoint = endpoints.find(e => e.platform === otherPlatform && e.channelId === otherForum.id);
 
       const myPostId = message.channelId;
       const otherPostId = setup.postId;
-      if (myPostId && otherPostId) {
-        const myPostEndpoint = await BridgeEndpoint.create({
-          platform: myPlatform,
-          instanceId: myInstanceId,
-          channelId: myPostId,
-          guildId: myForum.guildId,
-          webhookId: myForumEndpoint.webhookId,
-          webhookToken: myForumEndpoint.webhookToken,
-          kind: "thread",
-          autoMirrored: true,
-          parentEndpointId: myForumEndpoint.id,
-          tagMap: null,
-          groupId: myForumEndpoint.groupId,
-        });
-        const otherPostEndpoint = await BridgeEndpoint.create({
-          platform: otherPlatform,
-          instanceId: otherInstanceId,
-          channelId: otherPostId,
-          guildId: otherForum.guildId,
-          webhookId: otherForumEndpoint.webhookId,
-          webhookToken: otherForumEndpoint.webhookToken,
-          kind: "thread",
-          autoMirrored: true,
-          parentEndpointId: otherForumEndpoint.id,
-          tagMap: null,
-          groupId: otherForumEndpoint.groupId,
-        });
-
-        const linkGroup = newLinkGroup();
-        await MessageLink.create({
-          linkGroup,
-          messageId: myPostId,
-          replyId: null,
-          authorId: "",
-          endpointId: myPostEndpoint.id,
-        });
-        await MessageLink.create({
-          linkGroup,
-          messageId: otherPostId,
-          replyId: null,
-          authorId: "",
-          endpointId: otherPostEndpoint.id,
-        });
+      if (myPostId && otherPostId && myForumEndpoint && otherForumEndpoint) {
+        const [myPostEndpoint, otherPostEndpoint] = await ensureThreadRows([
+          {
+            parentEndpoint: myForumEndpoint,
+            platform: myPlatform,
+            instanceId: myInstanceId,
+            channelId: myPostId,
+            guildId: myForum.guildId,
+            webhookId: myForumEndpoint.webhookId,
+            webhookToken: myForumEndpoint.webhookToken,
+          },
+          {
+            parentEndpoint: otherForumEndpoint,
+            platform: otherPlatform,
+            instanceId: otherInstanceId,
+            channelId: otherPostId,
+            guildId: otherForum.guildId,
+            webhookId: otherForumEndpoint.webhookId,
+            webhookToken: otherForumEndpoint.webhookToken,
+          },
+        ]);
+        await ensureThreadFamilyLink(myPostEndpoint, myPostId, otherPostEndpoint, otherPostId);
       }
 
       await syncForumTags(myForum, myPlatform, discordClient);

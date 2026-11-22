@@ -167,11 +167,16 @@ async function sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMet
 
 async function ensureFluxerWebhook(targetEndpoint, fluxerClient) {
   try {
-    const channel = await fluxerClient.channels.fetch(targetEndpoint.channelId);
+    const parent =
+      targetEndpoint.kind === "thread" && targetEndpoint.parentEndpointId
+        ? await BridgeEndpoint.findByPk(targetEndpoint.parentEndpointId)
+        : null;
+    const webhookChannelId = parent?.channelId ?? targetEndpoint.channelId;
+    const channel = await fluxerClient.channels.fetch(webhookChannelId);
     const webhook = await createWebhookFor(
       channel,
       "fluxer",
-      `Fluxcord Bridge (${targetEndpoint.channelId} F ${targetEndpoint.guildId})`
+      `Fluxcord Bridge (${webhookChannelId} F ${targetEndpoint.guildId})`
     );
     if (!webhook) return false;
     targetEndpoint.webhookId = webhook.id;
@@ -180,6 +185,14 @@ async function ensureFluxerWebhook(targetEndpoint, fluxerClient) {
       { webhookId: webhook.id, webhookToken: webhook.token },
       { where: { id: targetEndpoint.id } }
     );
+    if (parent) {
+      parent.webhookId = webhook.id;
+      parent.webhookToken = webhook.token;
+      await BridgeEndpoint.update(
+        { webhookId: webhook.id, webhookToken: webhook.token },
+        { where: { id: parent.id } }
+      );
+    }
     log("DEBUG", `Pipeline lazily created fluxer webhook endpoint=${targetEndpoint.id} webhook=${webhook.id}`);
     return true;
   } catch (e) {

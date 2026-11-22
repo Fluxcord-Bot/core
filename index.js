@@ -30,6 +30,7 @@ import {
   mirrorDiscordThreadUpdate,
   mirrorFluxerThreadUpdate,
   isSelfCreate,
+  isSelfEditedThread,
   selfCreatedThreads,
   syncForumTags,
 } from "./utils/ThreadMirror.js";
@@ -90,8 +91,17 @@ async function destroyEndpointsByIds(ids) {
     attributes: ["id"],
   });
   const allIds = [...ids, ...children.map(c => c.get("id"))];
+  const rows = await BridgeEndpoint.findAll({
+    where: { id: { [Op.in]: allIds } },
+    attributes: ["BridgeGroupId"],
+  });
+  const groupIds = [...new Set(rows.map(row => row.get("groupId")).filter(id => id != null))];
   await MessageLink.destroy({ where: { endpointId: { [Op.in]: allIds } } });
   await BridgeEndpoint.destroy({ where: { id: { [Op.in]: allIds } } });
+  for (const groupId of groupIds) {
+    const remaining = await BridgeEndpoint.count({ where: { groupId } });
+    if (remaining === 0) await BridgeGroup.destroy({ where: { id: groupId } });
+  }
 }
 
 /**
@@ -170,6 +180,7 @@ discordClient.on(DiscordEvents.ThreadDelete, async thread => {
 });
 
 discordClient.on(DiscordEvents.ThreadUpdate, async (oldThread, newThread) => {
+  if (isSelfEditedThread("discord", newThread.id)) return;
   try {
     await mirrorDiscordThreadUpdate(oldThread, newThread, discordClient);
   } catch (e) {
@@ -351,6 +362,7 @@ function wireFluxerEvents(instanceId, fluxerClient) {
   });
 
   fluxerClient.on(FluxerEvents.ThreadUpdate, async (oldThread, newThread) => {
+    if (isSelfEditedThread("fluxer", newThread.id)) return;
     try {
       await mirrorFluxerThreadUpdate(oldThread, newThread, discordClient, fluxerClient);
     } catch (e) {

@@ -168,13 +168,23 @@ export async function removeChannelBridges(channelId, discordClient, fluxerClien
   const endpoints = await BridgeEndpoint.findAll({ where: { channelId } });
   if (endpoints.length === 0) return 0;
 
-  const endpointIds = endpoints.map(e => e.id);
-  const groupIds = [...new Set(endpoints.map(e => e.groupId))];
+  const children = await BridgeEndpoint.findAll({
+    where: { parentEndpointId: { [Op.in]: endpoints.map(e => e.id) } },
+  });
+  const threadGroupIds = [...new Set(children.map(e => e.groupId).filter(id => id != null))];
+  const familyRows =
+    threadGroupIds.length > 0
+      ? await BridgeEndpoint.findAll({ where: { groupId: { [Op.in]: threadGroupIds }, kind: "thread" } })
+      : [];
+
+  const allEndpoints = [...new Map([...endpoints, ...children, ...familyRows].map(e => [e.id, e])).values()];
+  const endpointIds = allEndpoints.map(e => e.id);
+  const groupIds = [...new Set(allEndpoints.map(e => e.groupId).filter(id => id != null))];
 
   await MessageLink.destroy({ where: { endpointId: { [Op.in]: endpointIds } } });
   await VoiceChannelMap.destroy({ where: { [Op.or]: [{ discordChannelId: channelId }, { fluxerChannelId: channelId }] } });
 
-  for (const endpoint of endpoints) {
+  for (const endpoint of allEndpoints) {
     if (endpoint.autoMirrored) continue;
     if (endpoint.platform === "discord" && endpoint.webhookId) {
       try {

@@ -106,7 +106,7 @@ export async function destroyEndpoints(ref, ctx) {
     } catch {}
   }
 
-  await BridgeEndpoint.destroy({ where: { id: { $in: endpointIds } } });
+  await BridgeEndpoint.destroy({ where: { id: { [Op.in]: endpointIds } } });
 
   const remaining = await BridgeEndpoint.count({ where: { groupId: { [Op.in]: groupIds } } });
   if (remaining === 0) {
