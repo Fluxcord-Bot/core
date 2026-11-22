@@ -9,7 +9,7 @@ import { getGuildPrefix } from "../GetGuildPrefix.js";
 import { CommandHandler } from "../CommandHandler.js";
 import { cacheUser } from "../MentionResolver.js";
 import { log } from "../Logger.js";
-import { waitForPendingMirror, ensureThreadFannedOut } from "../ThreadMirror.js";
+import { waitForPendingMirror, ensureThreadFannedOut, resumeThreadBackfill } from "../ThreadMirror.js";
 import { collectTargets, linkedThreadFamilyEndpoints } from "./targets.js";
 import { classifyWebhookMessage, propagateRelayEcho } from "./relay.js";
 import { renderForTarget, renderEarlyBridge, countCustomEmojis } from "./render.js";
@@ -74,6 +74,15 @@ export async function handleCreate(umsg, options = {}) {
       });
       if (made.length > 0) {
         log("DEBUG", `Create fanout thread ${thread.id} count=${made.length}`);
+        return;
+      }
+      const relayWebhookId =
+        umsg.platform === "fluxer" ? (umsg.webhookId ?? umsg.author?.id ?? null) : (umsg.webhookId ?? null);
+      if (
+        !options.backfill &&
+        (await resumeThreadBackfill(thread, umsg.platform, msg => pipelineCreateDynamic(msg, umsg), umsg.id, relayWebhookId))
+      ) {
+        log("DEBUG", `Create resumed backfill thread ${thread.id}`);
         return;
       }
     }
@@ -185,6 +194,7 @@ export async function handleCreate(umsg, options = {}) {
 
   let sentAny = false;
   let earlyDone = false;
+  let firstTargetError = null;
   const deliveredFlags = new Map();
   for (const entry of filteredTargets) {
     const targetEndpoint = entry.endpoints.find(e => e.webhookId) ?? entry.endpoints[0];
@@ -202,41 +212,47 @@ export async function handleCreate(umsg, options = {}) {
       continue;
     }
 
-    const render = await renderForTarget(umsg, targetEndpoint, {
-      refMessageId,
-      refMessage,
-      forwarded: Boolean(umsg.forwardedSnapshot),
-      bridgeContent,
-      ctx: umsg.ctx,
-    });
-
-    if (emojiCount >= 3 && !earlyDone && !isFluxerRateLimited(`webhook:${targetEndpoint.webhookId}`)) {
-      const earlyRender = await renderEarlyBridge(umsg, targetEndpoint, {
+    try {
+      const render = await renderForTarget(umsg, targetEndpoint, {
+        refMessageId,
+        refMessage,
         forwarded: Boolean(umsg.forwardedSnapshot),
         bridgeContent,
         ctx: umsg.ctx,
-        messageReferenceOption: umsg.platform === "fluxer" ? null : (render.messageReferenceOption ?? null),
       });
-      const early = await sendEarlyBridge(umsg, targetEndpoint, earlyRender, umsg.ctx);
-      if (early?.id) {
-        render.editMessageId = early.id;
-        render.messageReferenceOption = null;
-      }
-      earlyDone = true;
-    }
 
-    const sent = await sendToTarget(umsg, targetEndpoint, render, umsg.ctx, {
-      linkGroup,
-      sourceGroupId: options.sourceGroupId ?? null,
-      endpoints: entry.endpoints,
-    });
-    if (sent) sentAny = true;
+      if (emojiCount >= 3 && !earlyDone && !isFluxerRateLimited(`webhook:${targetEndpoint.webhookId}`)) {
+        const earlyRender = await renderEarlyBridge(umsg, targetEndpoint, {
+          forwarded: Boolean(umsg.forwardedSnapshot),
+          bridgeContent,
+          ctx: umsg.ctx,
+          messageReferenceOption: umsg.platform === "fluxer" ? null : (render.messageReferenceOption ?? null),
+        });
+        const early = await sendEarlyBridge(umsg, targetEndpoint, earlyRender, umsg.ctx);
+        if (early?.id) {
+          render.editMessageId = early.id;
+          render.messageReferenceOption = null;
+        }
+        earlyDone = true;
+      }
+
+      const sent = await sendToTarget(umsg, targetEndpoint, render, umsg.ctx, {
+        linkGroup,
+        sourceGroupId: options.sourceGroupId ?? null,
+        endpoints: entry.endpoints,
+      });
+      if (sent) sentAny = true;
+    } catch (e) {
+      log("DEBUG", `Create target failed id=${umsg.id} endpoint=${targetEndpoint.id} target=${entry.key}`, e);
+      firstTargetError ??= e;
+    }
   }
 
   if (sentAny) {
     resetBridgeHealth(umsg.guildId);
     scheduleSourceVerification(umsg, umsg.raw.content ?? "");
   }
+  if (firstTargetError) throw firstTargetError;
 }
 
 async function resolveRefMessageById(messageId, umsg) {
@@ -258,7 +274,7 @@ async function resolveRefMessageById(messageId, umsg) {
 
 async function pipelineCreateDynamic(msg, umsg) {
   const { pipelineCreate } = await import("./adapters.js");
-  await pipelineCreate(msg, { instanceId: umsg.instanceId });
+  await pipelineCreate(msg, { instanceId: umsg.instanceId, execCommands: false, backfill: true });
 }
 
 function isSourceMessageGoneError(e) {

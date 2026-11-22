@@ -63,9 +63,9 @@ async function sweepChannel(channel, endpoint, cutoff, discordClient) {
     for (const msg of missed) {
       try {
         if (platform === "fluxer") {
-          await pipelineCreate(msg, { instanceId: endpoint.instanceId, execCommands: false });
+          await pipelineCreate(msg, { instanceId: endpoint.instanceId, execCommands: false, backfill: true });
         } else {
-          await pipelineCreate(msg, { execCommands: false });
+          await pipelineCreate(msg, { execCommands: false, backfill: true });
         }
         success++;
       } catch {}

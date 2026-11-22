@@ -75,7 +75,7 @@ function fromPlatform(platform, message, options = {}) {
     instanceId: options.instanceId ?? "default",
     raw: message,
     id: message.id,
-    guildId: message.guildId ?? null,
+    guildId: message.guildId ?? message.channel?.guildId ?? null,
     channelId: message.channelId,
     author: normalizeAuthor(message.author),
     member: message.member ?? null,

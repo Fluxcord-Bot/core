@@ -149,9 +149,10 @@ ${Config.BotPrefix}bridge backfill [NUMBER] [cancel]
               await pipelineCreate(msg, {
                 instanceId: endpoint.instanceId,
                 execCommands: false,
+                backfill: true,
               });
             } else {
-              await pipelineCreate(msg, { execCommands: false });
+              await pipelineCreate(msg, { execCommands: false, backfill: true });
             }
             success++;
           } catch {}
@@ -210,7 +211,7 @@ async function backfillForumPosts(message, isFluxer, endpoints, numOfMessages, s
   }
 
   const statusMsg = await message.reply(`Backfilling ${posts.length} forum posts...`);
-  const bridgeMessage = msg => pipelineCreate(msg, { instanceId, execCommands: false });
+  const bridgeMessage = msg => pipelineCreate(msg, { instanceId, execCommands: false, backfill: true });
   let success = 0;
   for (const [i, thread] of posts.entries()) {
     if (state.cancelled) break;
