@@ -17,7 +17,7 @@ import {
 import { hasSilentFlag, stripSilentFlag } from "../../utils/SilentFlag.js";
 import { createBridgeGroup } from "../../utils/SetupHelper.js";
 import { mirrorTopicFromEndpoint } from "../../utils/TopicMirror.js";
-import { instanceIdOfClient } from "../../utils/FluxerClients.js";
+import { instanceIdOfClient, resolveFluxerClient } from "../../utils/FluxerClients.js";
 import { embedFooterForMessage } from "../../utils/PerInstance.js";
 
 function normalizeChannelName(name) {
@@ -30,12 +30,38 @@ function normalizeChannelName(name) {
     .replace(/^-+|-+$/g, "");
 }
 
+function isBridgeableDiscordChannel(channel) {
+  if (!channel) return false;
+  if (typeof channel.isThread === "function" && channel.isThread()) return false;
+  if (
+    channel.type === ChannelType.GuildCategory ||
+    channel.type === ChannelType.GuildForum ||
+    channel.type === ChannelType.GuildMedia
+  ) {
+    return false;
+  }
+  if (typeof channel.send !== "function") return false;
+  return true;
+}
+
+function isBridgeableFluxerChannel(channel) {
+  if (!channel) return false;
+  if (typeof channel.isThread === "function" && channel.isThread()) return false;
+  if (typeof channel.isForum === "function" && channel.isForum()) return false;
+  if (typeof channel.isMedia === "function" && channel.isMedia()) return false;
+  if (channel.type === ChannelType.GuildCategory) return false;
+  if (typeof channel.send !== "function") return false;
+  return true;
+}
+
 function findMatchingChannel(fluxerChannels, discordChannel) {
   const channelName = normalizeChannelName(discordChannel.name);
   const isVoice = discordChannel.type === ChannelType.GuildVoice;
   const discordAnnouncement = isDiscordAnnouncementChannel(discordChannel);
 
-  const sameType = fluxerChannels.filter(x => (x.type === ChannelType.GuildVoice) === isVoice);
+  const sameType = fluxerChannels.filter(
+    x => isBridgeableFluxerChannel(x) && (x.type === ChannelType.GuildVoice) === isVoice
+  );
 
   const rankCandidates = candidates => {
     const sameKind = candidates.filter(x => isFluxerAnnouncementChannel(x) === discordAnnouncement);
@@ -95,6 +121,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
         guildId: message.guildId,
         channelId: message.channelId,
         isFluxer,
+        instanceId: isFluxer ? (instanceIdOfClient(fluxerClient) ?? "default") : "default",
         silent: silentRequested,
         direction: directionOrCode.startsWith("f") ? "f2d" : directionOrCode.startsWith("d") ? "d2f" : "both",
       });
@@ -141,6 +168,12 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         return;
       }
 
+      // the code was created on the other side; use that side's client (which may be a
+      // non-default fluxer instance) to look its community up
+      const sourceInstanceId = setup.instanceId ?? "default";
+      const otherClient = setup.isFluxer ? resolveFluxerClient(sourceInstanceId) : discordClient;
+      const otherSideName = setup.isFluxer ? "Fluxer community" : "Discord server";
+
       const msg = await message.reply("Getting all channels and trying to bridge them...");
 
       let discordChannels;
@@ -152,13 +185,27 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         try {
           discordGuild = await discordClient.guilds.fetch(setup.guildId);
           fluxerGuild = await fluxerClient.guilds.fetch(message.guildId);
-        } catch {
-          await message.reply("Guild not found. Maybe invite the bot?");
+        } catch (e) {
+          await message.reply(
+            `Couldn't fetch the ${otherSideName} for this code (${
+              e?.status ?? e?.message ?? "unknown error"
+            }). Maybe invite the bot there?`
+          );
           PendingSetup.delete(directionOrCode);
           return;
         }
-        discordChannels = discordGuild.channels.cache;
-        fluxerChannels = await fluxerGuild.fetchChannels();
+        try {
+          discordChannels = discordGuild.channels.cache;
+          fluxerChannels = await fluxerGuild.fetchChannels();
+        } catch (e) {
+          await message.reply(
+            `Couldn't fetch the channels of the ${otherSideName} (${
+              e?.status ?? e?.message ?? "unknown error"
+            }). Maybe invite the bot there?`
+          );
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
       } else {
         if (!message.guildId) {
           await message.reply("This command can only be used in a server.");
@@ -167,19 +214,34 @@ ${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await gen
         }
         try {
           discordGuild = await discordClient.guilds.fetch(message.guildId);
-          fluxerGuild = await fluxerClient.guilds.fetch(setup.guildId);
-        } catch {
-          await message.reply("Guild not found. Maybe invite the bot?");
+          fluxerGuild = await otherClient.guilds.fetch(setup.guildId);
+        } catch (e) {
+          await message.reply(
+            `Couldn't fetch the ${otherSideName} for this code (${
+              e?.status ?? e?.message ?? "unknown error"
+            }). Maybe invite the bot there?`
+          );
           PendingSetup.delete(directionOrCode);
           return;
         }
-        discordChannels = discordGuild.channels.cache;
-        fluxerChannels = await fluxerGuild.fetchChannels();
+        try {
+          discordChannels = discordGuild.channels.cache;
+          fluxerChannels = await fluxerGuild.fetchChannels();
+        } catch (e) {
+          await message.reply(
+            `Couldn't fetch the channels of the ${otherSideName} (${
+              e?.status ?? e?.message ?? "unknown error"
+            }). Maybe invite the bot there?`
+          );
+          PendingSetup.delete(directionOrCode);
+          return;
+        }
       }
 
       const results = [];
 
       for (let channel of discordChannels) {
+        if (!isBridgeableDiscordChannel(channel[1])) continue;
         const matchedChannel = findMatchingChannel(fluxerChannels, channel[1]);
 
         if (matchedChannel) {
@@ -225,11 +287,16 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, disco
   const discordUnsupported =
     typeof discordChannel.isThread === "function" && discordChannel.isThread()
       ? true
-      : discordChannel.type === ChannelType.GuildForum || discordChannel.type === ChannelType.GuildMedia;
+      : discordChannel.type === ChannelType.GuildForum ||
+        discordChannel.type === ChannelType.GuildMedia ||
+        discordChannel.type === ChannelType.GuildCategory ||
+        typeof discordChannel.send !== "function";
   const fluxerUnsupported =
     (typeof fluxerChannel.isThread === "function" && fluxerChannel.isThread()) ||
     (typeof fluxerChannel.isForum === "function" && fluxerChannel.isForum()) ||
-    (typeof fluxerChannel.isMedia === "function" && fluxerChannel.isMedia());
+    (typeof fluxerChannel.isMedia === "function" && fluxerChannel.isMedia()) ||
+    fluxerChannel.type === ChannelType.GuildCategory ||
+    typeof fluxerChannel.send !== "function";
   if (discordUnsupported || fluxerUnsupported) {
     return {
       success: false,
@@ -298,13 +365,17 @@ async function bridgeChannel(fluxerChannel, discordChannel, setup, silent, disco
   }
 
   if (!silent) {
-    await discordChannel.send({
-      content: "🎉 This " + voiceText + " channel is now bridged to Fluxer!",
-    });
+    if (typeof discordChannel.send === "function") {
+      await discordChannel.send({
+        content: "🎉 This " + voiceText + " channel is now bridged to Fluxer!",
+      });
+    }
 
-    await fluxerChannel.send({
-      content: "🎉 This " + voiceText + " channel is now bridged to Discord!",
-    });
+    if (typeof fluxerChannel.send === "function") {
+      await fluxerChannel.send({
+        content: "🎉 This " + voiceText + " channel is now bridged to Discord!",
+      });
+    }
   }
 
   return {
