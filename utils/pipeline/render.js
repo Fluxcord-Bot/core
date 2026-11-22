@@ -382,11 +382,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
     ...(targetPlatform === "fluxer" ? { replied_user: true } : { replied_user: false }),
   };
 
-  const flags =
-    targetPlatform === "discord"
-      ? (umsg.flags.silent ? 4096 : 0) | (canUserEmbed ? 0 : 4)
-      : (umsg.flags.silent ? 4096 : 0) |
-        (umsg.platform === "discord" ? (canUserEmbed ? 0 : 4) : umsg.flags.suppressEmbeds || !canUserEmbed ? 4 : 0);
+  const flags = (umsg.flags.silent ? 4096 : 0) | (umsg.flags.suppressEmbeds || !canUserEmbed ? 4 : 0);
 
   return {
     content: payloadContent,
