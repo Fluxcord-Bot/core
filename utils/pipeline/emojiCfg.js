@@ -19,7 +19,7 @@ export function fluxerReplyLine(instanceId) {
   const fluxerReplies = cfg?.fluxerReplyEmoji;
   const entry = fluxerReplies?.[instanceId] ?? fluxerReplies?.default ?? Object.values(fluxerReplies ?? {})[0];
   if (!entry?.replyL || !entry?.replyR) return "";
-  return `-# ${entry.replyL}${entry.replyR} `;
+  return `-# <${entry.replyL}><${entry.replyR}> `;
 }
 
 export function discordReplyLine() {

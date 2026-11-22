@@ -181,7 +181,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
   const canBridgePing = canUserPing && (await everyonePingEnabled(targetEndpoint));
 
   const parsedContent = await renderContent(umsg, targetEndpoint, {
-    parsedSeed: bridgeContent?.messageData?.parsedContent ?? null,
+    parsedSeed: bridgeContent?.messageData?.parsedContent ?? umsg.content ?? null,
     canBridgePing,
     forwarded,
     ctx: opts.ctx,
@@ -273,7 +273,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
       embeds.filter(x => !isPlatformPreviewEmbed(x, umsg.content)).map(x => discordEmbedToFluxer(x, targetClient))
     );
   } else if (umsg.platform === "fluxer" && targetPlatform === "discord") {
-    embeds = await fluxerEmbedToDiscord(umsg.raw, opts.ctx?.discordClient);
+    embeds = await fluxerEmbedToDiscord({ content: umsg.content, embeds }, opts.ctx?.discordClient);
   }
 
   if (umsg.platform === "discord" && umsg.type === MessageType.PollResult && targetPlatform === "fluxer") {
@@ -382,11 +382,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
     ...(targetPlatform === "fluxer" ? { replied_user: true } : { replied_user: false }),
   };
 
-  const flags =
-    targetPlatform === "discord"
-      ? (umsg.flags.silent ? 4096 : 0) | (canUserEmbed ? 0 : 4)
-      : (umsg.flags.silent ? 4096 : 0) |
-        (umsg.platform === "discord" ? (canUserEmbed ? 0 : 4) : umsg.flags.suppressEmbeds || !canUserEmbed ? 4 : 0);
+  const flags = (umsg.flags.silent ? 4096 : 0) | (umsg.flags.suppressEmbeds || !canUserEmbed ? 4 : 0);
 
   return {
     content: payloadContent,

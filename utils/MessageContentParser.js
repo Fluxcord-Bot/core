@@ -182,7 +182,7 @@ export async function attemptParseBridgedMessage(message) {
 
   const content = message.content ?? "";
 
-  const noticeRegex = /^-# <:reply_l:\d+><:reply_r:\d+> (?:Unbridged|Forwarded) message\n?/;
+  const noticeRegex = /^-# (?:<:reply_l:\d+><:reply_r:\d+> )?(?:Unbridged|Forwarded) message\n?/;
   if (noticeRegex.test(content)) {
     return {
       isBridge: true,

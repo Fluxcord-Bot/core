@@ -13,7 +13,7 @@ export async function findReplyCopy(targetChannelId, refMessageId) {
   return siblings.find(s => s.endpoint?.channelId === targetChannelId) ?? null;
 }
 
-function authorLabelFor(refMessage, targetPlatform, nameIndicator) {
+function authorLabelFor(refMessage, targetPlatform, nameIndicator, authorPlatform) {
   const author = refMessage?.author;
   if (refMessage?.webhookId) {
     const name = author?.globalName ?? author?.username ?? "";
@@ -22,10 +22,10 @@ function authorLabelFor(refMessage, targetPlatform, nameIndicator) {
     }
   }
   if (targetPlatform === "discord") {
-    return `${indicatorPrefix("discord", nameIndicator)}${author?.tag ?? author?.username ?? "unknown-user"}`;
+    return `${indicatorPrefix(authorPlatform, nameIndicator)}${author?.tag ?? author?.username ?? "unknown-user"}`;
   }
   const disc = author?.discriminator;
-  return `${indicatorPrefix("fluxer", nameIndicator)}@${author?.username ?? "unknown-user"}${disc && disc !== "0000" ? `#${disc}` : ""}`;
+  return `${indicatorPrefix(authorPlatform, nameIndicator)}@${author?.username ?? "unknown-user"}${disc && disc !== "0000" ? `#${disc}` : ""}`;
 }
 
 async function discordReplyPing(target, refMessageId, refMessage) {
@@ -57,7 +57,7 @@ async function discordReplyPing(target, refMessageId, refMessage) {
 export async function renderReplyLine(target, refMessageId, refMessage) {
   if (!refMessageId) return "";
   const prefix = replyLineForPlatform(target.platform, target.instanceId);
-  let label = authorLabelFor(refMessage, target.platform, target.nameIndicator);
+  let label = authorLabelFor(refMessage, target.platform, target.nameIndicator, target.sourcePlatform ?? target.platform);
   if (target.platform === "discord") {
     const ping = await discordReplyPing(target, refMessageId, refMessage);
     if (ping) label = `<@${ping}>`;

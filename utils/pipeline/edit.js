@@ -63,6 +63,11 @@ export async function handleEdit(umsg) {
         umsg.platform === "discord"
           ? Boolean(umsg.raw.flags?.has?.(MessageFlags.SuppressEmbeds))
           : Boolean(umsg.raw.flags?.has?.(4));
+      if (knownSuppressState(umsg.id) === suppressed) {
+        log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} reason=ownSuppressWrite`);
+        return;
+      }
+
       const echoLinkRows = await MessageLink.findAll({ where: { messageId: umsg.id }, include: ["endpoint"] });
       const echoSourceRows = echoLinkRows.filter(
         row => row.endpoint?.platform === umsg.platform && row.endpoint?.channelId === umsg.channelId
@@ -191,6 +196,17 @@ export async function handleEdit(umsg) {
             } else {
               const webhook = await getDiscordWebhook(umsg.ctx.discordClient, targetEndpoint);
               if (!webhook) return;
+
+              const suppress = Boolean(render.flags & 4);
+              const channel = await umsg.ctx.discordClient.channels.fetch(targetEndpoint.channelId).catch(() => null);
+              const copy = await channel?.messages?.fetch?.(other.messageId).catch(() => null);
+              if (copy && copy.content === render.content && copy.flags.has(MessageFlags.SuppressEmbeds) !== suppress) {
+                markSuppressWrite(other.messageId, suppress);
+                await copy.suppressEmbeds(suppress);
+                log("DEBUG", `Edit suppressed-only discord id=${umsg.id} targetMsg=${other.messageId} suppress=${suppress}`);
+                return;
+              }
+
               markSuppressWrite(other.messageId, Boolean(render.flags & 4));
               await webhook.editMessage(other.messageId, {
                 content: render.content,
