@@ -19,6 +19,7 @@ import { resolveDiscordReference, resolveFluxerReference } from "./references.js
 import { isFluxerRateLimited } from "../FluxerRateLimit.js";
 import { resolveFluxerClient } from "../FluxerClients.js";
 import { attemptParseBridgedMessage } from "../MessageContentParser.js";
+import { pipelineCreate } from "./adapters.js";
 
 export async function handleCreate(umsg, options = {}) {
   if (umsg.guildId == null) return;
