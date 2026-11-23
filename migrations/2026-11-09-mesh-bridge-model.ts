@@ -152,15 +152,14 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
         )) as any;
         let groupId = Array.isArray(groupInserted) && groupInserted[0]?.id != null ? groupInserted[0].id : null;
         if (groupId == null) {
-          const latest = (await queryInterface.sequelize.query(
-            `SELECT id FROM "BridgeGroups" ORDER BY id DESC LIMIT 1`,
-            { type: QueryTypes.SELECT, transaction }
-          )) as any[];
+          const latest = (await queryInterface.sequelize.query(`SELECT id FROM "BridgeGroups" ORDER BY id DESC LIMIT 1`, {
+            type: QueryTypes.SELECT,
+            transaction,
+          })) as any[];
           groupId = latest[0]?.id;
         }
 
-        const tagMap =
-          row.tagMap == null ? null : typeof row.tagMap === "string" ? row.tagMap : JSON.stringify(row.tagMap);
+        const tagMap = row.tagMap == null ? null : typeof row.tagMap === "string" ? row.tagMap : JSON.stringify(row.tagMap);
         const kind = row.parentChannelMapId ? "thread" : "channel";
         const inserted = (await queryInterface.bulkInsert(
           "BridgeEndpoints",
@@ -212,11 +211,9 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
           fluxerEndpointId = latest.find(x => x.platform === "fluxer")?.id;
         }
 
-        await queryInterface.bulkInsert(
-          MAP_TABLE,
-          [{ oldChannelMapId: row.id, discordEndpointId, fluxerEndpointId }],
-          { transaction } as any
-        );
+        await queryInterface.bulkInsert(MAP_TABLE, [{ oldChannelMapId: row.id, discordEndpointId, fluxerEndpointId }], {
+          transaction,
+        } as any);
         endpointIdByOld.set(Number(row.id), { discord: discordEndpointId, fluxer: fluxerEndpointId });
       });
     }
@@ -269,7 +266,10 @@ export async function up({ context: queryInterface }: { context: QueryInterface 
 
     const alreadyLinked = new Set<string>();
     for (let i = 0; i < messageIds.length; i += INSERT_BATCH) {
-      const inList = messageIds.slice(i, i + INSERT_BATCH).map(id => escape(id)).join(",");
+      const inList = messageIds
+        .slice(i, i + INSERT_BATCH)
+        .map(id => escape(id))
+        .join(",");
       if (!inList) continue;
       const rows = (await queryInterface.sequelize.query(
         `SELECT DISTINCT "messageId" FROM "MessageLinks" WHERE "messageId" IN (${inList})`,
