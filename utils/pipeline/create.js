@@ -76,8 +76,7 @@ export async function handleCreate(umsg, options = {}) {
         log("DEBUG", `Create fanout thread ${thread.id} count=${made.length}`);
         return;
       }
-      const relayWebhookId =
-        umsg.platform === "fluxer" ? (umsg.webhookId ?? umsg.author?.id ?? null) : (umsg.webhookId ?? null);
+      const relayWebhookId = umsg.platform === "fluxer" ? (umsg.webhookId ?? umsg.author?.id ?? null) : (umsg.webhookId ?? null);
       if (
         !options.backfill &&
         (await resumeThreadBackfill(thread, umsg.platform, msg => pipelineCreateDynamic(msg, umsg), umsg.id, relayWebhookId))

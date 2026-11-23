@@ -268,7 +268,7 @@ export async function attemptParseBridgedMessage(message) {
     }
   }
 
-  const boltReplyRegex = /https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
+  const boltReplyRegex = /https:\/\/discord\.com\/channels\/(\d+|@me)\/(\d+)\/(\d+)/;
 
   if (Array.isArray(message.components)) {
     for (const row of message.components) {
