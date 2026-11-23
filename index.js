@@ -897,6 +897,8 @@ if (missingTempGuildInstances.length > 0) {
 if (Config.VoiceBridgingEnabled) {
   if (!DiscordEnabled) {
     log("META", "Voice bridging requires a Discord bot token, skipping voice setup.");
+  } else if (!Config.RunnerSecret) {
+    log("META", "Voice bridging requires a runner token, skipping voice setup.");
   } else {
     const voiceHandler = await import("./utils/VoiceHandler.js");
     const { setupVoiceHandling } = voiceHandler;

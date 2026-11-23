@@ -69,6 +69,9 @@ const command = {
     const now = new Date();
     const msg = await message.reply("Pinging...");
     const configuredInstances = getFluxerInstances();
+
+    console.log(configuredInstances);
+
     const fluxerInstances = [...fluxerClients.entries()];
     const fluxerRestLatencies = await Promise.all(
       fluxerInstances.map(async ([instanceId, client]) => {
@@ -104,19 +107,12 @@ const command = {
     for (const [instanceId, client] of fluxerInstances) {
       const rest = fluxerRestLatencies.find(entry => entry.instanceId === instanceId)?.value ?? "n/a";
       const ping =
-        client.isReady() && typeof client.ws.ping === "number" && client.ws.ping >= 0
-          ? `${Math.round(client.ws.ping)}ms`
-          : "n/a";
+        client.isReady() && typeof client.ws.ping === "number" && client.ws.ping >= 0 ? `${Math.round(client.ws.ping)}ms` : "n/a";
       const guildCount = client.guilds.size;
-      const memberCount = client.guilds.reduce(
-        (acc, guild) => acc + (guild.memberCount ?? guild.members.size),
-        0
-      );
+      const memberCount = client.guilds.reduce((acc, guild) => acc + (guild.memberCount ?? guild.members.size), 0);
       instanceLines.push(instanceHost(instanceId, configuredInstances));
       latencyLines.push(`${rest} REST, ${ping} GW`);
-      countLines.push(
-        `${guildCount} guild${guildCount === 1 ? "" : "s"}, ${memberCount} user${memberCount === 1 ? "" : "s"}`
-      );
+      countLines.push(`${guildCount} guild${guildCount === 1 ? "" : "s"}, ${memberCount} user${memberCount === 1 ? "" : "s"}`);
     }
 
     const load = os.loadavg()[0].toFixed(2);

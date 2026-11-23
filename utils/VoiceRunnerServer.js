@@ -20,7 +20,7 @@ wss.on("listening", () => {
   log("VOICE", `Runner server listening on :${PORT}`);
 });
 wss.on("connection", (ws, req) => {
-  if (SECRET && req.headers["x-runner-secret"] !== SECRET) {
+  if (req.headers["x-runner-secret"] !== SECRET) {
     ws.close(4001, "Unauthorized");
     return;
   }

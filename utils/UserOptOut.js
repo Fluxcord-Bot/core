@@ -28,6 +28,7 @@ export async function isUserOptedOut(userType, userId) {
  */
 export async function isGuildOptInEnabled(guildId, guildType) {
   const guildMap = await GuildMap.findOne({ where: { guildId, guildType } });
+  console.log(guildId, guildType, guildMap);
   return guildMap?.guildOptInEnabled === true;
 }
 
@@ -158,10 +159,7 @@ export async function notifyExistingOptOutMembers(guildId, guildType, discordCli
 
     let member;
     try {
-      member =
-        guildType === "discord"
-          ? await  (guild).members.fetch(userId)
-          : await  (guild).fetchMember(userId);
+      member = guildType === "discord" ? await guild.members.fetch(userId) : await guild.fetchMember(userId);
     } catch (error) {
       const unknownMember =
         error?.code === 10007 ||

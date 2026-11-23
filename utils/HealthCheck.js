@@ -22,7 +22,7 @@ export function setupHealthcheck(discordClient, fluxerClient) {
   if (Config.HealthcheckEnabled === false) return null;
 
   const port = Config.HealthcheckPort ?? 8080;
-  const host = Config.HealthcheckHost ?? "0.0.0.0";
+  const host = Config.HealthcheckHost ?? "127.0.0.1";
 
   const server = http.createServer((req, res) => {
     const url = (req.url || "/").split("?")[0];
