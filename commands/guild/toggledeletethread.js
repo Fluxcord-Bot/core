@@ -1,6 +1,5 @@
-import { Message } from "@fluxerjs/core";
-import { GuildMap } from "../../db/index.js";
-import { log } from "node:console";
+import { Message as FluxerMessage } from "@fluxerjs/core";
+import { applyBridgeToggle } from "../../utils/BridgeToggle.js";
 
 /**
  * @type {import('../../utils/CommandSchema.js').CommandSchema}
