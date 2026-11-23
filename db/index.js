@@ -167,11 +167,7 @@ BridgeEndpoint.init(
   {
     sequelize,
     modelName: "BridgeEndpoint",
-    indexes: [
-      { fields: ["platform", "channelId"] },
-      { fields: ["BridgeGroupId"] },
-      { fields: ["platform", "guildId"] },
-    ],
+    indexes: [{ fields: ["platform", "channelId"] }, { fields: ["BridgeGroupId"] }, { fields: ["platform", "guildId"] }],
   }
 );
 MessageLink.init(
@@ -189,11 +185,7 @@ MessageLink.init(
   {
     sequelize,
     modelName: "MessageLink",
-    indexes: [
-      { fields: ["BridgeEndpointId", "messageId"] },
-      { fields: ["linkGroup"] },
-      { fields: ["messageId"] },
-    ],
+    indexes: [{ fields: ["BridgeEndpointId", "messageId"] }, { fields: ["linkGroup"] }, { fields: ["messageId"] }],
   }
 );
 
@@ -212,9 +204,6 @@ MessageLink.belongsTo(BridgeEndpoint, {
   foreignKey: "endpointId",
   as: "endpoint",
 });
-MessageLink.addHook("beforeBulkDestroy", options => {
-  console.log(`[LinkTrace] MessageLink.destroy where=${JSON.stringify(options.where ?? null)} stack=${new Error().stack?.split("\n").slice(2, 6).join(" | ")}`);
-});
 BridgeEndpoint.hasMany(MessageLink, {
   foreignKey: "endpointId",
   as: "messageLinks",
@@ -232,13 +221,4 @@ BridgeEndpoint.belongsTo(BridgeEndpoint, {
   as: "parentEndpoint",
 });
 
-export {
-  sequelize,
-  GuildMap,
-  UserConfig,
-  GuildUserOptIn,
-  BridgeGroup,
-  BridgeEndpoint,
-  MessageLink,
-  VoiceChannelMap,
-};
+export { sequelize, GuildMap, UserConfig, GuildUserOptIn, BridgeGroup, BridgeEndpoint, MessageLink, VoiceChannelMap };

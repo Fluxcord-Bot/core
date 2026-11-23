@@ -70,8 +70,6 @@ const command = {
     const msg = await message.reply("Pinging...");
     const configuredInstances = getFluxerInstances();
 
-    console.log(configuredInstances);
-
     const fluxerInstances = [...fluxerClients.entries()];
     const fluxerRestLatencies = await Promise.all(
       fluxerInstances.map(async ([instanceId, client]) => {

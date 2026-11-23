@@ -28,7 +28,6 @@ export async function isUserOptedOut(userType, userId) {
  */
 export async function isGuildOptInEnabled(guildId, guildType) {
   const guildMap = await GuildMap.findOne({ where: { guildId, guildType } });
-  console.log(guildId, guildType, guildMap);
   return guildMap?.guildOptInEnabled === true;
 }
 
