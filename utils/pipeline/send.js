@@ -72,6 +72,7 @@ export async function sendEarlyBridge(umsg, targetEndpoint, earlyRender, ctx) {
       message_reference: earlyRender.messageReferenceOption,
       allowed_mentions: earlyRender.allowedMentions,
       flags: earlyRender.flags,
+      channelId: targetEndpoint.channelId,
       ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
     });
     log("DEBUG", `Pipeline early bridge id=${umsg.id} fluxerId=${msg?.id} endpoint=${targetEndpoint.id}`);
@@ -264,6 +265,7 @@ async function sendToFluxerEndpoint(umsg, targetEndpoint, render, relayMeta) {
         message_reference: render.messageReferenceOption,
         allowed_mentions: render.allowedMentions,
         flags: render.flags,
+        channelId: targetEndpoint.channelId,
         ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
       });
     }
@@ -279,6 +281,7 @@ async function sendToFluxerEndpoint(umsg, targetEndpoint, render, relayMeta) {
           files: render.files,
           allowed_mentions: render.allowedMentions,
           flags: render.flags,
+          channelId: targetEndpoint.channelId,
           ...(targetEndpoint.kind === "thread" ? { threadId: targetEndpoint.channelId } : {}),
         });
       } catch (e2) {

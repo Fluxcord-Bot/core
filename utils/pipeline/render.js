@@ -245,7 +245,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
     const processed = await processSticker(stickerUrl, { animated, name: sticker.name });
     if (processed) {
       if (targetPlatform === "fluxer") {
-        files.push({ name: processed.filename, data: processed.buffer });
+        files.push({ name: processed.filename, data: processed.buffer, contentType: processed.contentType });
       } else {
         files.push({ attachment: processed.buffer, name: processed.filename });
       }

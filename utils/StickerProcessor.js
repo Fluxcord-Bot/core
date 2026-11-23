@@ -86,7 +86,7 @@ export async function processSticker(url, { animated = false, name = "sticker" }
       ffmpeg.stdin.end(rawBuffer);
     });
 
-    return { buffer, filename: `${name}.${ext}` };
+    return { buffer, filename: `${name}.${ext}`, contentType: `image/${ext}` };
   } catch (e) {
     log("DEBUG", `StickerProcessor: ffmpeg failed, ${e.message}`);
     return null;

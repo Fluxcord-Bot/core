@@ -29,9 +29,8 @@ function toAttachmentPayload(file, id) {
  * @returns {Promise<any>}
  */
 export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, params) {
-  const attachments = [];
   const resolvedFiles = [];
-  const { files, threadId, thread_name, applied_tags, ...jsonPayload } = params;
+  const { files, threadId, thread_name, applied_tags, channelId, ...jsonPayload } = params;
 
   log("DEBUG", `[FluxerWebhookSend] Preparing to send webhook with ${files?.length ?? 0} files.`);
 
@@ -40,6 +39,7 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
       try {
         const file = files[i];
         let data = file.data ?? file.attachment;
+        let contentType = file.contentType;
 
         if (!data) {
           if (!file.url) {
@@ -53,33 +53,51 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
             continue;
           }
           data = await res.arrayBuffer();
+          contentType ??= res.headers.get("content-type")?.split(";")[0] || undefined;
         }
 
-        resolvedFiles.push({
-          name: file.name,
-          filename: file.name,
-          data,
-        });
-
-        attachments.push(toAttachmentPayload(file, i));
+        resolvedFiles.push({ file, contentType, data });
       } catch (e) {
         log("FLUXER", `Failed to fetch: ${e}`);
       }
     }
   }
 
-  jsonPayload.attachments = attachments;
-
   if (thread_name !== undefined) jsonPayload.thread_name = thread_name;
   if (applied_tags !== undefined) jsonPayload.applied_tags = applied_tags;
 
-  const query = threadId ? `?wait=true&thread_id=${threadId}` : "?wait=true";
+  const path = `/webhooks/${webhookId}/${webhookToken}?wait=true${threadId ? `&thread_id=${threadId}` : ""}`;
+
+  let cloudAttachments;
+  if (channelId && resolvedFiles.length > 0) {
+    try {
+      const channel = await fluxerClient.channels.fetch(channelId);
+      const uploaded = await channel.uploadAttachmentsForSend(
+        resolvedFiles.map((e, i) => ({
+          id: i,
+          filename: e.file.name,
+          data: e.data,
+          contentType: e.contentType ?? "application/octet-stream",
+        }))
+      );
+      const slots = new Map(uploaded.map(u => [u.id, u]));
+      cloudAttachments = resolvedFiles.map((e, i) => {
+        const slot = slots.get(i);
+        if (!slot) throw new Error(`Fluxer returned no upload slot for ${e.file.name}`);
+        return { ...toAttachmentPayload(e.file, i), ...slot };
+      });
+    } catch (e) {
+      log("FLUXER", `Cloud upload failed for webhook ${webhookId}, sending files inline`, e);
+    }
+  }
+
+  jsonPayload.attachments = cloudAttachments ?? resolvedFiles.map((e, i) => toAttachmentPayload(e.file, i));
 
   return await withFluxerRateLimit(
     () =>
-      fluxerClient.rest.post(`/webhooks/${webhookId}/${webhookToken}${query}`, {
+      fluxerClient.rest.post(path, {
         body: jsonPayload,
-        files: resolvedFiles,
+        ...(cloudAttachments ? {} : { files: resolvedFiles.map(e => ({ name: e.file.name, filename: e.file.name, data: e.data })) }),
         auth: false,
       }),
     `webhook:${webhookId}`
