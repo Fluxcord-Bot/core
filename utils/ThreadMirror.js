@@ -330,6 +330,7 @@ export async function ensureThreadFamilyLink(sourceRow, sourceMessageId, targetR
 }
 
 export async function ensureThreadRows(specs) {
+  if (specs.length === 0) return [];
   const existing = [];
   const groupIds = [];
   for (const spec of specs) {
@@ -385,6 +386,11 @@ export async function ensureThreadRows(specs) {
         parentEndpointId: spec.parentEndpoint?.id ?? null,
       })
     );
+  }
+
+  // Never leave a bridge group behind without endpoints.
+  if ((await BridgeEndpoint.count({ where: { groupId } })) === 0) {
+    await BridgeGroup.destroy({ where: { id: groupId } });
   }
   return rows;
 }

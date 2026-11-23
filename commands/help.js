@@ -1,4 +1,4 @@
-import { EmbedBuilder } from "@fluxerjs/core";
+import { EmbedBuilder, Message } from "@fluxerjs/core";
 import Config from "../utils/ConfigHandler.js";
 import { getCommands } from "../utils/CommandHandler.js";
 import { getGuildPrefix } from "../utils/GetGuildPrefix.js";
@@ -41,7 +41,7 @@ const command = {
   params: "[...command]",
   slashOptions: [{ name: "command", type: "string", rest: true }],
   async run(params, message, _, _2) {
-    const prefix = await getGuildPrefix(message.guildId ?? "");
+    const prefix = await getGuildPrefix(message.guildId ?? "", message instanceof Message ? "fluxer" : "discord");
     if (params[0]) {
       const command = (await getCommands()).find(
         x =>

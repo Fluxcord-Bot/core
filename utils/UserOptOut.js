@@ -110,7 +110,7 @@ export async function promptOptedOutUserOnFirstMessage(guildId, guildType, user,
  * @param {"discord" | "fluxer"} guildType
  */
 export async function sendGuildOptInPrompt(user, guildName, guildId, guildType) {
-  const prefix = await getGuildPrefix(guildId);
+  const prefix = await getGuildPrefix(guildId, guildType);
   const community = guildType === "fluxer" ? "community" : "guild";
   const dm = await user.createDM();
   await dm.send({

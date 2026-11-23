@@ -10,7 +10,7 @@ export default async function changeBotBio(guild) {
   if (!guild?.id || !guild.members || !guild.channels) return;
   try {
     const guildMap = await GuildMap.findOne({
-      where: { guildId: guild.id },
+      where: { guildId: guild.id, guildType: guild instanceof Guild ? "fluxer" : "discord" },
     });
     if (guildMap?.customBio) {
       if (guild instanceof Guild) {

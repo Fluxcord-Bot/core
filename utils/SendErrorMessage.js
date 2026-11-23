@@ -24,7 +24,7 @@ export async function sendErrorMessage(message, discordClient, error, options = 
   const instanceId = options.instanceId ?? (isFluxer ? instanceIdOfClient(message.client) ?? "default" : "default");
 
   const maps = await GuildMap.findAll({ where: { guildId: message.guildId } });
-  const guildMap = maps.find(m => (isFluxer ? true : m.guildType === "discord")) ?? null;
+  const guildMap = maps.find(m => m.guildType === (isFluxer ? "fluxer" : "discord")) ?? null;
 
   try {
     if (guildMap) {

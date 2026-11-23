@@ -10,9 +10,9 @@ export const DEFAULT_INFO_EMOJI = "ℹ️";
 /**
  * @param {string | null} guildId
  */
-export async function getInfoReactionEmoji(guildId) {
+export async function getInfoReactionEmoji(guildId, guildType) {
   if (!guildId) return DEFAULT_INFO_EMOJI;
-  const guildMap = await GuildMap.findOne({ where: { guildId } });
+  const guildMap = await GuildMap.findOne({ where: guildType ? { guildId, guildType } : { guildId } });
   return guildMap?.infoReactionEmoji || DEFAULT_INFO_EMOJI;
 }
 

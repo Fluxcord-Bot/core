@@ -1,4 +1,4 @@
-import { Channel as FluxerChannel } from "@fluxerjs/core";
+import { Channel as FluxerChannel, Message as FluxerMessage } from "@fluxerjs/core";
 import { ChannelType } from "discord.js";
 import Config from "../../utils/ConfigHandler.js";
 import { GuildMap } from "../../db/index.js";
@@ -29,9 +29,11 @@ const command = {
       return;
     }
 
+    const guildType = message instanceof FluxerMessage ? "fluxer" : "discord";
     const guildMap = await GuildMap.findOne({
       where: {
         guildId: message.guildId,
+        guildType,
       },
     });
 

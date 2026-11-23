@@ -1,7 +1,7 @@
 import { GuildChannel as FluxerGuildChannel } from "@fluxerjs/core";
 import { GuildChannel as DiscordGuildChannel } from "discord.js";
 import { Op } from "sequelize";
-import { BridgeEndpoint, BridgeGroup, MessageLink, VoiceChannelMap } from "../db/index.js";
+import { sequelize, BridgeEndpoint, BridgeGroup, MessageLink, VoiceChannelMap } from "../db/index.js";
 import { invalidateFluxerWebhookCache } from "./Webhooks.js";
 import { findOrCreateGuildMap } from "./Bridging.js";
 import { log } from "./Logger.js";
@@ -79,20 +79,33 @@ async function buildEndpoint(spec) {
  * @param {import("discord.js").Client} discordClient
  */
 export async function createBridgeGroup(bridgeType, specs, discordClient) {
-  const group = await BridgeGroup.create({ bridgeType });
-  const endpoints = [];
+  // Resolve webhooks/guild maps before opening the transaction so a failure
+  // here leaves no group behind. The DB write itself is atomic: either the
+  // group exists with all of its endpoints, or nothing is persisted.
+  const built = [];
   for (const spec of specs) {
-    const row = await BridgeEndpoint.create({
-      ...(await buildEndpoint({
+    built.push(
+      await buildEndpoint({
         ...spec,
         skipWebhook: spec.skipWebhook ?? !webhookNeededForTarget(spec.platform, bridgeType),
-      })),
-      groupId: group.id,
-    });
-    endpoints.push(row);
+      })
+    );
   }
-  void discordClient;
-  return { group, endpoints };
+
+  const transaction = await sequelize.transaction();
+  try {
+    const group = await BridgeGroup.create({ bridgeType }, { transaction });
+    const endpoints = [];
+    for (const row of built) {
+      endpoints.push(await BridgeEndpoint.create({ ...row, groupId: group.id }, { transaction }));
+    }
+    await transaction.commit();
+    void discordClient;
+    return { group, endpoints };
+  } catch (e) {
+    await transaction.rollback().catch(() => {});
+    throw e;
+  }
 }
 
 /**
@@ -125,35 +138,46 @@ export async function setupBridgePair(bridgeType, specA, specB, discordClient) {
   const existingInTarget = await BridgeEndpoint.findAll({ where: { groupId: targetGroup.id } });
   const alreadyThere = new Set(existingInTarget.map(e => `${e.platform}:${e.channelId}:${e.instanceId}`));
 
-  const endpoints = [...existingInTarget];
+  const pending = [];
   for (const spec of [specA, specB]) {
     if (alreadyThere.has(`${spec.platform}:${spec.channel.id}:${spec.instanceId ?? "default"}`)) continue;
-    const row = await BridgeEndpoint.create({
-      ...(await buildEndpoint({
+    pending.push(
+      await buildEndpoint({
         ...spec,
         skipWebhook: spec.skipWebhook ?? !webhookNeededForTarget(spec.platform, "both"),
-      })),
-      groupId: targetGroup.id,
-    });
-    endpoints.push(row);
+      })
+    );
     alreadyThere.add(`${spec.platform}:${spec.channel.id}:${spec.instanceId ?? "default"}`);
   }
 
-  for (const group of rest) {
-    const moved = await BridgeEndpoint.findAll({ where: { groupId: group.id } });
-    for (const ep of moved) {
-      const key = `${ep.platform}:${ep.channelId}:${ep.instanceId}`;
-      if (alreadyThere.has(key)) {
-        await MessageLink.destroy({ where: { endpointId: ep.id } });
-        await ep.destroy();
-        continue;
-      }
-      ep.groupId = targetGroup.id;
-      await ep.save();
-      alreadyThere.add(key);
-      endpoints.push(ep);
+  const transaction = await sequelize.transaction();
+  let endpoints;
+  try {
+    endpoints = [...existingInTarget];
+    for (const row of pending) {
+      endpoints.push(await BridgeEndpoint.create({ ...row, groupId: targetGroup.id }, { transaction }));
     }
-    await group.destroy();
+
+    for (const group of rest) {
+      const moved = await BridgeEndpoint.findAll({ where: { groupId: group.id }, transaction });
+      for (const ep of moved) {
+        const key = `${ep.platform}:${ep.channelId}:${ep.instanceId}`;
+        if (alreadyThere.has(key)) {
+          await MessageLink.destroy({ where: { endpointId: ep.id }, transaction });
+          await ep.destroy({ transaction });
+          continue;
+        }
+        ep.groupId = targetGroup.id;
+        await ep.save({ transaction });
+        alreadyThere.add(key);
+        endpoints.push(ep);
+      }
+      await group.destroy({ transaction });
+    }
+    await transaction.commit();
+  } catch (e) {
+    await transaction.rollback().catch(() => {});
+    throw e;
   }
 
   return { group: targetGroup, endpoints, merged: rest.length + 1 };

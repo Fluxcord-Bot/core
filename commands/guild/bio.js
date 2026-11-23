@@ -25,12 +25,14 @@ const command = {
     const isFluxer = message instanceof FluxerMessage;
     const text = params.join(" ").trim();
 
+    const guildType = message instanceof Message ? "fluxer" : "discord";
     const guildMap = await GuildMap.findOrCreate({
       where: {
         guildId: message.guildId,
+        guildType,
       },
       defaults: {
-        guildType: message instanceof Message ? "fluxer" : "discord",
+        guildType,
       },
     });
 

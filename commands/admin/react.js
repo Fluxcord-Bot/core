@@ -25,6 +25,7 @@ const command = {
     const guildMap = await GuildMap.findOne({
       where: {
         guildId: message.guildId,
+        guildType: message instanceof Message ? "fluxer" : "discord",
       },
     });
 

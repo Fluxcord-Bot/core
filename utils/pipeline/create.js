@@ -44,7 +44,7 @@ export async function handleCreate(umsg, options = {}) {
 
   cacheUser(umsg.raw.author, umsg.platform);
 
-  const guildPrefix = await getGuildPrefix(umsg.guildId);
+  const guildPrefix = await getGuildPrefix(umsg.guildId, umsg.platform);
   if ((umsg.content ?? "").startsWith(guildPrefix)) {
     log("DEBUG", `Create ${umsg.platform} id=${umsg.id} isCommand=${options.execCommands !== false}`);
     if (options.execCommands === false) return;

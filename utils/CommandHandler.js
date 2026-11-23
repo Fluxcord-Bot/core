@@ -49,7 +49,7 @@ export async function CommandHandler(message, discordClient, fluxerClient) {
   if (message.author.bot || message.webhookId) return;
 
   const cmdList = message.content.split(" ");
-  const guildPrefix = await getGuildPrefix(message.guildId ?? "");
+  const guildPrefix = await getGuildPrefix(message.guildId ?? "", message instanceof FluxerMessage ? "fluxer" : "discord");
   const command = cmdList[0]?.startsWith(guildPrefix)
     ? cmdList[0].slice(guildPrefix.length)
     : cmdList[0]?.replace(Config.BotPrefix, "");

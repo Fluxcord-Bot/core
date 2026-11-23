@@ -49,7 +49,7 @@ const command = {
       }
 
       if (!confirmed) {
-        const prefix = await getGuildPrefix(message.guildId ?? "");
+        const prefix = await getGuildPrefix(message.guildId ?? "", userType);
         await message.reply({
           embeds: [
             {
@@ -82,7 +82,7 @@ const command = {
     }
 
     if (!confirmed) {
-      const prefix = await getGuildPrefix(message.guildId ?? "");
+      const prefix = await getGuildPrefix(message.guildId ?? "", userType);
       await message.reply({
         embeds: [
           {

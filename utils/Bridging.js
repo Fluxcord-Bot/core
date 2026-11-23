@@ -198,7 +198,20 @@ export function isDeletedGroup(linkGroup) {
  * @returns {Promise<GuildMap>}
  */
 export async function findOrCreateGuildMap(guildType, guildId, instanceId = "default") {
-  const where = guildType === "fluxer" ? { guildId, guildType, fluxerInstanceId: instanceId } : { guildId, guildType };
-  const [map] = await GuildMap.findOrCreate({ where });
+  const scoped = { guildId, guildType };
+  const existing = await GuildMap.findOne({ where: scoped, order: [["id", "ASC"]] });
+  if (existing) {
+    if (guildType === "fluxer" && existing.fluxerInstanceId !== instanceId) {
+      log(
+        "WARN",
+        `GuildMap ${guildId} instance mismatch (stored ${existing.fluxerInstanceId}, got ${instanceId}); reusing stored row`
+      );
+    }
+    return existing;
+  }
+  const [map] = await GuildMap.findOrCreate({
+    where: scoped,
+    defaults: { guildType, guildId, fluxerInstanceId: guildType === "fluxer" ? instanceId : "default" },
+  });
   return map;
 }

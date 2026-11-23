@@ -1,6 +1,7 @@
 import { Message } from "@fluxerjs/core";
 import { GuildMap } from "../../db/index.js";
 import Config from "../../utils/ConfigHandler.js";
+import { invalidateGuildPrefix } from "../../utils/GetGuildPrefix.js";
 
 const MAX_PREFIX_LENGTH = 10;
 
@@ -18,12 +19,14 @@ const command = {
   slashOptions: [{ name: "value", type: "string" }],
   requireElevated: true,
   async run(params, message, _, _2) {
+    const guildType = message instanceof Message ? "fluxer" : "discord";
     const guildMap = await GuildMap.findOrCreate({
       where: {
         guildId: message.guildId,
+        guildType,
       },
       defaults: {
-        guildType: message instanceof Message ? "fluxer" : "discord",
+        guildType,
       },
     });
 
@@ -39,6 +42,7 @@ const command = {
     if (params[0].toLowerCase() === "reset") {
       guildMap[0].botPrefix = Config.BotPrefix;
       await guildMap[0].save();
+      invalidateGuildPrefix(message.guildId);
       await message.reply(`Prefix reset! The bot will now respond to \`${Config.BotPrefix}\` in this server.`);
       return;
     }
@@ -57,6 +61,7 @@ const command = {
 
     guildMap[0].botPrefix = newPrefix;
     await guildMap[0].save();
+    invalidateGuildPrefix(message.guildId);
 
     await message.reply(
       `Prefix changed! The bot will now only respond to \`${newPrefix}\` in this server (no longer to \`${Config.BotPrefix}\`).`

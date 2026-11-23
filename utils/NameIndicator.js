@@ -29,10 +29,30 @@ export async function resolveNameIndicator(receiverGuildId, senderGuildId) {
   const guildIds = await bridgeWebGuildIds([receiverGuildId, senderGuildId]);
   if (guildIds.length === 0) return null;
 
-  const rows = await GuildMap.findAll({
+  const allRows = await GuildMap.findAll({
     where: { guildId: guildIds },
     attributes: ["guildId", "nameIndicator", "guildType", "fluxerInstanceId"],
     raw: true,
+  });
+  if (allRows.length === 0) return null;
+
+  // The same snowflake can exist as a Discord guild and a Fluxer community.
+  // BridgeEndpoints know the authoritative platform per guild, so prefer the
+  // matching GuildMap row and ignore rows of the wrong platform.
+  const memberships = await BridgeEndpoint.findAll({
+    where: { guildId: guildIds },
+    attributes: ["guildId", "platform"],
+    raw: true,
+  });
+  const platformsByGuild = new Map();
+  for (const m of memberships) {
+    const set = platformsByGuild.get(m.guildId) ?? new Set();
+    set.add(m.platform);
+    platformsByGuild.set(m.guildId, set);
+  }
+  const rows = allRows.filter(r => {
+    const platforms = platformsByGuild.get(r.guildId);
+    return !platforms || platforms.size === 0 || platforms.has(r.guildType);
   });
   if (rows.length === 0) return null;
 

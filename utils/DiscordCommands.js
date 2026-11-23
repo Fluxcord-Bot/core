@@ -434,7 +434,7 @@ export function setupDiscordCommands(discordClient, fluxerClient) {
       } catch {}
       const defs = resolveDefs(commandToRun);
       const params = buildParams(defs, interaction);
-      const prefix = await getGuildPrefix(interaction.guildId ?? "");
+      const prefix = await getGuildPrefix(interaction.guildId ?? "", "discord");
       shim.content = `${prefix}${commandToRun.name} ${params.join(" ")}`.trim();
       await commandToRun.run(params, shim, discordClient, fluxerClient);
       if (!interaction.replied && !interaction.deferred) {

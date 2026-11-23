@@ -396,7 +396,7 @@ async function normalizeFluxerEmojiName(fluxerClient, name) {
  */
 export function setupReactionHandling(discordClient) {
   discordClient.on(DiscordEvents.MessageReactionAdd, async (reaction, user) => {
-    const infoEmoji = await getInfoReactionEmoji(reaction.message.guildId).catch(() => DEFAULT_INFO_EMOJI);
+    const infoEmoji = await getInfoReactionEmoji(reaction.message.guildId, "discord").catch(() => DEFAULT_INFO_EMOJI);
     if (isInfoReactionEmoji(reaction.emoji.id, reaction.emoji.name, infoEmoji)) {
       try {
         if (await sendBridgeInfo(await reaction.message.fetch(), user, discordClient)) {
@@ -427,7 +427,7 @@ export function setupFluxerReactionHandling(discordClient, fluxerClient) {
 
   fluxerClient.on(FluxerEvents.MessageReactionAdd, async payload => {
     const { reaction, user } = payload;
-    const infoEmoji = await getInfoReactionEmoji(reaction.guildId).catch(() => DEFAULT_INFO_EMOJI);
+    const infoEmoji = await getInfoReactionEmoji(reaction.guildId, "fluxer").catch(() => DEFAULT_INFO_EMOJI);
     const emojiName = reaction.emoji.id ? reaction.emoji.name : await normalizeFluxerEmojiName(fluxerClient, reaction.emoji.name);
     const configuredName = reaction.emoji.id ? infoEmoji : await normalizeFluxerEmojiName(fluxerClient, infoEmoji);
     log(
