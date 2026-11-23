@@ -20,6 +20,7 @@ import { runBackfill } from "./BackfillQueue.js";
 import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 import { newLinkGroup } from "./Bridging.js";
 import { getFluxerClient } from "./FluxerClients.js";
+import { isBridgeToggleEnabled } from "./BridgeToggle.js";
 
 const MAX_POST_TAGS = 5;
 const MAX_FORUM_TAGS = 20;
@@ -137,7 +138,10 @@ export async function resumeThreadBackfill(thread, platform, bridgeMessage, curr
     });
     const linkedIds = new Set(linked.map(row => row.messageId));
     if (page.every(m => linkedIds.has(m.id))) return false;
-    log("DEBUG", `resumeThreadBackfill ${platform} thread=${thread.id} unbridged=${page.filter(m => !linkedIds.has(m.id)).length}`);
+    log(
+      "DEBUG",
+      `resumeThreadBackfill ${platform} thread=${thread.id} unbridged=${page.filter(m => !linkedIds.has(m.id)).length}`
+    );
     await backfillMirroredThread(thread, bridgeMessage, thread.guildId);
     return true;
   } catch (e) {
@@ -343,8 +347,7 @@ export async function ensureThreadRows(specs) {
   }
 
   let groupId = groupIds[0];
-  const groupHasChannels =
-    groupId == null ? false : (await BridgeEndpoint.count({ where: { groupId, kind: "channel" } })) > 0;
+  const groupHasChannels = groupId == null ? false : (await BridgeEndpoint.count({ where: { groupId, kind: "channel" } })) > 0;
   if (groupId == null || groupHasChannels) {
     const parentGroupId = specs.find(spec => spec.parentEndpoint?.groupId != null)?.parentEndpoint.groupId;
     const sourceGroupId = groupId ?? parentGroupId;
@@ -558,9 +561,7 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
       if (headMessage.author) {
         let guildUser;
         try {
-          guildUser = await (await dstClient.guilds.fetch(targetParentEndpoint.guildId)).fetchMember(
-            headMessage.author.id
-          );
+          guildUser = await (await dstClient.guilds.fetch(targetParentEndpoint.guildId)).fetchMember(headMessage.author.id);
         } catch {}
         headUsername = withIndicator(
           guildUser?.displayName ?? headMessage.author.globalName ?? headMessage.author.username,
@@ -596,21 +597,16 @@ async function mirrorFluxerThreadToFluxer(thread, parentEndpoint, targetParentEn
   let newThreadId = null;
   let starterMessageId = null;
   try {
-    const res = await sendFluxerWebhook(
-      targetParentEndpoint.webhookId,
-      targetParentEndpoint.webhookToken,
-      dstClient,
-      {
-        content: headContent,
-        ...(headGone ? { username: "Deleted message" } : headUsername ? { username: headUsername } : {}),
-        ...(headAvatarUrl && !headGone ? { avatar_url: headAvatarUrl } : {}),
-        ...(headInlined && headEmbeds.length > 0 ? { embeds: headEmbeds } : {}),
-        ...(headInlined && headFiles.length > 0 ? { files: headFiles } : {}),
-        thread_name: thread.name.slice(0, 100),
-        allowed_mentions: { parse: [] },
-        ...(appliedTags.length > 0 ? { applied_tags: appliedTags } : {}),
-      }
-    );
+    const res = await sendFluxerWebhook(targetParentEndpoint.webhookId, targetParentEndpoint.webhookToken, dstClient, {
+      content: headContent,
+      ...(headGone ? { username: "Deleted message" } : headUsername ? { username: headUsername } : {}),
+      ...(headAvatarUrl && !headGone ? { avatar_url: headAvatarUrl } : {}),
+      ...(headInlined && headEmbeds.length > 0 ? { embeds: headEmbeds } : {}),
+      ...(headInlined && headFiles.length > 0 ? { files: headFiles } : {}),
+      thread_name: thread.name.slice(0, 100),
+      allowed_mentions: { parse: [] },
+      ...(appliedTags.length > 0 ? { applied_tags: appliedTags } : {}),
+    });
     newThreadId = res?.channel_id ?? null;
     starterMessageId = res?.id ?? null;
   } catch (e) {
@@ -891,10 +887,7 @@ async function mirrorDiscordThreadToDiscord(thread, parentEndpoint, targetParent
       },
     ]);
     made.push(srcRow, dstRow);
-    log(
-      "DEBUG",
-      `autoBridgeDiscordThread mirrored discord=${thread.id} -> ${newThreadId} guild=${targetParentEndpoint.guildId}`
-    );
+    log("DEBUG", `autoBridgeDiscordThread mirrored discord=${thread.id} -> ${newThreadId} guild=${targetParentEndpoint.guildId}`);
 
     if (starterMessageId) {
       await ensureThreadFamilyLink(srcRow, thread.id, dstRow, starterMessageId, headAuthorId);
@@ -919,7 +912,6 @@ export async function autoBridgeDiscordThread(thread, parentEndpoints, discordCl
     return waitForPendingMirror("discord", thread.id);
   }
 
-  
   const made = [];
 
   for (const parentEndpoint of parentEndpoints) {
@@ -930,14 +922,7 @@ export async function autoBridgeDiscordThread(thread, parentEndpoints, discordCl
         if (sibling.platform === "fluxer") {
           const fluxerClient = getFluxerClient(sibling.instanceId);
           if (!fluxerClient) continue;
-          const result = await mirrorDiscordThreadToFluxer(
-            thread,
-            parentEndpoint,
-            sibling,
-            discordClient,
-            fluxerClient,
-            claim
-          );
+          const result = await mirrorDiscordThreadToFluxer(thread, parentEndpoint, sibling, discordClient, fluxerClient, claim);
           if (result) made.push(...result);
         } else {
           const result = await mirrorDiscordThreadToDiscord(thread, parentEndpoint, sibling, discordClient, claim);
@@ -1193,7 +1178,6 @@ export async function autoBridgeFluxerThread(thread, parentEndpoints, discordCli
     return waitForPendingMirror("fluxer", thread.id);
   }
 
-  
   const made = [];
 
   for (const parentEndpoint of parentEndpoints) {
@@ -1202,14 +1186,7 @@ export async function autoBridgeFluxerThread(thread, parentEndpoints, discordCli
 
       for (const sibling of discordParents) {
         if (sibling.platform === "discord") {
-          const result = await mirrorFluxerThreadToDiscord(
-            thread,
-            parentEndpoint,
-            sibling,
-            discordClient,
-            fluxerClient,
-            claim
-          );
+          const result = await mirrorFluxerThreadToDiscord(thread, parentEndpoint, sibling, discordClient, fluxerClient, claim);
           if (result) made.push(...result);
         } else {
           const dstClient = getFluxerClient(sibling.instanceId);
@@ -1516,7 +1493,12 @@ async function mirrorFluxerThreadToDiscord(thread, parentEndpoint, discordParent
             const discordThreadEndpoint = await BridgeEndpoint.findOne({
               where: { groupId: row.groupId, platform: "discord", kind: "thread", channelId: discordThreadId },
             });
-            await MessageLink.create({ linkGroup, messageId: discordStarterId, endpointId: discordThreadEndpoint.id, authorId: headAuthorId });
+            await MessageLink.create({
+              linkGroup,
+              messageId: discordStarterId,
+              endpointId: discordThreadEndpoint.id,
+              authorId: headAuthorId,
+            });
             await MessageLink.create({ linkGroup, messageId: thread.id, endpointId: row.id, authorId: headAuthorId });
           } catch (e) {
             log("DB", "Failed to map bridged thread starter message", e);
@@ -1541,6 +1523,8 @@ export async function cleanupMirroredRow(endpoint, discordClient, platform) {
   const siblings = await BridgeEndpoint.findAll({
     where: { groupId: endpoint.groupId, kind: "thread", channelId: { [Op.ne]: endpoint.channelId } },
   });
+  const deleteThreadEnabled = await isBridgeToggleEnabled(endpoint, "deleteThreadEnabled");
+  if (!deleteThreadEnabled) return;
   for (const sibling of siblings) {
     if (sibling.platform === "discord") {
       try {
@@ -1610,8 +1594,7 @@ async function applyThreadUpdate(sibling, sourceEndpoint, oldThread, newThread, 
       ? await BridgeEndpoint.findByPk(sourceEndpoint.parentEndpointId)
       : null;
     const targetParentEndpoint = sibling.parentEndpointId ? await BridgeEndpoint.findByPk(sibling.parentEndpointId) : null;
-    const sourceClient =
-      sourceEndpoint.platform === "discord" ? discordClient : getFluxerClient(sourceEndpoint.instanceId);
+    const sourceClient = sourceEndpoint.platform === "discord" ? discordClient : getFluxerClient(sourceEndpoint.instanceId);
     if (sourceParentEndpoint && targetParentEndpoint && sourceClient) {
       const sourceParent = await sourceClient.channels.fetch(sourceParentEndpoint.channelId).catch(() => null);
       const targetParent = await client.channels.fetch(targetParentEndpoint.channelId).catch(() => null);
@@ -1731,8 +1714,7 @@ export async function syncForumTags(channel, platform, discordClient) {
     });
     for (const sibling of siblings) {
       const sourceClient = platform === "discord" ? discordClient : getFluxerClient(endpoint.instanceId);
-      const targetClient =
-        sibling.platform === "discord" ? discordClient : getFluxerClient(sibling.instanceId);
+      const targetClient = sibling.platform === "discord" ? discordClient : getFluxerClient(sibling.instanceId);
       if (!sourceClient || !targetClient) continue;
       await syncTagsBetween(endpoint, sourceClient, sibling, targetClient, discordClient);
     }

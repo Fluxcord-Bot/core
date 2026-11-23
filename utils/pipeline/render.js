@@ -364,7 +364,7 @@ export async function renderForTarget(umsg, targetEndpoint, opts = {}) {
     log(
       "DEBUG",
       `EmptyRender src=${umsg.platform}->${targetPlatform} type=${umsg.type} stickerCount=${umsg.stickers?.length ?? 0} rawStickers=${
-        Array.isArray(rawStickers) ? rawStickers.length : rawStickers?.size ?? "n/a"
+        Array.isArray(rawStickers) ? rawStickers.length : (rawStickers?.size ?? "n/a")
       } stickersCtor=${umsg.stickers?.constructor?.name ?? "none"} sameRef=${umsg.stickers === rawStickers} iterable=${
         typeof umsg.stickers?.[Symbol.iterator] === "function"
       } attachments=${umsg.attachments?.length ?? 0} embeds=${umsg.embeds?.length ?? 0} contentLen=${(umsg.content ?? "").length}`
