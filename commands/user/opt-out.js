@@ -21,14 +21,17 @@ const command = {
     },
     { name: "confirm", type: "boolean" },
   ],
-  async run(params, message) {
+  async run(params, message, _, fClient) {
     const isFluxer = message instanceof FluxerMessage;
     const userType = isFluxer ? "fluxer" : "discord";
     const scope = params.find(param => param.toLowerCase() !== "confirm")?.toLowerCase();
     const confirmed = params.some(param => param.toLowerCase() === "confirm");
+
+    const fluxerName = (await fClient.fetchInstance()).app_public?.branding?.product_name;
+
     const community = isFluxer ? "community" : "guild";
-    const otherSide = isFluxer ? "Discord" : "Fluxer";
-    const platform = isFluxer ? "Fluxer" : "Discord";
+    const otherSide = isFluxer ? "Discord/Fluxer" : "Fluxer";
+    const platform = isFluxer ? (fluxerName ?? "Fluxer") : "Discord";
 
     if (scope && scope !== "global") {
       await message.reply(
