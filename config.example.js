@@ -1,3 +1,18 @@
+// ███████╗██╗     ██╗   ██╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ██████╗
+// ██╔════╝██║     ██║   ██║╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔══██╗
+// █████╗  ██║     ██║   ██║ ╚███╔╝ ██║     ██║   ██║██████╔╝██║  ██║
+// ██╔══╝  ██║     ██║   ██║ ██╔██╗ ██║     ██║   ██║██╔══██╗██║  ██║
+// ██║     ███████╗╚██████╔╝██╔╝ ██╗╚██████╗╚██████╔╝██║  ██║██████╔╝
+// ╚═╝     ╚══════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝
+//
+// Hi there! You should go to https://fluxcord.jbcrn.dev/self-hosting
+// for how to self host Fluxcord.
+//
+// Having issues? Go to Fluxcord's support community at:
+// Discord   https://discord.jbcrn.dev
+// Fluxer    https://fluxer.gg/jbcrn
+// FluxFur   https://fluxfur.com/invite/fluxcord
+
 const Config = {
   // The base URL of the Fluxer API. Change this only if you're using a self-hosted instance.
   // FluxerAPIBaseURL: "https://example.com/api",
