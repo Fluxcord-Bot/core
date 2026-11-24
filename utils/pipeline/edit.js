@@ -173,6 +173,16 @@ export async function handleEdit(umsg) {
                 return;
               }
 
+              if (
+                current?.content === render.content &&
+                currentFlags === nextFlags &&
+                render.embeds.length === 0 &&
+                render.files.length === 0
+              ) {
+                log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} targetMsg=${other.messageId} reason=noChange`);
+                return;
+              }
+
               markSuppressWrite(other.messageId, Boolean(nextFlags & 4));
               if (targetEndpoint.webhookId) {
                 await editFluxerWebhook(targetEndpoint.webhookId, targetEndpoint.webhookToken, fluxerClient, other.messageId, {
@@ -200,11 +210,17 @@ export async function handleEdit(umsg) {
               const suppress = Boolean(render.flags & 4);
               const channel = await umsg.ctx.discordClient.channels.fetch(targetEndpoint.channelId).catch(() => null);
               const copy = await channel?.messages?.fetch?.(other.messageId).catch(() => null);
-              if (copy && copy.content === render.content && copy.flags.has(MessageFlags.SuppressEmbeds) !== suppress) {
-                markSuppressWrite(other.messageId, suppress);
-                await copy.suppressEmbeds(suppress);
-                log("DEBUG", `Edit suppressed-only discord id=${umsg.id} targetMsg=${other.messageId} suppress=${suppress}`);
-                return;
+              if (copy && copy.content === render.content) {
+                if (copy.flags.has(MessageFlags.SuppressEmbeds) !== suppress) {
+                  markSuppressWrite(other.messageId, suppress);
+                  await copy.suppressEmbeds(suppress);
+                  log("DEBUG", `Edit suppressed-only discord id=${umsg.id} targetMsg=${other.messageId} suppress=${suppress}`);
+                  return;
+                }
+                if (render.embeds.length === 0 && !render.attachmentUploads?.length) {
+                  log("DEBUG", `Edit skip ${umsg.platform} id=${umsg.id} targetMsg=${other.messageId} reason=noChange`);
+                  return;
+                }
               }
 
               markSuppressWrite(other.messageId, Boolean(render.flags & 4));
