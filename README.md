@@ -30,10 +30,10 @@ The Discord bot needs the **Message Content** privileged intent enabled.
 
 Firstly, this requires both Node.js and PNPM installed.
 
-**Do not pull this repo directly.** Instead, pull the Fluxcord Dev repository:
+**Do not clone this repo directly.** Instead, clone the Fluxcord Dev repository:
 
 ```
-git pull https://git.gay/Fluxcord/dev Fluxcord
+git clone https://git.gay/Fluxcord/dev Fluxcord
 ```
 
 then initialize it:
