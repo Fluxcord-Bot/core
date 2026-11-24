@@ -16,11 +16,16 @@ const restartBackoff = new Map();
 const pendingJoinWatchdogs = new Map();
 const fluxerVoiceStates = new Map();
 const fluxerChannelOccupancy = new Map();
+const fluxerOnlySessions = new Map();
+const fluxerOnlyPending = new Map();
+const fluxerOnlyTimers = new Map();
+const fluxerOnlyGiveUpUntil = new Map();
 let _discordClient = null;
 let _voicePool = [];
 let _startupRecoveryScheduled = false;
 let _recoveryArmed = false;
 let _recoveryRunning = false;
+let _fluxerOnlyRecoveryRunning = false;
 let _reconcileTimer = null;
 const RESTART_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 const REJOIN_COOLDOWN_MS = 10 * 60_000;
@@ -96,6 +101,257 @@ async function findDiscordTargetForFluxer(instanceId, fluxerGuildId, fluxerChann
   });
   if (!row) return null;
   return { discordGuildId: row.discordGuildId, discordChannelId: row.discordChannelId };
+}
+async function findFluxerVoiceSiblings(instanceId, fluxerGuildId, fluxerChannelId) {
+  if (!fluxerGuildId || !fluxerChannelId) return [];
+  const endpoint = await BridgeEndpoint.findOne({
+    where: { platform: "fluxer", instanceId: normalizeInstanceId(instanceId), channelId: fluxerChannelId },
+  });
+  if (!endpoint) return [];
+  const siblings = await BridgeEndpoint.findAll({ where: { groupId: endpoint.groupId, platform: "fluxer" } });
+  const out = [];
+  const seen = new Set();
+  for (const sibling of siblings) {
+    const siblingInstanceId = normalizeInstanceId(sibling.instanceId);
+    if (siblingInstanceId === normalizeInstanceId(instanceId) && sibling.channelId === fluxerChannelId) continue;
+    const key = `${siblingInstanceId}:${sibling.guildId}:${sibling.channelId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      instanceId: siblingInstanceId,
+      fluxerGuildId: sibling.guildId,
+      fluxerChannelId: sibling.channelId,
+    });
+  }
+  return out;
+}
+function fluxerOnlyTargetKey(target) {
+  return `${normalizeInstanceId(target.instanceId)}:${target.fluxerGuildId}:${target.fluxerChannelId}`;
+}
+function fluxerOnlySessionKey(targets) {
+  return `fluxer-only:${targets.map(fluxerOnlyTargetKey).sort().join("|")}`;
+}
+function getFluxerLivekitServer(target) {
+  return (
+    latestFluxerVoiceServer.get(
+      getFluxerServerKey(target.instanceId, target.fluxerGuildId, target.fluxerChannelId)
+    ) ??
+    latestFluxerVoiceServer.get(getFluxerServerKey(target.instanceId, target.fluxerGuildId)) ??
+    null
+  );
+}
+function joinFluxerVoice(target) {
+  fluxerClientFor(target.instanceId)?.sendToGateway(0, {
+    op: 4,
+    d: {
+      guild_id: target.fluxerGuildId,
+      channel_id: target.fluxerChannelId,
+      self_mute: false,
+      self_deaf: false,
+    },
+  });
+}
+function leaveFluxerVoice(targets) {
+  for (const target of targets ?? []) {
+    log("VOICE", `Leaving voice for fluxer=${target.instanceId}/${target.fluxerGuildId}`);
+    fluxerClientFor(target.instanceId)?.sendToGateway(0, {
+      op: 4,
+      d: {
+        guild_id: target.fluxerGuildId,
+        channel_id: null,
+        self_mute: false,
+        self_deaf: false,
+      },
+    });
+  }
+}
+function stopFluxerOnlySession(key) {
+  const session = fluxerOnlySessions.get(key);
+  if (session?.stopping) return;
+  if (session) session.stopping = true;
+  fluxerOnlySessions.delete(key);
+  killBridge(key);
+  leaveFluxerVoice(session?.targets);
+  log("VOICE", `Fluxer-only voice session stopped (${key})`);
+}
+async function maybeLaunchFluxerOnly(key) {
+  if (fluxerOnlySessions.has(key)) return;
+  const pendingEntry = fluxerOnlyPending.get(key);
+  if (!pendingEntry) return;
+  const ready = [];
+  const missing = [];
+  for (const target of pendingEntry.targets) {
+    const server = getFluxerLivekitServer(target);
+    if (server?.livekitUrl && server?.livekitToken) ready.push({ target, server });
+    else missing.push(target);
+  }
+  if (missing.length > 0) {
+    if (Date.now() - (pendingEntry.armedAt ?? 0) > 15_000) {
+      pendingEntry.attempts = (pendingEntry.attempts ?? 0) + 1;
+      if (pendingEntry.attempts > 6) {
+        log("VOICE", `Giving up on Fluxer voice credentials for ${key} after ${pendingEntry.attempts} attempts`);
+        fluxerOnlyGiveUpUntil.set(key, Date.now() + 10 * 60_000);
+        fluxerOnlyPending.delete(key);
+        return;
+      }
+      log("VOICE", `Re-requesting Fluxer voice credentials for ${key} (attempt ${pendingEntry.attempts})`);
+      for (const target of pendingEntry.targets) joinFluxerVoice(target);
+      pendingEntry.armedAt = Date.now();
+      fluxerOnlyPending.set(key, pendingEntry);
+    }
+    log(
+      "VOICE",
+      `Waiting on Fluxer voice credentials for ${key} (missing ${missing.map(fluxerOnlyTargetKey).join(",")})`
+    );
+    return;
+  }
+  if (!hasRunner()) {
+    log("VOICE", `No runner available for Fluxer-only bridge ${key}`);
+    return;
+  }
+  fluxerOnlyPending.delete(key);
+  const livekitRooms = ready.map(({ target, server }) => ({
+    url: server.livekitUrl,
+    token: server.livekitToken,
+    instanceId: target.instanceId,
+    channelId: target.fluxerChannelId,
+  }));
+  const primary = ready[0];
+  const sessionTargets = ready.map(({ target }) => target);
+  log("VOICE", `Spawning Fluxer-only bridge ${key} (${livekitRooms.length} rooms)`);
+  const spawned = spawnBridge(
+    key,
+    primary.server.livekitUrl,
+    {
+      FLUXER_ONLY: "1",
+      LIVEKIT_URL: primary.server.livekitUrl,
+      LIVEKIT_TOKEN: primary.server.livekitToken,
+      LIVEKIT_ROOMS: JSON.stringify(livekitRooms),
+    },
+    {
+      onMessage(msg) {
+        const session = fluxerOnlySessions.get(key);
+        if (!session) return;
+        if (msg === "bridge-ready" || msg === "fluxer-joined") {
+          session.empty = false;
+        } else if (msg === "fluxer-empty") {
+          session.empty = true;
+          stopFluxerOnlySession(key);
+        }
+      },
+      onExit(code) {
+        log("VOICE", `Fluxer-only bridge exited (${key}, code ${code})`);
+        const session = fluxerOnlySessions.get(key);
+        fluxerOnlySessions.delete(key);
+        const exitTargets = session?.targets ?? sessionTargets;
+        if (code === 6 || code === 7) {
+          for (const target of exitTargets) {
+            latestFluxerVoiceServer.delete(
+              getFluxerServerKey(target.instanceId, target.fluxerGuildId, target.fluxerChannelId)
+            );
+            latestFluxerVoiceServer.delete(getFluxerServerKey(target.instanceId, target.fluxerGuildId));
+          }
+        }
+        leaveFluxerVoice(exitTargets);
+        if (code === 0) return;
+        if (getFluxerTargetCount(exitTargets) > 0) {
+          armFluxerOnlyBridge(exitTargets, `bridge failure code ${code}`, 5000);
+        }
+      },
+      onError(message) {
+        log("VOICE", `Fluxer-only bridge error: ${message}`);
+      },
+    }
+  );
+  if (spawned) {
+    fluxerOnlySessions.set(key, {
+      targets: sessionTargets,
+      empty: false,
+      stopping: false,
+    });
+  } else {
+    fluxerOnlyPending.set(key, { targets: sessionTargets, armedAt: Date.now(), attempts: 0 });
+  }
+}
+function armFluxerOnlyBridge(targets, reason, delayMs = 0) {
+  const unique = [];
+  const seen = new Set();
+  for (const target of targets ?? []) {
+    const key = fluxerOnlyTargetKey(target);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({
+      instanceId: normalizeInstanceId(target.instanceId),
+      fluxerGuildId: target.fluxerGuildId,
+      fluxerChannelId: target.fluxerChannelId,
+    });
+  }
+  if (unique.length < 2) return;
+  const communities = new Set(unique.map(target => `${target.instanceId}:${target.fluxerGuildId}`));
+  if (communities.size !== unique.length) {
+    log(
+      "VOICE",
+      "Cannot bridge voice channels in the same community without a second bot connection; skipping Fluxer-only bridge"
+    );
+    return;
+  }
+  const key = fluxerOnlySessionKey(unique);
+  if ((fluxerOnlyGiveUpUntil.get(key) ?? 0) > Date.now()) return;
+  if (fluxerOnlySessions.has(key) || fluxerOnlyPending.has(key) || fluxerOnlyTimers.has(key)) return;
+  const launch = async () => {
+    fluxerOnlyTimers.delete(key);
+    if (fluxerOnlySessions.has(key)) return;
+    if (getFluxerTargetCount(unique) === 0) return;
+    log("VOICE", `Arming Fluxer-only voice bridge ${key} (${reason})`);
+    for (const target of unique) joinFluxerVoice(target);
+    fluxerOnlyPending.set(key, { targets: unique, armedAt: Date.now(), attempts: 0 });
+    await maybeLaunchFluxerOnly(key);
+  };
+  if (delayMs > 0) {
+    fluxerOnlyTimers.set(key, setTimeout(() => void launch(), delayMs));
+  } else {
+    void launch();
+  }
+}
+async function recoverFluxerOnlyBridges(reason) {
+  if (_fluxerOnlyRecoveryRunning) return;
+  _fluxerOnlyRecoveryRunning = true;
+  try {
+    for (const key of [...fluxerOnlyPending.keys()]) {
+      await maybeLaunchFluxerOnly(key);
+    }
+    const fluxerEndpoints = await BridgeEndpoint.findAll({ where: { platform: "fluxer" } });
+    const byGroup = new Map();
+    for (const endpoint of fluxerEndpoints) {
+      if (!endpoint.instanceId) continue;
+      let list = byGroup.get(endpoint.groupId);
+      if (!list) {
+        list = [];
+        byGroup.set(endpoint.groupId, list);
+      }
+      list.push(endpoint);
+    }
+    const candidateGroups = [...byGroup]
+      .filter(([, list]) => list.length >= 2)
+      .map(([groupId]) => groupId);
+    if (candidateGroups.length === 0) return;
+    const discordEndpoints = await BridgeEndpoint.findAll({
+      where: { platform: "discord", groupId: { [Op.in]: candidateGroups } },
+    });
+    const groupsWithDiscord = new Set(discordEndpoints.map(endpoint => endpoint.groupId));
+    for (const [groupId, list] of byGroup) {
+      if (list.length < 2 || groupsWithDiscord.has(groupId)) continue;
+      const targets = list.map(endpoint => ({
+        instanceId: normalizeInstanceId(endpoint.instanceId),
+        fluxerGuildId: endpoint.guildId,
+        fluxerChannelId: endpoint.channelId,
+      }));
+      if (getFluxerTargetCount(targets) === 0) continue;
+      armFluxerOnlyBridge(targets, reason);
+    }
+  } finally {
+    _fluxerOnlyRecoveryRunning = false;
+  }
 }
 async function findVoiceMapChannels() {
   const channels = new Map();
@@ -407,6 +663,7 @@ function scheduleStartupRecovery(reason) {
     _startupRecoveryScheduled = false;
     await flushPendingRunnerRestarts();
     await recoverActiveVoiceBridges(reason);
+    await recoverFluxerOnlyBridges(reason);
   });
 }
 async function rejoinMappedChannel(guildId, channelId, options = {}) {
@@ -526,6 +783,16 @@ export async function setupVoiceHandling(discordClient, extraVoiceClients = []) 
         log("VOICE", `Got Fluxer voice server for ${channelId} (${instanceId})`);
         await maybeLaunch(channelId);
       }
+      for (const [key, entry] of [...fluxerOnlyPending]) {
+        const relevant = entry.targets.some(
+          target =>
+            target.instanceId === instanceId &&
+            target.fluxerGuildId === fluxerGuildId &&
+            (!fluxerChannelId || target.fluxerChannelId === fluxerChannelId)
+        );
+        if (!relevant) continue;
+        await maybeLaunchFluxerOnly(key);
+      }
     });
     fluxerClient.on(FluxerEvents.VoiceStatesSync, data => {
       for (const state of data.voiceStates) {
@@ -551,10 +818,24 @@ export async function setupVoiceHandling(discordClient, extraVoiceClients = []) 
       );
       const discordTarget = await findDiscordTargetForFluxer(instanceId, data.guild_id, data.channel_id);
       if (!discordTarget) {
-        log(
-          "VOICE",
-          `Fluxer voiceStateUpdate (${instanceId}) had no configured map for guild=${data.guild_id} channel=${data.channel_id}`
-        );
+        const siblings = await findFluxerVoiceSiblings(instanceId, data.guild_id, data.channel_id);
+        if (siblings.length === 0) {
+          log(
+            "VOICE",
+            `Fluxer voiceStateUpdate (${instanceId}) had no configured map for guild=${data.guild_id} channel=${data.channel_id}`
+          );
+          return;
+        }
+        const targets = [
+          {
+            instanceId: normalizeInstanceId(instanceId),
+            fluxerGuildId: data.guild_id,
+            fluxerChannelId: data.channel_id,
+          },
+          ...siblings,
+        ];
+        log("VOICE", `Fluxer-to-Fluxer voice join detected (${instanceId}); arming voice bridge`);
+        armFluxerOnlyBridge(targets, "Fluxer join detected");
         return;
       }
       if (sessions.has(discordTarget.discordChannelId)) return;
@@ -592,6 +873,7 @@ export function startVoiceRecovery() {
   scheduleStartupRecovery("startup complete");
   _reconcileTimer ??= setInterval(() => {
     void recoverActiveVoiceBridges("periodic reconcile");
+    void recoverFluxerOnlyBridges("periodic reconcile");
   }, 60_000);
 }
 async function sendJoinOp(guildId, channelId, options = {}) {

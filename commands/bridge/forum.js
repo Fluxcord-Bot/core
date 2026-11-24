@@ -2,7 +2,6 @@ import { EmbedBuilder, Message as FluxerMessage } from "@fluxerjs/core";
 import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
-import { genAuthLink } from "../../utils/GenAuthLink.js";
 import { BridgeEndpoint } from "../../db/index.js";
 import { ensureThreadFamilyLink, ensureThreadRows, syncForumTags } from "../../utils/ThreadMirror.js";
 import { Op } from "sequelize";
@@ -98,7 +97,7 @@ silent - skip the "this forum is now bridged" messages on both sides`,
               `# \`${Config.BotPrefix}bridge forum ${code}\`
 Execute that inside a post on the other side's forum to continue setting up forum bridging! Code will expire after 5 minutes.
 
-${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`
+Bot isn't there? Run \`${Config.BotPrefix}invitebot\` to get invite links.`
             )
             .setFooter(
               embedFooterForMessage(message)

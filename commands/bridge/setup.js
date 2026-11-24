@@ -2,7 +2,6 @@ import { EmbedBuilder, Message as FluxerMessage } from "@fluxerjs/core";
 import RandomString from "../../utils/RandomString.js";
 import { PendingSetup } from "../../utils/CommandHandler.js";
 import Config from "../../utils/ConfigHandler.js";
-import { genAuthLink } from "../../utils/GenAuthLink.js";
 import { VoiceChannelMap } from "../../db/index.js";
 import { Op } from "sequelize";
 import changeBotBio from "../../utils/ChangeBotBio.js";
@@ -101,7 +100,7 @@ silent - skip the "this channel is now bridged" messages on both sides`,
               `# \`${Config.BotPrefix}bridge setup ${code}\`
 Execute that to the other side to continue setting up bridging! Code will expire after 5 minutes.${vcBridgeWarning}${optionalWarning}
 
-${isFluxer ? "Discord" : "Fluxer"} bot isn't there? [Invite the bot](${await genAuthLink(message.client.user.id, !isFluxer)})!`
+Bot isn't there? Run \`${Config.BotPrefix}invitebot\` to get invite links.`
             )
             .setFooter(
               embedFooterForMessage(message)

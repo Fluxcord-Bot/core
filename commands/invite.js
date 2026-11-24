@@ -1,8 +1,51 @@
 import { Message as FluxerMessage } from "@fluxerjs/core";
-import { BridgeEndpoint, BridgeGroup, GuildMap } from "../db/index.js";
-import { Op } from "sequelize";
+import { GuildMap } from "../db/index.js";
 import { getFluxerInviteBaseUrl } from "../utils/GetFluxerUrls.js";
-import { resolveFluxerClient } from "../utils/FluxerClients.js";
+import { findEndpoints, fanoutTargets } from "../utils/Bridging.js";
+import { instanceIdOfClient, resolveFluxerClient } from "../utils/FluxerClients.js";
+
+const MAX_INVITE_TARGETS = 15;
+
+function targetKey(target) {
+  return `${target.platform}:${target.instanceId || "default"}:${target.guildId}`;
+}
+
+function instanceTag(target) {
+  const instanceId = target.instanceId || "default";
+  return target.platform === "fluxer" && instanceId !== "default" ? ` [${instanceId}]` : "";
+}
+
+async function discordInvite(target, discordClient) {
+  const guild = await discordClient.guilds.fetch(target.guildId);
+  if (guild.vanityURLCode) {
+    return `Invite code for **${guild.name}**${instanceTag(target)}:\n<https://discord.gg/${guild.vanityURLCode}>`;
+  }
+  const invite = await guild.invites.create(target.channelId, { maxAge: 172800 });
+  return `Invite code for **${guild.name}**${instanceTag(target)} (valid for 2 days):\n<https://discord.gg/${invite.code}>`;
+}
+
+async function fluxerInvite(target) {
+  const instanceId = target.instanceId || "default";
+  const client = resolveFluxerClient(instanceId);
+  const guild = await client.guilds.fetch(target.guildId);
+  const inviteBase = await getFluxerInviteBaseUrl(instanceId);
+  if (guild.vanityURLCode) {
+    return `Invite code for **${guild.name}**${instanceTag(target)}:\n<${inviteBase}/${guild.vanityURLCode}>`;
+  }
+  const channel = await client.channels.fetch(target.channelId);
+  if (!channel) throw new Error("channel not found");
+  const invite = await channel.createInvite({ maxAge: 172800 });
+  return `Invite code for **${guild.name}**${instanceTag(target)} (valid for 2 days):\n<${inviteBase}/${invite.code}>`;
+}
+
+async function inviteLine(target, discordClient) {
+  try {
+    if (target.platform === "discord") return await discordInvite(target, discordClient);
+    return await fluxerInvite(target);
+  } catch (e) {
+    return `Couldn't create an invite for ${target.platform} ${target.guildId}: ${e?.message ?? e}`;
+  }
+}
 
 /**
  * @type {import('../utils/CommandSchema.d.ts').CommandSchema}
@@ -13,91 +56,50 @@ const command = {
   requireElevated: false,
   async run(params, message, discordClient, fluxerClient) {
     const sourcePlatform = message instanceof FluxerMessage ? "fluxer" : "discord";
-    const endpoints = await BridgeEndpoint.findAll({
-      where: { guildId: message.guildId, platform: sourcePlatform, kind: "channel" },
-      raw: true,
-    });
+    const sourceInstanceId = sourcePlatform === "fluxer" ? (instanceIdOfClient(fluxerClient) ?? "default") : "default";
 
-    if (endpoints.length === 0) {
+    const sourceEndpoints = await findEndpoints(sourcePlatform, message.channelId);
+    if (sourceEndpoints.length === 0) {
       await message.reply("This channel isn't part of a bridge.");
       return;
     }
 
-    const groupIds = [...new Set(endpoints.map(x => x.groupId))];
-    const groups = await BridgeGroup.findAll({ where: { id: { [Op.in]: groupIds } }, raw: true });
-    const guildMaps = await GuildMap.findAll({ where: { guildId: message.guildId } });
-    if (guildMaps.some(g => g.get("inviteEnabled") === false)) {
+    const guildMap = await GuildMap.findOne({ where: { guildId: message.guildId, guildType: sourcePlatform } });
+    if (guildMap?.inviteEnabled === false) {
       await message.reply("The invite command is disabled in this guild.");
       return;
     }
 
-    const members = await BridgeEndpoint.findAll({
-      where: { groupId: { [Op.in]: groupIds } },
-      raw: true,
-    });
-    const target = members.find(x => x.platform !== sourcePlatform);
-    if (!target) {
+    const members = await fanoutTargets(sourceEndpoints[0]);
+    const channelMembers = members.filter(x => x.kind === "channel");
+    const pool = channelMembers.length > 0 ? channelMembers : members;
+
+    const seen = new Set([`${sourcePlatform}:${sourceInstanceId}:${message.guildId}`]);
+    const targets = [];
+    for (const member of pool) {
+      const key = targetKey(member);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push(member);
+    }
+
+    if (targets.length === 0) {
       await message.reply("This channel isn't part of a bridge.");
       return;
     }
 
-    if (sourcePlatform === "fluxer") {
-      let guild;
-      try {
-        guild = await discordClient.guilds.fetch(target.guildId);
-      } catch {
-        guild = null;
-      }
-
-      if (guild) {
-        let guildInvite = "https://discord.gg/";
-        if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
-        else {
-          const invite = await guild.invites.create(target.channelId, {
-            maxAge: 172800,
-          });
-          guildInvite += invite.code;
-        }
-
-        await message.reply(
-          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`
-        );
-      }
-    } else {
-      let guild;
-      try {
-        guild = await resolveFluxerClient(target.instanceId).guilds.fetch(target.guildId);
-      } catch {
-        guild = null;
-      }
-
-      if (guild) {
-        const inviteBase = await getFluxerInviteBaseUrl(target.instanceId);
-        let guildInvite = inviteBase + "/";
-        if (guild.vanityURLCode) guildInvite += guild.vanityURLCode;
-        else {
-          /** @type {import("@fluxerjs/core").GuildChannel | null} */
-          let channel;
-          try {
-            channel = await resolveFluxerClient(target.instanceId).channels.fetch(target.channelId);
-          } catch {
-            channel = null;
-          }
-          if (!channel) {
-            await message.reply("Bridged Fluxer channel not found.");
-            return;
-          }
-          const invite = await channel.createInvite({
-            maxAge: 172800,
-          });
-          guildInvite += invite.code;
-        }
-
-        await message.reply(
-          `Invite code for **${guild.name}**${guild.vanityURLCode ? "" : " (valid for 2 days)"}: ${guildInvite}`
-        );
-      }
+    const limited = targets.slice(0, MAX_INVITE_TARGETS);
+    const lines = [];
+    for (const target of limited) {
+      lines.push(await inviteLine(target, discordClient));
     }
+
+    let content = lines.join("\n");
+    const remaining = targets.length - limited.length;
+    if (remaining > 0) content += `\n…and ${remaining} more bridged server(s)/community(ies).`;
+    if (content.length > 1900) content = `${content.slice(0, 1897)}...`;
+
+    await message.reply(content);
   },
 };
 
