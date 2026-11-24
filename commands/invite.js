@@ -1,5 +1,3 @@
-//@ts-check
-
 import { Message as FluxerMessage } from "@fluxerjs/core";
 import { GuildMap } from "../db/index.js";
 import { getFluxerInviteBaseUrl } from "../utils/GetFluxerUrls.js";
