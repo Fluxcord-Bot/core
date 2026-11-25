@@ -1,7 +1,7 @@
 import { MessageLink, BridgeEndpoint } from "../../db/index.js";
 import { MessageType } from "discord.js";
 import { sendErrorMessage } from "../SendErrorMessage.js";
-import { findEndpoints, newLinkGroup, ensureLink } from "../Bridging.js";
+import { findEndpoints, newLinkGroup, ensureLink, isDeletedGroup } from "../Bridging.js";
 import { waitForMessageMap } from "../WaitForMessageMap.js";
 import { canUserBridge, promptOptedOutUserOnFirstMessage } from "../UserOptOut.js";
 import { resetBridgeHealth } from "../BridgeHealth.js";
@@ -201,6 +201,12 @@ export async function handleCreate(umsg, options = {}) {
       const existing = await ensureLink(linkGroup, endpoint.id, umsg.id, refMessageId, umsg.author?.id);
       if (existing && endpoint.id === targetEndpoint.id) deliveredFlags.set(entry.key, false);
     }
+  }
+
+  if (isDeletedGroup(umsg.id)) {
+    log("DEBUG", `Create abort ${umsg.platform} id=${umsg.id} reason=sourceDeleted`);
+    await MessageLink.destroy({ where: { linkGroup } });
+    return;
   }
 
   for (const entry of filteredTargets) {
