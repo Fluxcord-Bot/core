@@ -71,7 +71,8 @@ export async function sendFluxerWebhook(webhookId, webhookToken, fluxerClient, p
   let cloudAttachments;
   if (channelId && resolvedFiles.length > 0) {
     try {
-      const channel = await fluxerClient.channels.fetch(channelId);
+      let channel = await fluxerClient.channels.fetch(channelId);
+      if (channel.isThread?.()) channel = await fluxerClient.channels.fetch(channel.parentId ?? channelId);
       const uploaded = await channel.uploadAttachmentsForSend(
         resolvedFiles.map((e, i) => ({
           id: i,
