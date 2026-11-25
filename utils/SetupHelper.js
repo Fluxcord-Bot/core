@@ -3,6 +3,7 @@ import { GuildChannel as DiscordGuildChannel } from "discord.js";
 import { Op } from "sequelize";
 import { sequelize, BridgeEndpoint, BridgeGroup, MessageLink, VoiceChannelMap } from "../db/index.js";
 import { invalidateFluxerWebhookCache } from "./Webhooks.js";
+import { withFluxerRateLimit } from "./FluxerRateLimit.js";
 import { findOrCreateGuildMap } from "./Bridging.js";
 import { log } from "./Logger.js";
 
@@ -16,7 +17,7 @@ export async function createWebhookFor(channel, platform, label) {
   try {
     if (platform === "fluxer") {
       if (!(channel instanceof FluxerGuildChannel)) return null;
-      const webhook = await channel.createWebhook({ name: label });
+      const webhook = await withFluxerRateLimit(() => channel.createWebhook({ name: label }), `webhook:${channel.id}`);
       invalidateFluxerWebhookCache(channel.id);
       return { id: webhook.id, token: webhook.token ?? "" };
     }
@@ -29,7 +30,7 @@ export async function createWebhookFor(channel, platform, label) {
   }
 }
 
-function webhookNeededForTarget(platform, bridgeType) {
+export function webhookNeededForTarget(platform, bridgeType) {
   if (bridgeType === "both") return true;
   return platform === "fluxer" ? bridgeType === "discord2fluxer" : bridgeType === "fluxer2discord";
 }
