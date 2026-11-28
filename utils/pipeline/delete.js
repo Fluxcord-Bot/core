@@ -1,6 +1,7 @@
 import { MessageLink, BridgeEndpoint, BridgeGroup } from "../../db/index.js";
 import { Op } from "sequelize";
 import { deleteLogicalMessage, rewriteRepliesForDeleted } from "../LogicalMessage.js";
+import { markDeletedGroup } from "../Bridging.js";
 import { resolveFluxerClient } from "../FluxerClients.js";
 import { invalidateFluxerWebhookCache } from "../Webhooks.js";
 import { log } from "../Logger.js";
@@ -10,6 +11,7 @@ export async function handleDelete(umsg) {
 
   const sourceRows = rows.filter(row => row.endpoint?.platform === umsg.platform && row.endpoint?.channelId === umsg.channelId);
   if (sourceRows.length === 0) {
+    markDeletedGroup(umsg.id);
     log(
       "DEBUG",
       `Delete skip ${umsg.platform} id=${umsg.id} channel=${umsg.channelId} reason=unbridgedMessage totalLinkRows=${rows.length} rowEndpoints=[${rows

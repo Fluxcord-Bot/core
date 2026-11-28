@@ -8,7 +8,8 @@ import { resolveDiscordThreadChannel } from "../DiscordThreadResolver.js";
 import { maybePublishDiscordMessage, maybePublishFluxerMessage } from "../AnnouncementPublish.js";
 import { resolveFluxerClient } from "../FluxerClients.js";
 import { withFluxerRateLimit } from "../FluxerRateLimit.js";
-import { recordRelay } from "../Bridging.js";
+import { recordRelay, isDeletedGroup } from "../Bridging.js";
+import { deleteDiscordCopy, deleteFluxerCopy } from "../LogicalMessage.js";
 import { log } from "../Logger.js";
 
 export async function sendToTarget(umsg, targetEndpoint, render, ctx, relayMeta) {
@@ -19,6 +20,18 @@ export async function sendToTarget(umsg, targetEndpoint, render, ctx, relayMeta)
     targetEndpoint.platform === "discord"
       ? await sendToDiscordEndpoint(umsg, targetEndpoint, render, ctx, relayMeta)
       : await sendToFluxerEndpoint(umsg, targetEndpoint, render, relayMeta);
+  if (sent?.id && isDeletedGroup(relayMeta.linkGroup)) {
+    try {
+      if (targetEndpoint.platform === "discord") await deleteDiscordCopy(ctx?.discordClient, targetEndpoint, sent.id);
+      else await deleteFluxerCopy(targetEndpoint, sent.id);
+      log("DEBUG", `Undid copy ${sent.id} on ${targetEndpoint.platform} for deleted group ${relayMeta.linkGroup}`);
+    } catch (e) {
+      log("BRIDGE", `Failed to undo copy ${sent.id} of deleted group ${relayMeta.linkGroup}`, e);
+    }
+    await MessageLink.destroy({ where: { linkGroup: relayMeta.linkGroup } }).catch(() => {});
+    return null;
+  }
+
   if (sent?.id && relayMeta.endpoints?.length) {
     try {
       await MessageLink.update(

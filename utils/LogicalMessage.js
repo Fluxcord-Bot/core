@@ -23,7 +23,7 @@ function isFluxerUnknownMessageError(error) {
   );
 }
 
-async function deleteFluxerCopy(endpoint, messageId) {
+export async function deleteFluxerCopy(endpoint, messageId) {
   const fluxerClient = resolveFluxerClient(endpoint.instanceId);
   await withFluxerRateLimit(
     () => fluxerClient.rest.delete(FluxerRoutes.channelMessage(endpoint.channelId, messageId)),
@@ -31,7 +31,7 @@ async function deleteFluxerCopy(endpoint, messageId) {
   );
 }
 
-async function deleteDiscordCopy(discordClient, endpoint, messageId) {
+export async function deleteDiscordCopy(discordClient, endpoint, messageId) {
   const channel = await discordClient.channels.fetch(endpoint.channelId).catch(() => null);
   if (channel?.messages?.delete) {
     try {
