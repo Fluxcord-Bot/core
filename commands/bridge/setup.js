@@ -68,7 +68,9 @@ silent - skip the "this channel is now bridged" messages on both sides`,
       });
 
       let vcBridgeWarning = isVoice
-        ? "heck <https://fluxcord.jbcrn.dev/vc-bridging/> for disclaimers of Fluxcord's Voice Bridging."
+        ? `heck <https://fluxcord.jbcrn.dev/vc-bridging/> for disclaimers of Fluxcord's Voice Bridging.
+
+Seeing any VC bridge issues like glitchy sound, bot drops connection often, it disconnects and reconnects too much, or it doesn't connect at all? Please report it on Troubleshooting and Support forum in https://fluxer.gg/jbcrn.`
         : "";
       if (!!directionOrCode && directionOrCode != "both" && isVoice) {
         if (isFluxer) {
@@ -229,6 +231,10 @@ Bot isn't there? Run \`${Config.BotPrefix}invitebot\` to get invite links.`
         }
       }
 
+      const voiceNote = isVoice
+        ? "\n\nSeeing any VC bridge issues like glitchy sound, bot drops connection often, it disconnects and reconnects too much, or it doesn't connect at all? Please report it on Troubleshooting and Support forum in <https://fluxer.gg/jbcrn>."
+        : "";
+
       PendingSetup.delete(directionOrCode);
 
       const silent = setup.silent || silentRequested;
@@ -246,11 +252,19 @@ Bot isn't there? Run \`${Config.BotPrefix}invitebot\` to get invite links.`
 
       if (!silent) {
         await channel.send({
-          content: "🎉 This " + voiceText + " channel is now bridged!" + remoteOptionalWarning + announcementNote + mergedNote,
+          content:
+            "🎉 This " +
+            voiceText +
+            " channel is now bridged!" +
+            remoteOptionalWarning +
+            announcementNote +
+            mergedNote +
+            voiceNote,
         });
 
         await message.reply({
-          content: "🎉 This " + voiceText + " channel is now bridged!" + optionalWarning + announcementNote + mergedNote,
+          content:
+            "🎉 This " + voiceText + " channel is now bridged!" + optionalWarning + announcementNote + mergedNote + voiceNote,
         });
       }
 

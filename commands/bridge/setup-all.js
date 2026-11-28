@@ -81,8 +81,7 @@ function findMatchingChannel(candidates, sourceChannel, candidatePlatform) {
 
 async function fetchGuildSide(platform, instanceId, client, guildId) {
   const guild = await client.guilds.fetch(guildId);
-  const channels =
-    platform === "discord" ? [...(await guild.channels.fetch()).values()] : await guild.fetchChannels();
+  const channels = platform === "discord" ? [...(await guild.channels.fetch()).values()] : await guild.fetchChannels();
   return { platform, instanceId, client, guild, channels };
 }
 
@@ -169,8 +168,12 @@ async function bridgeChannel(sideA, sideB, { direction, silent, discordClient })
       const audioNote = voiceAudioUnsupported
         ? " (voice audio isn't supported for Discord-to-Discord yet; text chat is bridged)"
         : "";
+      const voiceNote =
+        aVoice || bVoice
+          ? "\n\nSeeing any VC bridge issues like glitchy sound, bot drops connection often, it disconnects and reconnects too much, or it doesn't connect at all? Please report it on Troubleshooting and Support forum in <https://fluxer.gg/jbcrn>."
+          : "";
       await side.channel
-        .send({ content: `🎉 This ${voiceText} channel is now bridged to ${other}!${audioNote}` })
+        .send({ content: `🎉 This ${voiceText} channel is now bridged to ${other}!${audioNote}${voiceNote}` })
         .catch(() => {});
     };
     await notify(sideA, sideB.platform);
@@ -278,11 +281,7 @@ Bot isn't there? Run \`${Config.BotPrefix}invitebot\` to get invite links.${opti
       const sourcePlatform = setup.isFluxer ? "fluxer" : "discord";
       const sourceInstanceId = setup.instanceId ?? "default";
 
-      if (
-        sourcePlatform === currentPlatform &&
-        sourceInstanceId === currentInstanceId &&
-        setup.guildId === message.guildId
-      ) {
+      if (sourcePlatform === currentPlatform && sourceInstanceId === currentInstanceId && setup.guildId === message.guildId) {
         await message.reply(`You can't bridge a ${isFluxer ? "community" : "server"} to itself.`);
         PendingSetup.delete(directionOrCode);
         return;
